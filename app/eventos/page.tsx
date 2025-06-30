@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import eventosData from "../../data/eventos.json";
+import eventosData from "./data.json";
 
 interface Evento {
   id: number;
