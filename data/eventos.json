@@ -1,0 +1,17 @@
+[
+  {
+    "id": 0,
+    "title": "evento1",
+    "url": "https://www.url1.cl"
+  },
+  {
+    "id": 1,
+    "title": "evento2",
+    "url": "https://www.url2.cl"
+  },
+  {
+    "id": 2,
+    "title": "evento3",
+    "url": "https://www.url3.cl"
+  }
+]
