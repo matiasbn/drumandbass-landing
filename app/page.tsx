@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { ButtonLink } from "@/components/ButtonLink";
 
 export default function Home() {
   return (
@@ -16,24 +17,9 @@ export default function Home() {
         del Drum and Bass en 🇨🇱
       </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
-        <a
-          href="/eventos"
-          className="flex h-12 w-full items-center justify-center rounded-md border border-solid border-black/[.08] bg-white text-center text-base font-medium text-black transition-colors hover:bg-gray-100 dark:border-white/[.145] dark:bg-black dark:text-white dark:hover:bg-gray-900"
-        >
-          Eventos
-        </a>
-        <a
-          href="/dj"
-          className="flex h-12 w-full items-center justify-center rounded-md border border-solid border-black/[.08] bg-white text-center text-base font-medium text-black transition-colors hover:bg-gray-100 dark:border-white/[.145] dark:bg-black dark:text-white dark:hover:bg-gray-900"
-        >
-          DJs
-        </a>
-        <a
-          href="#"
-          className="flex h-12 w-full items-center justify-center rounded-md border border-solid border-black/[.08] bg-white text-center text-base font-medium text-black transition-colors hover:bg-gray-100 dark:border-white/[.145] dark:bg-black dark:text-white dark:hover:bg-gray-900"
-        >
-          Organizaciones
-        </a>
+        <ButtonLink href="/eventos">Eventos</ButtonLink>
+        <ButtonLink href="/dj">DJs</ButtonLink>
+        <ButtonLink href="#">Organizaciones</ButtonLink>
       </div>
     </main>
   );
