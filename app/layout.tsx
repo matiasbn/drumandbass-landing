@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Drum & Bass Chile",
   description: "Enlaces oficiales de Drum & Bass Chile",
+  icons: {
+    icon: "/logo.JPG", // Ruta al ícono en la carpeta public
+    apple: "/logo.JPG", // Ícono para dispositivos Apple
+  },
 };
 
 export default function RootLayout({
