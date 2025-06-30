@@ -11,7 +11,10 @@ export default function Home() {
         className="rounded-full" // Esta clase de Tailwind hace la imagen redonda
         priority // Ayuda a que la imagen principal cargue más rápido
       />
-      <h1 className="mt-4 mb-8 text-3xl font-bold">Drum & Bass Chile</h1>
+      <h1 className="mt-4 mb-8 whitespace-nowrap text-center text-xl font-bold sm:text-2xl md:text-3xl">
+        La comunidad oficial <br />
+        del Drum and Bass en 🇨🇱
+      </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
         <a
           href="#"
