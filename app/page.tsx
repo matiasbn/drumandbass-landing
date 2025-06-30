@@ -6,12 +6,12 @@ export default function Home() {
       <Image
         src="/logo.JPG"
         alt="Logo Drum & Bass Chile"
-        width={96}
-        height={96}
+        width={256}
+        height={256}
         className="rounded-full" // Esta clase de Tailwind hace la imagen redonda
         priority // Ayuda a que la imagen principal cargue más rápido
       />
-      <h1 className="mt-4 mb-8 text-xl font-semibold">Drum & Bass Chile</h1>
+      <h1 className="mt-4 mb-8 text-3xl font-bold">Drum & Bass Chile</h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
         <a
           href="#"
