@@ -1,11 +1,12 @@
 import Image from "next/image";
 import { ButtonLink } from "@/components/ButtonLink";
+import { LOGO_PATH } from "./constants";
 
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
       <Image
-        src="/logo.JPG"
+        src={LOGO_PATH}
         alt="Logo Drum & Bass Chile"
         width={256}
         height={256}
