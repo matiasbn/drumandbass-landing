@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import data from "@/app/dj/data.json";
 import type { Dj } from "@/app/dj/types";
+import { use } from "react";
 
 type Props = {
-  params: { djId: string };
+  params: Promise<{ djId: string }>;
 };
 
 export async function generateStaticParams() {
@@ -19,8 +20,9 @@ export async function generateStaticParams() {
 }
 
 export default function DjSetsPage({ params }: Props) {
-  const djId = decodeURIComponent(params.djId);
-  const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djId);
+  const { djId } = use(params);
+  const djIdParam = decodeURIComponent(djId);
+  const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djIdParam);
 
   // Si el DJ no existe o no tiene sets, mostramos la página 404
   if (!dj || dj.sets.length === 0) {
