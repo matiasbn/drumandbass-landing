@@ -41,6 +41,34 @@
     "sets": []
   },
   {
+    "name": "Zaulo",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/zaulo_/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/zaulo_official"
+      }
+    ],
+    "sets": []
+  },
+  {
+    "name": "Spinosaurus",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/spinxsaurus/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/isspinosaurus"
+      }
+    ],
+    "sets": []
+  },
+  {
     "name": "Forero",
     "links": [
       {
