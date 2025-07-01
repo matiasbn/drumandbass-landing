@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { ButtonLink } from "@/components/ButtonLink";
 import { LOGO_PATH } from "@/app/constants";
 import { Footer } from "@/app/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Drum and Bass Chile | La Comunidad",
+  description:
+    "El punto de encuentro para la comunidad de Drum and Bass en Chile. Descubre DJs, eventos, y organizaciones de la escena local.",
+};
 
 export default function Home() {
   return (

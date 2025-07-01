@@ -1,9 +1,16 @@
 import { ButtonLink } from "@/components/ButtonLink";
+import type { Metadata } from "next";
 import { LOGO_PATH } from "@/app/constants";
 import Image from "next/image";
 import Link from "next/link";
 import organizacionesData from "./data.json";
 import { Footer } from "@/app/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Organizaciones y Colectivos de Drum and Bass en Chile",
+  description:
+    "Conoce las organizaciones, sellos y colectivos que impulsan la cultura Drum and Bass en la escena chilena.",
+};
 
 interface Organizacion {
   name: string;

@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import eventosData from "./data.json";
 import { ButtonLink } from "@/components/ButtonLink";
 import { LOGO_PATH } from "@/app/constants";
 import { Footer } from "@/app/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Eventos de Drum and Bass en Chile",
+  description:
+    "Encuentra los próximos eventos y fiestas de la escena Drum and Bass en Chile. Mantente al día con las fechas y compra tus entradas.",
+};
 
 interface Evento {
   id: number;

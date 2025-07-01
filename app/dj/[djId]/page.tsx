@@ -1,6 +1,7 @@
 import { ButtonLink } from "@/components/ButtonLink";
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata, ResolvingMetadata } from "next";
 import { notFound } from "next/navigation";
 import data from "@/app/dj/data.json";
 import type { Dj } from "@/app/dj/types";
@@ -10,8 +11,28 @@ import { getDjId } from "../utils";
 import { Footer } from "@/app/components/Footer";
 
 type Props = {
-  djId: string;
+  params: Promise<{ djId: string }>;
 };
+
+export async function generateMetadata(
+  { params: paramsPromise }: Props,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _parent: ResolvingMetadata
+): Promise<Metadata> {
+  const { djId } = await paramsPromise;
+  const dj = (data as Dj[]).find((d) => getDjId(d) === djId);
+
+  if (!dj) {
+    return {
+      title: "DJ no encontrado",
+    };
+  }
+
+  return {
+    title: dj.name,
+    description: `Descubre los links y sets de ${dj.name}, DJ de la comunidad Drum and Bass en Chile.`,
+  };
+}
 
 export async function generateStaticParams() {
   const djs = data as Dj[];
@@ -20,7 +41,7 @@ export async function generateStaticParams() {
   }));
 }
 // {params}: {params: Promise<{ id: string }>}
-export default function DjDetailPage({ params }: { params: Promise<Props> }) {
+export default function DjDetailPage({ params }: Props) {
   // Decodificar el ID por si contiene caracteres especiales como espacios
   const { djId } = use(params);
   const djIdParam = decodeURIComponent(djId);
@@ -32,7 +53,7 @@ export default function DjDetailPage({ params }: { params: Promise<Props> }) {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
-      <Link href="/dj">
+      <Link href="/">
         <Image
           src={LOGO_PATH}
           alt="Logo Drum & Bass Chile - Volver a la lista de DJs"

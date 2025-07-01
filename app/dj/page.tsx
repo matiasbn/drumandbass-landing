@@ -1,4 +1,5 @@
 import { ButtonLink } from "@/components/ButtonLink";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import data from "./data.json";
@@ -6,6 +7,12 @@ import type { Dj } from "./types";
 import { LOGO_PATH } from "@/app/constants";
 import { getDjId } from "./utils";
 import { Footer } from "@/app/components/Footer";
+
+export const metadata: Metadata = {
+  title: "DJs de Drum and Bass en Chile",
+  description:
+    "Explora la lista de DJs de la escena Drum and Bass en Chile. Conoce a los artistas que mueven la comunidad.",
+};
 
 export default function DjListPage() {
   const djs = (data as Dj[]).sort((a, b) => a.name.localeCompare(b.name));
