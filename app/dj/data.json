@@ -7,56 +7,131 @@
         "url": "https://www.instagram.com/djbristolcl/"
       },
       {
-        "title": "Facebook",
-        "url": "https://www.facebook.com/dj1/"
+        "title": "Tienda Bristol Muziq",
+        "url": "https://www.instagram.com/bristolmuziq/"
       }
     ],
     "sets": [
       {
-        "title": "Set 1",
-        "url": "https://www.mixcloud.com/dj1/set1/"
+        "title": "La Oficina temporada 2",
+        "url": "https://www.youtube.com/live/hUsNKqPJLY4?si=Yby2gk-PIep9GcP2&t=385"
       },
       {
-        "title": "Set 2",
-        "url": "https://www.mixcloud.com/dj1/set2/"
+        "title": "Alocasia TV",
+        "url": "https://www.youtube.com/watch?v=5jA72lY3llE&t=3s"
+      },
+      {
+        "title": "La Oficina temporada 1",
+        "url": "https://www.youtube.com/watch?v=clbhLwPp6YM"
       }
     ]
   },
   {
-    "name": "DJ2",
+    "name": "ZeroDay",
     "links": [
       {
         "title": "Instagram",
-        "url": "https://www.instagram.com/dj2/"
+        "url": "https://www.instagram.com/zeroday.dj"
       },
       {
-        "title": "Facebook",
-        "url": "https://www.facebook.com/dj2/"
+        "title": "Souncloud",
+        "url": "https://soundcloud.com/zerodaymusic"
+      },
+      {
+        "title": "Youtube",
+        "url": "https://www.youtube.com/@zerodaydj"
       }
     ],
     "sets": [
       {
-        "title": "Set 1",
-        "url": "https://www.mixcloud.com/dj2/set1/"
+        "title": "See You at the Dancefloor",
+        "url": "https://soundcloud.com/zerodaymusic/see-you-at-the-dancefloor"
       },
       {
-        "title": "Set 2",
-        "url": "https://www.mixcloud.com/dj2/set2/"
+        "title": "Santiago Soundclash Vol 2",
+        "url": "https://soundcloud.com/laoficina_music/zeroday-x-chaos-theory-santiago-sound-clash-vol-2"
+      },
+
+      {
+        "title": "Liquid DnB",
+        "url": "https://soundcloud.com/zerodaymusic/liquid-dnb-session-3"
       }
     ]
   },
   {
-    "name": "DJ3",
+    "name": "Stomp",
     "links": [
       {
         "title": "Instagram",
-        "url": "https://www.instagram.com/dj3/"
+        "url": "https://www.instagram.com/stomplex/"
       },
       {
-        "title": "Facebook",
-        "url": "https://www.facebook.com/dj3/"
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/stompdnb"
       }
     ],
-    "sets": []
+    "sets": [
+      {
+        "title": "La Oficina Temporada 2",
+        "url": "https://www.youtube.com/watch?v=G4NhUgteoa4"
+      },
+      {
+        "title": "La Oficina Temporada 1",
+        "url": "https://www.youtube.com/watch?v=iVHrEGa6FFY&t=18s"
+      }
+    ]
+  },
+  {
+    "name": "Alvarits",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/alvarits_/"
+      }
+    ],
+    "sets": [
+      {
+        "title": "La Oficina Temporada 1",
+        "url": "https://www.youtube.com/watch?v=5apXTTIMHn0"
+      }
+    ]
+  },
+  {
+    "name": "Inguerzon",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/inguerzonmusic/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/inguerzon"
+      }
+    ],
+    "sets": [
+      {
+        "title": "La Oficina Temporada 2",
+        "url": "https://www.youtube.com/watch?v=tRMBsKDP3PI"
+      }
+    ]
+  },
+  {
+    "name": "Cherry Punch",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/cherry__punch/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/cherry_punch"
+      }
+    ],
+    "sets": [
+      {
+        "title": "La Oficina Temporada 1",
+        "url": "https://soundcloud.com/laoficina_music/cherry-punch-x-bass-music"
+      }
+    ]
   }
 ]
