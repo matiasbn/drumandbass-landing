@@ -20,7 +20,7 @@ export default function Home() {
       <div className="flex w-full max-w-xs flex-col gap-4">
         <ButtonLink href="/eventos">Eventos</ButtonLink>
         <ButtonLink href="/dj">DJs</ButtonLink>
-        <ButtonLink href="#">Organizaciones</ButtonLink>
+        <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
       </div>
     </main>
   );
