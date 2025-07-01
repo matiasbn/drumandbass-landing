@@ -3,6 +3,7 @@ import Link from "next/link";
 import eventosData from "./data.json";
 import { ButtonLink } from "@/components/ButtonLink";
 import { LOGO_PATH } from "@/app/constants";
+import { Footer } from "@/app/components/Footer";
 
 interface Evento {
   id: number;
@@ -47,6 +48,7 @@ export default function EventosPage() {
           </ButtonLink>
         ))}
       </div>
+      <Footer />
     </main>
   );
 }

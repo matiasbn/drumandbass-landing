@@ -3,6 +3,7 @@ import { LOGO_PATH } from "@/app/constants";
 import Image from "next/image";
 import Link from "next/link";
 import organizacionesData from "./data.json";
+import { Footer } from "@/app/components/Footer";
 
 interface Organizacion {
   name: string;
@@ -39,6 +40,7 @@ export default function OrganizacionesPage() {
           </ButtonLink>
         ))}
       </div>
+      <Footer />
     </main>
   );
 }

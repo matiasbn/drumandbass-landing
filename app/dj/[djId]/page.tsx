@@ -7,6 +7,7 @@ import type { Dj } from "@/app/dj/types";
 import { LOGO_PATH } from "@/app/constants";
 import { use } from "react";
 import { getDjId } from "../utils";
+import { Footer } from "@/app/components/Footer";
 
 type Props = {
   djId: string;
@@ -15,7 +16,7 @@ type Props = {
 export async function generateStaticParams() {
   const djs = data as Dj[];
   return djs.map((dj) => ({
-    djId: dj.name.toLowerCase(),
+    djId: getDjId(dj),
   }));
 }
 // {params}: {params: Promise<{ id: string }>}
@@ -31,7 +32,7 @@ export default function DjDetailPage({ params }: { params: Promise<Props> }) {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
-      <Link href="/">
+      <Link href="/dj">
         <Image
           src={LOGO_PATH}
           alt="Logo Drum & Bass Chile - Volver a la lista de DJs"
@@ -49,11 +50,10 @@ export default function DjDetailPage({ params }: { params: Promise<Props> }) {
           </ButtonLink>
         ))}
         {dj.sets.length > 0 && (
-          <ButtonLink href={`/dj/${dj.name.toLowerCase()}/sets`}>
-            Sets
-          </ButtonLink>
+          <ButtonLink href={`/dj/${getDjId(dj)}/sets`}>Sets</ButtonLink>
         )}
       </div>
+      <Footer />
     </main>
   );
 }

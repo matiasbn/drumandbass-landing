@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { ButtonLink } from "@/components/ButtonLink";
 import { LOGO_PATH } from "@/app/constants";
+import { Footer } from "@/app/components/Footer";
 
 export default function Home() {
   return (
@@ -22,6 +23,7 @@ export default function Home() {
         <ButtonLink href="/dj">DJs</ButtonLink>
         <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
       </div>
+      <Footer />
     </main>
   );
 }

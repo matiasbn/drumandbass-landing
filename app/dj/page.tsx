@@ -5,6 +5,7 @@ import data from "./data.json";
 import type { Dj } from "./types";
 import { LOGO_PATH } from "@/app/constants";
 import { getDjId } from "./utils";
+import { Footer } from "@/app/components/Footer";
 
 export default function DjListPage() {
   const djs = (data as Dj[]).sort((a, b) => a.name.localeCompare(b.name));
@@ -29,6 +30,7 @@ export default function DjListPage() {
           </ButtonLink>
         ))}
       </div>
+      <Footer />
     </main>
   );
 }
