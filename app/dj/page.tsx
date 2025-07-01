@@ -3,10 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import data from "./data.json";
 import { LOGO_PATH } from "../constants";
-
-type Dj = {
-  name: string;
-};
+import type { Dj } from "./types";
 
 export default function DjListPage() {
   const djs = data as Dj[];
@@ -26,8 +23,7 @@ export default function DjListPage() {
       <h1 className="mt-4 mb-8 text-center text-3xl font-bold">DJs</h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
         {djs.map((dj) => (
-          // Nota: Los botones apuntan a "#" como placeholder. Puedes cambiar el href según necesites.
-          <ButtonLink key={dj.name} href="#">
+          <ButtonLink key={dj.name} href={`/dj/${dj.name.toLowerCase()}`}>
             {dj.name}
           </ButtonLink>
         ))}
