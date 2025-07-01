@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import eventosData from "./data.json";
 import { ButtonLink } from "@/components/ButtonLink";
+import { LOGO_PATH } from "../constants";
 
 interface Evento {
   id: number;
@@ -15,7 +16,7 @@ export default function EventosPage() {
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
       <Link href="/">
         <Image
-          src="/logo.JPG"
+          src={LOGO_PATH}
           alt="Logo Drum & Bass Chile - Volver al inicio"
           width={256}
           height={256}
