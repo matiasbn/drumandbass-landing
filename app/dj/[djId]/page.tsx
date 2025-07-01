@@ -6,6 +6,7 @@ import data from "@/app/dj/data.json";
 import type { Dj } from "@/app/dj/types";
 import { LOGO_PATH } from "@/app/constants";
 import { use } from "react";
+import { getDjId } from "../utils";
 
 type Props = {
   djId: string;
@@ -22,7 +23,7 @@ export default function DjDetailPage({ params }: { params: Promise<Props> }) {
   // Decodificar el ID por si contiene caracteres especiales como espacios
   const { djId } = use(params);
   const djIdParam = decodeURIComponent(djId);
-  const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djIdParam);
+  const dj = (data as Dj[]).find((d) => getDjId(d) === djIdParam);
 
   if (!dj) {
     notFound();
