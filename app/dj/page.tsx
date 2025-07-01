@@ -2,8 +2,8 @@ import { ButtonLink } from "@/components/ButtonLink";
 import Image from "next/image";
 import Link from "next/link";
 import data from "./data.json";
-import { LOGO_PATH } from "../constants";
 import type { Dj } from "./types";
+import { LOGO_PATH } from "@/app/constants";
 
 export default function DjListPage() {
   const djs = data as Dj[];

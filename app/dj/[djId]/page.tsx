@@ -2,9 +2,10 @@ import { ButtonLink } from "@/components/ButtonLink";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import data from "../data.json";
-import type { Dj } from "../types";
-import { LOGO_PATH } from "../../constants";
+import data from "@/app/dj/data.json";
+import type { Dj } from "@/app/dj/types";
+import { LOGO_PATH } from "@/app/constants";
+import { use } from "react";
 
 type Props = {
   params: { djId: string };
@@ -16,11 +17,15 @@ export async function generateStaticParams() {
     djId: dj.name.toLowerCase(),
   }));
 }
-
-export default function DjDetailPage({ params }: Props) {
+// {params}: {params: Promise<{ id: string }>}
+export default function DjDetailPage({ params }: { params: Promise<Props> }) {
   // Decodificar el ID por si contiene caracteres especiales como espacios
-  const djId = decodeURIComponent(params.djId);
-  const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djId);
+  const {
+    params: { djId },
+  } = use(params);
+
+  const djIdParam = decodeURIComponent(djId);
+  const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djIdParam);
 
   if (!dj) {
     notFound();
@@ -45,7 +50,11 @@ export default function DjDetailPage({ params }: Props) {
             {link.title}
           </ButtonLink>
         ))}
-        {dj.sets.length > 0 && <ButtonLink href="#">Sets</ButtonLink>}
+        {dj.sets.length > 0 && (
+          <ButtonLink href={`/dj/${dj.name.toLowerCase()}/sets`}>
+            Sets
+          </ButtonLink>
+        )}
       </div>
     </main>
   );

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import eventosData from "./data.json";
 import { ButtonLink } from "@/components/ButtonLink";
-import { LOGO_PATH } from "../constants";
+import { LOGO_PATH } from "@/app/constants";
 
 interface Evento {
   id: number;
