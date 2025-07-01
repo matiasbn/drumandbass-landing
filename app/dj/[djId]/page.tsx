@@ -8,7 +8,7 @@ import { LOGO_PATH } from "@/app/constants";
 import { use } from "react";
 
 type Props = {
-  params: { djId: string };
+  djId: string;
 };
 
 export async function generateStaticParams() {
@@ -20,10 +20,7 @@ export async function generateStaticParams() {
 // {params}: {params: Promise<{ id: string }>}
 export default function DjDetailPage({ params }: { params: Promise<Props> }) {
   // Decodificar el ID por si contiene caracteres especiales como espacios
-  const {
-    params: { djId },
-  } = use(params);
-
+  const { djId } = use(params);
   const djIdParam = decodeURIComponent(djId);
   const dj = (data as Dj[]).find((d) => d.name.toLowerCase() === djIdParam);
 
