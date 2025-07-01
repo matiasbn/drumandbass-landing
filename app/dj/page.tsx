@@ -6,7 +6,7 @@ import type { Dj } from "./types";
 import { LOGO_PATH } from "@/app/constants";
 
 export default function DjListPage() {
-  const djs = data as Dj[];
+  const djs = (data as Dj[]).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
