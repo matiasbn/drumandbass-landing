@@ -14,8 +14,8 @@ export default function Home() {
         priority // Ayuda a que la imagen principal cargue más rápido
       />
       <h1 className="mt-4 mb-8 whitespace-nowrap text-center text-xl font-bold sm:text-2xl md:text-3xl">
-        La comunidad oficial <br />
-        del Drum and Bass en 🇨🇱
+        La comunidad del <br />
+        Drum and Bass en 🇨🇱
       </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
         <ButtonLink href="/eventos">Eventos</ButtonLink>
