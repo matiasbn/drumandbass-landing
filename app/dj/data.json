@@ -1,11 +1,62 @@
 [
   {
-    "title": "DJ 1"
+    "name": "Bristol",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/djbristolcl/"
+      },
+      {
+        "title": "Facebook",
+        "url": "https://www.facebook.com/dj1/"
+      }
+    ],
+    "sets": [
+      {
+        "title": "Set 1",
+        "url": "https://www.mixcloud.com/dj1/set1/"
+      },
+      {
+        "title": "Set 2",
+        "url": "https://www.mixcloud.com/dj1/set2/"
+      }
+    ]
   },
   {
-    "title": "DJ 2"
+    "name": "DJ 2",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/dj2/"
+      },
+      {
+        "title": "Facebook",
+        "url": "https://www.facebook.com/dj2/"
+      }
+    ],
+    "sets": [
+      {
+        "title": "Set 1",
+        "url": "https://www.mixcloud.com/dj2/set1/"
+      },
+      {
+        "title": "Set 2",
+        "url": "https://www.mixcloud.com/dj2/set2/"
+      }
+    ]
   },
   {
-    "title": "DJ 3"
+    "name": "DJ 3",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/dj3/"
+      },
+      {
+        "title": "Facebook",
+        "url": "https://www.facebook.com/dj3/"
+      }
+    ],
+    "sets": []
   }
 ]

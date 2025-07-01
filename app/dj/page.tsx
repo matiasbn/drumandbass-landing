@@ -4,12 +4,12 @@ import Link from "next/link";
 import data from "./data.json";
 import { LOGO_PATH } from "../constants";
 
-type ButtonData = {
-  title: string;
+type Dj = {
+  name: string;
 };
 
-export default function DjButtonsPage() {
-  const buttons = data as ButtonData[];
+export default function DjListPage() {
+  const djs = data as Dj[];
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
@@ -23,12 +23,12 @@ export default function DjButtonsPage() {
           priority
         />
       </Link>
-      <h1 className="mb-8 text-center text-3xl font-bold">DJ</h1>
+      <h1 className="mt-4 mb-8 text-center text-3xl font-bold">DJs</h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
-        {buttons.map((button) => (
+        {djs.map((dj) => (
           // Nota: Los botones apuntan a "#" como placeholder. Puedes cambiar el href según necesites.
-          <ButtonLink key={button.title} href="#">
-            {button.title}
+          <ButtonLink key={dj.name} href="#">
+            {dj.name}
           </ButtonLink>
         ))}
       </div>
