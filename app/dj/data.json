@@ -41,6 +41,25 @@
     "sets": []
   },
   {
+    "name": "Forero",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/foreromusic/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/foreromusic"
+      }
+    ],
+    "sets": [
+      {
+        "title": "La Oficina Temporada 2",
+        "url": "https://www.youtube.com/live/OXtN13pWjMQ?t=323s"
+      }
+    ]
+  },
+  {
     "name": "Ciland",
     "links": [
       {
