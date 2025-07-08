@@ -23,9 +23,12 @@ export default function Home() {
       />
       <h1 className="mt-4 mb-8 whitespace-nowrap text-center text-xl font-bold sm:text-2xl md:text-3xl">
         La comunidad de <br />
-        Drum and Bass en 🇨🇱
+        Drum and Bass en Chile 🇨🇱
       </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
+        <ButtonLink href="https://www.instagram.com/drumandbasschile.cl">
+          Instagram
+        </ButtonLink>
         <ButtonLink href="/eventos">Eventos</ButtonLink>
         <ButtonLink href="/dj">DJs</ButtonLink>
         <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
