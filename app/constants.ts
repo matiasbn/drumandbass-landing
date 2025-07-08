@@ -1,1 +1,1 @@
-export const LOGO_PATH = "/logo.png";
+export const LOGO_PATH = "/logo-con-bandera.png";
