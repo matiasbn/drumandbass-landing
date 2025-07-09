@@ -29,6 +29,9 @@ export default function Home() {
         <ButtonLink href="https://www.instagram.com/drumandbasschile.cl">
           Instagram
         </ButtonLink>
+        <ButtonLink href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R">
+          Grupo WhatsApp
+        </ButtonLink>
         <ButtonLink href="/eventos">Eventos</ButtonLink>
         <ButtonLink href="/dj">DJs</ButtonLink>
         <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
