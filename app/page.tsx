@@ -26,10 +26,10 @@ export default function Home() {
         Drum and Bass en Chile 🇨🇱
       </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
-        <ButtonLink href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R">
-          Grupo WhatsApp
-        </ButtonLink>
         <ButtonLink href="/eventos">Eventos</ButtonLink>
+        <ButtonLink href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R">
+          Grupo WhatsApp (English Welcome)
+        </ButtonLink>
         <ButtonLink href="https://www.instagram.com/drumandbasschile.cl">
           Instagram
         </ButtonLink>
