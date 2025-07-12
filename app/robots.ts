@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://www.drumandbass.cl/sitemap.xml", // ¡Usa tu dominio final aquí!
+    sitemap: "https://www.drumandbasschile.cl/sitemap.xml", // ¡Usa tu dominio final aquí!
   };
 }
