@@ -34,6 +34,9 @@ export default function Home() {
         >
           Eventos
         </Link>
+        <ButtonLink href="https://docs.google.com/forms/d/e/1FAIpQLSflrgi9s_oAzMfIRhqj4vr8FAeWZTjDwoQa4IhInSY78I0giA/viewform?usp=dialog">
+          Encuesta Satisfacción So Liquid
+        </ButtonLink>
         <ButtonLink href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R">
           Grupo WhatsApp (English Welcome)
         </ButtonLink>
