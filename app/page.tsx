@@ -30,11 +30,11 @@ export default function Home() {
         <ButtonLink href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R">
           Grupo WhatsApp (English Welcome)
         </ButtonLink>
+        <ButtonLink href="/dj">DJs</ButtonLink>
+        <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
         <ButtonLink href="https://www.instagram.com/drumandbasschile.cl">
           Instagram
         </ButtonLink>
-        <ButtonLink href="/dj">DJs</ButtonLink>
-        <ButtonLink href="/organizaciones">Organizaciones</ButtonLink>
       </div>
       <Footer />
     </main>
