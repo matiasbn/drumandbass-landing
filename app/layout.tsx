@@ -16,8 +16,10 @@ export const metadata: Metadata = {
   title: "Drum & Bass Chile",
   description: "Enlaces oficiales de Drum & Bass Chile",
   icons: {
-    icon: "/logo.JPG", // Ruta al ícono en la carpeta public
-    apple: "/logo.JPG", // Ícono para dispositivos Apple
+    // Es buena práctica usar un .ico para máxima compatibilidad
+    icon: "/favicon.ico",
+    // Y un .png para otros usos, como el ícono de Apple
+    apple: "/apple-touch-icon.png",
   },
 };
 
