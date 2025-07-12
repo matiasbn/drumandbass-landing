@@ -23,7 +23,8 @@ export default function Home() {
         priority // Ayuda a que la imagen principal cargue más rápido
       />
       <h1 className="mt-4 mb-8 whitespace-nowrap text-center text-xl font-bold sm:text-2xl md:text-3xl">
-        La primera comunidad online de <br />
+        La primera comunidad <br />
+        online de <br />
         Drum and Bass en Chile 🇨🇱
       </h1>
       <div className="flex w-full max-w-xs flex-col gap-4">
