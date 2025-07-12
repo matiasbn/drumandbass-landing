@@ -5,7 +5,7 @@ import { LOGO_PATH } from "@/app/constants";
 import { Footer } from "@/app/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Drum and Bass Chile | La Comunidad",
+  title: "Drum and Bass Chile | La Comunidad de Drum and Bass en Chile",
   description:
     "El punto de encuentro para la comunidad de Drum and Bass en Chile. Descubre DJs, eventos, y organizaciones de la escena local.",
 };
