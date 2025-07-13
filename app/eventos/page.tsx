@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import eventosData from "./data.json";
-import { ButtonLink } from "@/components/ButtonLink";
 import { LOGO_PATH } from "@/app/constants";
 import { Footer } from "@/app/components/Footer";
+import { EventList } from "@/app/components/EventList";
 
 export const metadata: Metadata = {
   title: "Eventos de Drum and Bass en Chile",
@@ -48,13 +48,7 @@ export default function EventosPage() {
         />
       </Link>
       <h1 className="mt-4 mb-8 text-center text-3xl font-bold">Eventos</h1>
-      <div className="flex w-full max-w-xs flex-col gap-4">
-        {eventos.map((evento) => (
-          <ButtonLink key={evento.id} href={evento.url} isExternal>
-            {`${evento.title} ${evento.date}`}
-          </ButtonLink>
-        ))}
-      </div>
+      <EventList eventos={eventos} />
       <Footer />
     </main>
   );
