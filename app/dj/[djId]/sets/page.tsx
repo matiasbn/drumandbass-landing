@@ -1,4 +1,3 @@
-import { ButtonLink } from "@/components/ButtonLink";
 import Link from "next/link";
 import type { Metadata, ResolvingMetadata } from "next";
 import { notFound } from "next/navigation";
@@ -7,6 +6,7 @@ import type { Dj } from "@/app/dj/types";
 import { use } from "react";
 import { getDjId } from "@/app/dj/utils";
 import { Footer } from "@/components/Footer";
+import { DjSetList } from "@/components/DjSetList";
 
 type Props = {
   params: Promise<{ djId: string }>;
@@ -55,18 +55,15 @@ export default function DjSetsPage({ params }: Props) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
       <div className="mb-8 text-center">
-        <Link href={`/`} className="text-sm text-blue-500 hover:underline">
-          &larr; Volver a {dj.name}
+        <Link
+          href={`/dj/${getDjId(dj)}`}
+          className="text-sm text-blue-500 hover:underline"
+        >
+          &larr; Volver al perfil de {dj.name}
         </Link>
         <h1 className="mt-2 text-3xl font-bold">Sets de {dj.name}</h1>
       </div>
-      <div className="flex w-full max-w-xs flex-col gap-4">
-        {dj.sets.map((set) => (
-          <ButtonLink key={set.url} href={set.url} isExternal>
-            {set.title}
-          </ButtonLink>
-        ))}
-      </div>
+      <DjSetList djName={dj.name} sets={dj.sets} />
       <Footer />
     </main>
   );

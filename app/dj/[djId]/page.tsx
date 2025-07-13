@@ -1,4 +1,3 @@
-import { ButtonLink } from "@/components/ButtonLink";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata, ResolvingMetadata } from "next";
@@ -9,6 +8,7 @@ import { LOGO_PATH } from "@/app/constants";
 import { use } from "react";
 import { getDjId } from "../utils";
 import { Footer } from "@/components/Footer";
+import { DjLinks } from "@/components/DjLinks";
 
 type Props = {
   params: Promise<{ djId: string }>;
@@ -64,16 +64,7 @@ export default function DjDetailPage({ params }: Props) {
         />
       </Link>
       <h1 className="mt-4 mb-8 text-center text-3xl font-bold">{dj.name}</h1>
-      <div className="flex w-full max-w-xs flex-col gap-4">
-        {dj.links.map((link) => (
-          <ButtonLink key={link.url} href={link.url} isExternal>
-            {link.title}
-          </ButtonLink>
-        ))}
-        {dj.sets.length > 0 && (
-          <ButtonLink href={`/dj/${getDjId(dj)}/sets`}>Sets</ButtonLink>
-        )}
-      </div>
+      <DjLinks dj={dj} />
       <Footer />
     </main>
   );
