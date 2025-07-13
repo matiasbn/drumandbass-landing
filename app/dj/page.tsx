@@ -6,7 +6,7 @@ import data from "./data.json";
 import type { Dj } from "./types";
 import { LOGO_PATH } from "@/app/constants";
 import { getDjId } from "./utils";
-import { Footer } from "@/app/components/Footer";
+import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "DJs de Drum and Bass en Chile",

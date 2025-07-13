@@ -6,7 +6,7 @@ import data from "@/app/dj/data.json";
 import type { Dj } from "@/app/dj/types";
 import { use } from "react";
 import { getDjId } from "@/app/dj/utils";
-import { Footer } from "@/app/components/Footer";
+import { Footer } from "@/components/Footer";
 
 type Props = {
   params: Promise<{ djId: string }>;

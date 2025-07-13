@@ -3,8 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import eventosData from "./data.json";
 import { LOGO_PATH } from "@/app/constants";
-import { Footer } from "@/app/components/Footer";
-import { EventList } from "@/app/components/EventList";
+import { Footer } from "@/components/Footer";
+import { EventList } from "@/components/EventList";
 
 export const metadata: Metadata = {
   title: "Eventos de Drum and Bass en Chile",

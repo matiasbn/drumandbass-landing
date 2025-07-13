@@ -8,7 +8,7 @@ import type { Dj } from "@/app/dj/types";
 import { LOGO_PATH } from "@/app/constants";
 import { use } from "react";
 import { getDjId } from "../utils";
-import { Footer } from "@/app/components/Footer";
+import { Footer } from "@/components/Footer";
 
 type Props = {
   params: Promise<{ djId: string }>;

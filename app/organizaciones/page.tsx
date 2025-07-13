@@ -4,7 +4,7 @@ import { LOGO_PATH } from "@/app/constants";
 import Image from "next/image";
 import Link from "next/link";
 import organizacionesData from "./data.json";
-import { Footer } from "@/app/components/Footer";
+import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Organizaciones y Colectivos de Drum and Bass en Chile",
