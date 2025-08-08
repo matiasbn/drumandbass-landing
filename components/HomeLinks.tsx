@@ -21,10 +21,10 @@ export function HomeLinks() {
         Eventos
       </Link>
       <ButtonLink
-        href="https://docs.google.com/forms/d/e/1FAIpQLSflrgi9s_oAzMfIRhqj4vr8FAeWZTjDwoQa4IhInSY78I0giA/viewform?usp=dialog"
-        onClick={() => handleButtonClick("Encuesta So Liquid")}
+        href="https://foro.drumandbasschile.cl"
+        onClick={() => handleButtonClick("Foro")}
       >
-        Encuesta Satisfacción So Liquid
+        Foro
       </ButtonLink>
       <ButtonLink
         href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R"
