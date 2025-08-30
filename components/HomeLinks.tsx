@@ -22,7 +22,7 @@ export function HomeLinks() {
       </Link>
       <ButtonLink
         href="/productores"
-        onClick={() => handleButtonClick("Productores")}
+        onClick={() => handleButtonClick("Productores de Eventos")}
       >
         Productores de eventos
       </ButtonLink>
