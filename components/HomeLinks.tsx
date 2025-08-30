@@ -21,6 +21,12 @@ export function HomeLinks() {
         Eventos
       </Link>
       <ButtonLink
+        href="/productores"
+        onClick={() => handleButtonClick("Productores")}
+      >
+        Productores de eventos
+      </ButtonLink>
+      <ButtonLink
         href="https://foro.drumandbasschile.cl"
         onClick={() => handleButtonClick("Foro")}
       >
