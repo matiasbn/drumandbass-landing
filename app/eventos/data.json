@@ -7,8 +7,20 @@
   },
   {
     "id": 1,
+    "title": "Anti Fonda",
+    "url": "https://portaldisc.com/evento/instagramcomconceptdealernext2f",
+    "date": "17/09/25"
+  },
+  {
+    "id": 1,
     "title": "Trigga Fingaz",
-    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-luca-syn-gds-sabado-23-agosto",
-    "date": "23/08/25"
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-sabado-13-septiembre",
+    "date": "13/09/25"
+  },
+  {
+    "id": 1,
+    "title": "Trigga Fingaz",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-critycal-dub-sabado-20-septiembre",
+    "date": "20/09/25"
   }
 ]
