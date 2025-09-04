@@ -27,15 +27,58 @@
     ]
   },
   {
-    "name": "Fat Pablo",
+    "name": "Bristol",
     "links": [
       {
         "title": "Instagram",
-        "url": "https://www.instagram.com/djfatpablo/"
+        "url": "https://www.instagram.com/djbristolcl/"
       },
       {
-        "title": "SoundCloud",
-        "url": "https://soundcloud.com/fatpablo"
+        "title": "Tienda Bristol Muziq",
+        "url": "https://www.instagram.com/bristolmuziq/"
+      }
+    ],
+    "sets": [
+      {
+        "title": "La Oficina temporada 2",
+        "url": "https://www.youtube.com/live/hUsNKqPJLY4?si=Yby2gk-PIep9GcP2&t=385"
+      },
+      {
+        "title": "Alocasia TV",
+        "url": "https://www.youtube.com/watch?v=5jA72lY3llE&t=3s"
+      },
+      {
+        "title": "La Oficina temporada 1",
+        "url": "https://www.youtube.com/watch?v=clbhLwPp6YM"
+      }
+    ]
+  },
+  {
+    "name": "Dani Mach",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/_dani.mach/"
+      }
+    ],
+    "sets": []
+  },
+  {
+    "name": "Muribis",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/muribis_/"
+      }
+    ],
+    "sets": []
+  },
+  {
+    "name": "Jungle Soul",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "httphttps://www.instagram.com/mrjunglesoul/"
       }
     ],
     "sets": []
