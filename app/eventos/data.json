@@ -1,8 +1,20 @@
 [
   {
+    "id": 2,
+    "title": "Trigga Fingaz, Halloween",
+    "url": "https://www.instagram.com/p/DQFrt7NDSXT/?img_index=1",
+    "date": "26/10/25"
+  },
+  {
     "id": 0,
-    "title": "Trigga Fingaz",
-    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-kasyade-b-day-sabado-04-octubre",
-    "date": "04/10/25"
+    "title": "Trigga Fingaz, Halloween",
+    "url": "https://ticketplus.cl/events/misa-de-los-santos-5stage-halloween",
+    "date": "31/10/25"
+  },
+  {
+    "id": 1,
+    "title": "Trigga Fingaz, Bryan Gee",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-aniversario-con-bryan-gee-sabado-13-diciembre",
+    "date": "13/12/25"
   }
 ]
