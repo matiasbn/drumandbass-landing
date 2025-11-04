@@ -31,7 +31,7 @@ export function EventList({ eventos }: EventListProps) {
           isExternal
           onClick={() => handleEventClick(evento.title, evento.url)}
         >
-          {`${evento.title} ${evento.date}`}
+          {`${evento.title} -  ${evento.date}`}
         </ButtonLink>
       ))}
     </div>

@@ -20,14 +20,15 @@ interface Evento {
 }
 
 /**
- * Parsea una fecha en formato DD/MM/YY a un objeto Date para poder ordenarla.
+ * Parsea una fecha en formato DD/MM/YY o DD/MM/YYYY a un objeto Date para poder ordenarla.
  * @param dateString La fecha como string.
  * @returns Un objeto Date.
  */
 const parseDate = (dateString: string): Date => {
   const [day, month, year] = dateString.split("/").map(Number);
-  // Asumimos que los años YY corresponden al siglo 21.
-  return new Date(2000 + year, month - 1, day);
+  // Si el año tiene 2 dígitos, asumimos que corresponde al siglo 21
+  const fullYear = year < 100 ? 2000 + year : year;
+  return new Date(fullYear, month - 1, day);
 };
 
 export default function EventosPage() {
