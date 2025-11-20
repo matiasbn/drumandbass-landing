@@ -71,7 +71,21 @@
     "links": [
       {
         "title": "Instagram",
-        "url": "httphttps://www.instagram.com/mrjunglesoul/"
+        "url": "https://www.instagram.com/mrjunglesoul/"
+      }
+    ],
+    "sets": []
+  },
+  {
+    "name": "Fat Pablo",
+    "links": [
+      {
+        "title": "Instagram",
+        "url": "https://www.instagram.com/mrjunglesoul/"
+      },
+      {
+        "title": "SoundCloud",
+        "url": "https://soundcloud.com/fatpablo"
       }
     ],
     "sets": []
