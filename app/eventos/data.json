@@ -1,27 +1,98 @@
 [
   {
+    "id": 15,
     "title": "So Liquid 5",
     "url": "https://www.passline.com/eventos/so-liquid-05-brazilian-night?utm_source=ig&utm_medium=social&utm_content=link_in_bio",
     "date": "20/12/25"
   },
   {
+    "id": 14,
     "title": "Club Room, Bryan Gee",
     "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-aniversario-con-bryan-gee-sabado-13-diciembre",
     "date": "13/12/25"
   },
   {
+    "id": 13,
     "title": "OpenBar, Trigga Fingaz",
     "url": "https://docs.google.com/forms/d/e/1FAIpQLSc72Fvg1hccTxJlBeVDOFsKELhRuzgnLw7NSskDAjLhW9z7tg/viewform",
     "date": "06/12/25"
   },
   {
+    "id": 12,
     "title": "Club Room, Trigga Fingaz",
     "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-sabado-15-noviembre",
     "date": "15/11/25"
   },
   {
+    "id": 11,
     "title": "So Liquid 4",
     "url": "https://www.passline.com/eventos/so-liquid-4-jungle-night",
     "date": "08/11/25"
+  },
+  {
+    "id": 10,
+    "title": "Concept Dealer, Halloween",
+    "url": "https://ticketplus.cl/events/misa-de-los-santos-5stage-halloween",
+    "date": "31/10/25"
+  },
+  {
+    "id": 9,
+    "title": "So Liquid 3, Retrospectiva",
+    "url": "https://www.instagram.com/p/DQFrt7NDSXT/?img_index=1",
+    "date": "26/10/25"
+  },
+  {
+    "id": 8,
+    "title": "Trigga Fingaz, Kasyade B-day",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-kasyade-b-day-sabado-04-octubre",
+    "date": "04/10/25"
+  },
+  {
+    "id": 7,
+    "title": "So Liquid 2",
+    "url": "https://www.passline.com/eventos/so-liquid-02",
+    "date": "27/09/25"
+  },
+  {
+    "id": 6,
+    "title": "Trigga Fingaz, Critycal Dub",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-critycal-dub-sabado-20-septiembre",
+    "date": "20/09/25"
+  },
+  {
+    "id": 5,
+    "title": "Anti Fonda",
+    "url": "https://portaldisc.com/evento/instagramcomconceptdealernext2f",
+    "date": "17/09/25"
+  },
+  {
+    "id": 4,
+    "title": "Trigga Fingaz",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-sabado-13-septiembre",
+    "date": "13/09/25"
+  },
+  {
+    "id": 3,
+    "title": "Trigga Fingaz",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-luca-syn-gds-sabado-23-agosto",
+    "date": "23/08/25"
+  },
+  {
+    "id": 2,
+    "title": "Trigga Fingaz",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-sabado-19-julio",
+    "date": "19/07/25"
+  },
+  {
+    "id": 1,
+    "title": "So Liquid 1",
+    "url": "https://www.instagram.com/p/DLlmtnVuQIt/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+    "date": "12/07/25"
+  },
+  {
+    "id": 0,
+    "title": "Trigga Fingaz",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-sabado-5-julio",
+    "date": "05/07/25"
   }
 ]

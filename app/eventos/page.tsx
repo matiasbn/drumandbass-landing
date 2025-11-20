@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 interface Evento {
+  id: number;
   title: string;
   url: string;
   date: string;

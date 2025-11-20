@@ -4,6 +4,7 @@ import { ButtonLink } from "@/components/ButtonLink";
 import { event } from "@/lib/gtag";
 
 interface Evento {
+  id: number;
   title: string;
   url: string;
   date: string;
@@ -25,7 +26,7 @@ export function EventList({ eventos }: EventListProps) {
     <div className="flex w-full max-w-xs flex-col gap-4">
       {eventos.map((evento) => (
         <ButtonLink
-          key={evento.title}
+          key={evento.id}
           href={evento.url}
           isExternal
           onClick={() => handleEventClick(evento.title, evento.url)}
