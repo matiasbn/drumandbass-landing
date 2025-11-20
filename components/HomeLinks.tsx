@@ -21,10 +21,10 @@ export function HomeLinks() {
         Eventos
       </Link>
       <ButtonLink
-        href="/productores"
-        onClick={() => handleButtonClick("Productores de Eventos")}
+        href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R"
+        onClick={() => handleButtonClick("Grupo WhatsApp")}
       >
-        Productores de eventos
+        Grupo WhatsApp (English Welcome)
       </ButtonLink>
       <ButtonLink
         href="https://foro.drumandbasschile.cl"
@@ -33,22 +33,28 @@ export function HomeLinks() {
         Foro
       </ButtonLink>
       <ButtonLink
-        href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R"
-        onClick={() => handleButtonClick("Grupo WhatsApp")}
+        href="https://soundcloud.com/drum-and-bass-chile"
+        onClick={() => handleButtonClick("SoundCloud")}
       >
-        Grupo WhatsApp (English Welcome)
-      </ButtonLink>
-      <ButtonLink
-        href="https://open.spotify.com/playlist/3tE3RqDoTGskv0DJjVFBNy?si=146371bb86e543b6&pt=c209f3cac82594b9b8c025320bf2d877"
-        onClick={() => handleButtonClick("Spotify")}
-      >
-        Spotify Playlist Colaborativa
+        SoundCloud
       </ButtonLink>
       <ButtonLink
         href="https://www.instagram.com/drumandbasschile.cl"
         onClick={() => handleButtonClick("Instagram")}
       >
         Instagram
+      </ButtonLink>
+      <ButtonLink
+        href="https://open.spotify.com/playlist/3tE3RqDoTGskv0DJjVFBNy?si=146371bb86e543b6&pt=c209f3cac82594b9b8c025320bf2d877"
+        onClick={() => handleButtonClick("Spotify")}
+      >
+        Spotify Playlist
+      </ButtonLink>
+      <ButtonLink
+        href="/productores"
+        onClick={() => handleButtonClick("Productores de Eventos")}
+      >
+        Productores de eventos
       </ButtonLink>
       <ButtonLink href="/dj" onClick={() => handleButtonClick("DJs")}>
         DJs
