@@ -32,10 +32,32 @@ const parseDate = (dateString: string): Date => {
 };
 
 export default function EventosPage() {
-  // Ordenamos los eventos por fecha, del más próximo al más lejano.
-  const eventos: Evento[] = [...eventosData].sort(
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0); // Establecer la hora al inicio del día para comparación exacta
+
+  // Separar eventos en próximos y pasados
+  const eventosProximos: Evento[] = [];
+  const eventosPasados: Evento[] = [];
+
+  eventosData.forEach((evento) => {
+    const fechaEvento = parseDate(evento.date);
+    if (fechaEvento >= hoy) {
+      eventosProximos.push(evento);
+    } else {
+      eventosPasados.push(evento);
+    }
+  });
+
+  // Ordenar eventos próximos del más próximo al más lejano
+  eventosProximos.sort(
     (a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime()
   );
+
+  // Ordenar eventos pasados del más reciente al más antiguo
+  eventosPasados.sort(
+    (a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime()
+  );
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24 font-[family-name:var(--font-geist-sans)]">
       <Link href="/">
@@ -48,8 +70,23 @@ export default function EventosPage() {
           priority // Ayuda a que la imagen principal cargue más rápido
         />
       </Link>
-      <h1 className="mt-4 mb-8 text-center text-3xl font-bold">Eventos</h1>
-      <EventList eventos={eventos} />
+      
+      {/* Eventos próximos */}
+      {eventosProximos.length > 0 && (
+        <>
+          <h1 className="mt-4 mb-8 text-center text-3xl font-bold">Próximos Eventos</h1>
+          <EventList eventos={eventosProximos} />
+        </>
+      )}
+      
+      {/* Eventos pasados */}
+      {eventosPasados.length > 0 && (
+        <>
+          <h2 className="mt-12 mb-8 text-center text-2xl font-bold">Eventos Pasados</h2>
+          <EventList eventos={eventosPasados} />
+        </>
+      )}
+      
       <Footer />
     </main>
   );
