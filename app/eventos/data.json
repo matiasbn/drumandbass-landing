@@ -6,6 +6,12 @@
     "date": "08/11/25"
   },
   {
+    "id": 2,
+    "title": "OpenBar Las Condes, Trigga Fingaz",
+    "url": "https://docs.google.com/forms/d/e/1FAIpQLSc72Fvg1hccTxJlBeVDOFsKELhRuzgnLw7NSskDAjLhW9z7tg/viewform",
+    "date": "06/12/25"
+  },
+  {
     "id": 3,
     "title": "Club Room, Bryan Gee",
     "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-aniversario-con-bryan-gee-sabado-13-diciembre",
@@ -18,9 +24,9 @@
     "date": "15/11/25"
   },
   {
-    "id": 2,
-    "title": "OpenBar Las Condes, Trigga Fingaz",
-    "url": "https://docs.google.com/forms/d/e/1FAIpQLSc72Fvg1hccTxJlBeVDOFsKELhRuzgnLw7NSskDAjLhW9z7tg/viewform",
-    "date": "06/12/25"
+    "id": 5,
+    "title": "So Liquid 5",
+    "url": "https://www.passline.com/eventos/so-liquid-05-brazilian-night?utm_source=ig&utm_medium=social&utm_content=link_in_bio",
+    "date": "20/12/25"
   }
 ]
