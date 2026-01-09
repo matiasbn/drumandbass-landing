@@ -1,5 +1,11 @@
 [
   {
+    "id": 21,
+    "title": "Pool and Bass, Pool Party",
+    "url": "https://laoficina.evently.cl/pool-and-bass",
+    "date": "28/02/26"
+  },
+  {
     "id": 20,
     "title": "Alibi 🇧🇷, Club Room",
     "url": "https://ticketplus.cl/events/clubroom-presenta-trigga-fingaz-alibi-sabado-07-febrero",
@@ -13,15 +19,15 @@
   },
   {
     "id": 18,
-    "title": "Trigga Fingaz, Club Room",
-    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-sabado-17-enero",
-    "date": "17/01/26"
+    "title": "Ego Death, Concept Dealer",
+    "url": "https://www.portaldisc.com/evento/instagramcomconceptdealerigshmxv2",
+    "date": "24/01/26"
   },
   {
     "id": 17,
-    "title": "Pool and Bass, Pool Party",
-    "url": "https://laoficina.evently.cl/pool-and-bass",
-    "date": "28/02/26"
+    "title": "Trigga Fingaz, Club Room",
+    "url": "https://ticketplus.cl/events/clubroom-presenta-drum-bass-trigga-fingaz-sabado-17-enero",
+    "date": "17/01/26"
   },
   {
     "id": 16,
