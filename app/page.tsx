@@ -23,7 +23,7 @@ export default function Home() {
       />
       <h1 className="mt-4 mb-8 whitespace-nowrap text-center text-xl font-bold sm:text-2xl md:text-3xl">
         La comunidad <br />
-        online de <br />
+        online222 de <br />
         Drum and Bass en Chile 🇨🇱
       </h1>
       <HomeLinks />
