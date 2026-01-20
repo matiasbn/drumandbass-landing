@@ -7,7 +7,7 @@ import { HomeLinks } from "@/components/HomeLinks";
 export const metadata: Metadata = {
   title: "Drum and Bass Chile | La Comunidad de Drum and Bass en Chile",
   description:
-    "El punto de encuentro para la comunidad de Drum and Bass en Chile. Descubre DJs, eventos, y organizaciones de la escena local",
+    "El punto de encuentro para la comunidad de Drum and Bass en Chile. Descubre DJs, eventos, y organizaciones de la escena local.",
 };
 
 export default function Home() {
