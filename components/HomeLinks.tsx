@@ -21,6 +21,12 @@ export function HomeLinks() {
         Eventos
       </Link>
       <ButtonLink
+        href="https://www.youtube.com/@drumandbasschile"
+        onClick={() => handleButtonClick("YouTube")}
+      >
+        YouTube
+      </ButtonLink>
+      <ButtonLink
         href="https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R"
         onClick={() => handleButtonClick("Grupo WhatsApp")}
       >
