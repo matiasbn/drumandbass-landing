@@ -15,7 +15,7 @@
     "@remixicon/react": "^4.8.0",
     "contentful": "^11.10.2",
     "dayjs": "^1.11.19",
-    "next": "^15.5.7",
+    "next": "^16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
