@@ -12,12 +12,18 @@
   },
   "dependencies": {
     "@contentful/rich-text-html-renderer": "^17.1.6",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@remixicon/react": "^4.8.0",
+    "@supabase/supabase-js": "^2.93.3",
+    "@types/three": "^0.182.0",
     "contentful": "^11.10.2",
     "dayjs": "^1.11.19",
+    "facehash": "^0.0.5",
     "next": "^16.1.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
