@@ -52,6 +52,7 @@ export default function RootLayout({
           .brutalist-shadow-red { box-shadow: 8px 8px 0px 0px #ff0000; }
           .brutalist-shadow-blue { box-shadow: 8px 8px 0px 0px #0000ff; }
           .brutalist-shadow-green { box-shadow: 8px 8px 0px 0px #25D366; }
+          .brutalist-shadow-spotify { box-shadow: 8px 8px 0px 0px #1DB954; }
           .hover-lift:hover { transform: translate(-4px, -4px); box-shadow: 12px 12px 0px 0px rgba(0,0,0,1); }
           ::selection { background: #ff0000; color: white; }
       `}
