@@ -9,6 +9,7 @@ interface EventSkeleton {
     venue?: EntryFieldTypes.Text;
     address?: EntryFieldTypes.Text;
     date: EntryFieldTypes.Text;
+    endDate: EntryFieldTypes.Text;
     description?: EntryFieldTypes.RichText;
     tickets?: EntryFieldTypes.Text;
     info?: EntryFieldTypes.Text;
@@ -41,6 +42,7 @@ export async function getEvents(): Promise<ContentfulEvent[]> {
       venue: fields.venue as string | undefined,
       address: fields.address as string | undefined,
       date: fields.date as string,
+      endDate: fields.endDate as string | undefined,
       description: fields.description as ContentfulEvent['description'],
       tickets: fields.tickets as string | undefined,
       info: fields.info as string | undefined,
