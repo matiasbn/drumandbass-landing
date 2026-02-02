@@ -7,6 +7,7 @@ export interface ContentfulEvent {
   venue?: string;
   address?: string;
   date: string;
+  endDate?: string;
   description?: Document;
   tickets?: string;
   info?: string;

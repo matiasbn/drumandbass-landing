@@ -1,11 +1,29 @@
 
 import React from 'react';
 import dayjs from 'dayjs'
+import isToday from 'dayjs/plugin/isToday';
+import isTomorrow from 'dayjs/plugin/isTomorrow';
 import Image from 'next/image';
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 
 import { ContentfulEvent } from '../types/types';
 import BigButton from './BigButton';
+
+dayjs.extend(isToday);
+dayjs.extend(isTomorrow);
+
+function getProximityBadge(date: string, endDate?: string): { label: string; color: string } | null {
+  const now = dayjs();
+  const eventStart = dayjs(date);
+  const eventEnd = endDate ? dayjs(endDate) : eventStart;
+
+  if (now.isAfter(eventStart) && now.isBefore(eventEnd)) return { label: 'AHORA', color: 'bg-green-600' };
+  if (eventStart.isToday()) return { label: 'HOY', color: 'bg-red-600' };
+  if (eventStart.isTomorrow()) return { label: 'MAÑANA', color: 'bg-orange-500' };
+  const daysUntil = eventStart.startOf('day').diff(now.startOf('day'), 'day');
+  if (daysUntil > 0 && daysUntil <= 7) return { label: 'ESTA SEMANA', color: 'bg-yellow-500 text-black' };
+  return null;
+}
 
 interface EventItemProps {
   event: ContentfulEvent;
@@ -13,9 +31,10 @@ interface EventItemProps {
 }
 
 const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
-  const { title, flyer, date, tickets, description, venue, address } = event
+  const { title, flyer, date, endDate, tickets, description, venue, address } = event
   const formattedDate = dayjs(date).format('dddd DD  MMMM  YYYY [@] HH:mm');
   const isEven = index % 2 === 0;
+  const badge = getProximityBadge(date, endDate);
 
   return (
     <div className="group flex flex-col lg:flex-row border-b-8 border-black hover:bg-gray-50 transition-colors overflow-hidden">
@@ -31,7 +50,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
           />
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center mono font-bold text-center p-4">
-            NO FLYER AVAILABLE
+            NO FLYER
           </div>
         )}
       </div>
@@ -42,7 +61,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
           <div className="flex gap-3 items-start">
             {/* Flyer thumbnail on mobile */}
             {flyer && (
-              <div className="block lg:hidden w-20 flex-shrink-0 border-2 border-black overflow-hidden">
+              <div className="block lg:hidden w-20 shrink-0 border-2 border-black overflow-hidden">
                 <Image
                   src={flyer.url}
                   width={80}
@@ -53,8 +72,16 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
               </div>
             )}
             <div>
-              <div className="mono text-[12px] lg:text-base mb-1 lg:mb-2 font-black bg-black text-white px-2 py-1 inline-block">
-                {formattedDate}
+              <div className="flex flex-wrap items-center gap-2 mb-1 lg:mb-2">
+                {badge && (<div className='flex items-center bg-red-600 text-white text-sm lg:text-xl font-black mono px-3 py-1.5 lg:px-4 lg:py-2 border-4 border-black uppercase tracking-widest animate-pulse'>
+                  {['HOY', 'AHORA'].includes(badge.label) && <span className='mr-3 rounded-full bg-white w-2 h-2 inline-block'></span>}
+                  <span>
+                   {badge.label}
+                  </span>
+                </div>)}
+                <div className="mono text-[12px] lg:text-base font-black bg-black text-white px-2 py-1 inline-block">
+                  {formattedDate}
+                </div>
               </div>
               <h3 className="text-3xl lg:text-7xl font-black uppercase leading-none tracking-tighter italic mt-1 lg:mt-2">
                 {event.title}
