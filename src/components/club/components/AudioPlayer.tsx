@@ -47,7 +47,7 @@ const formatTime = (ms: number): string => {
 };
 
 export const AudioPlayer: React.FC = () => {
-  const { setIsPlaying } = usePlayback();
+  const { setIsPlaying, setTrackTitle: setContextTrackTitle, registerTogglePlay } = usePlayback();
   const [localIsPlaying, setLocalIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -138,14 +138,23 @@ export const AudioPlayer: React.FC = () => {
     };
   }, [updatePlayState]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (!widgetRef.current || !isReady) return;
     if (localIsPlaying) {
       widgetRef.current.pause();
     } else {
       widgetRef.current.play();
     }
-  };
+  }, [isReady, localIsPlaying]);
+
+  // Sync track title and togglePlay to context
+  useEffect(() => {
+    setContextTrackTitle(trackTitle);
+  }, [trackTitle, setContextTrackTitle]);
+
+  useEffect(() => {
+    registerTogglePlay(togglePlay);
+  }, [togglePlay, registerTogglePlay]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!widgetRef.current || !isReady || !progressRef.current || duration === 0) return;
