@@ -52,7 +52,7 @@ export const AudioPlayer: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [trackTitle, setTrackTitle] = useState('Loading...');
+  const [trackTitle, setTrackTitle] = useState('Cargando...');
   const [artistName, setArtistName] = useState('');
   const [isShuffled, setIsShuffled] = useState(true);
   const [trackCount, setTrackCount] = useState(0);
@@ -297,14 +297,14 @@ export const AudioPlayer: React.FC = () => {
               p-2 transition-colors disabled:opacity-30
               ${isShuffled ? 'text-[#00ff41]' : 'text-white/40 hover:text-white/60'}
             `}
-            title={isShuffled ? 'Shuffle on' : 'Shuffle off'}
+            title={isShuffled ? 'Aleatorio activado' : 'Aleatorio desactivado'}
           >
             <RiShuffleLine className="w-4 h-4" />
           </button>
 
           <div className="flex flex-col items-start ml-1">
             <span className="text-[10px] text-white/40 uppercase tracking-wider">
-              {isReady ? (localIsPlaying ? 'PLAYING' : 'PAUSED') : 'LOADING...'}
+              {isReady ? (localIsPlaying ? 'REPRODUCIENDO' : 'PAUSADO') : 'CARGANDO...'}
             </span>
             <span className="text-[10px] text-[#ff5500] flex items-center gap-1">
               <RiVolumeMuteLine className="w-3 h-3" />

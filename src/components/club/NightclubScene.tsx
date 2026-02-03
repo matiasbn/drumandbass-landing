@@ -63,15 +63,13 @@ const NightclubScene: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur border border-white/20 text-white font-mono text-sm hover:bg-white/10 hover:border-white/40 transition-all"
           >
             <RiArrowLeftLine className="w-4 h-4" />
-            EXIT CLUB
+            SALIR
           </Link>
         </div>
 
-        {/* Title overlay - desktop only */}
-        <div className="absolute top-4 right-4 z-10 hidden md:block">
-          <div className="px-4 py-2 bg-black/50 backdrop-blur border border-[#ff0055]/50 text-[#ff0055] font-mono text-sm tracking-wider">
-            DNB CHILE // LIVE
-          </div>
+        {/* Audio player - desktop: bottom left, above controls hint */}
+        <div className="absolute bottom-24 left-4 z-10 hidden md:block">
+          <AudioPlayer />
         </div>
 
         {/* Mobile: mini player toggle + collapsible player at top right */}
@@ -82,17 +80,16 @@ const NightclubScene: React.FC = () => {
           </div>
         </div>
 
-        {/* Audio player - desktop: bottom left */}
+        {/* Controls hint - desktop: bottom left */}
         <div className="absolute bottom-4 left-4 z-10 hidden md:block">
-          <AudioPlayer />
-          <div className="mt-2 px-3 py-1.5 bg-black/50 backdrop-blur border border-white/10 text-white/60 font-mono text-[10px] space-y-0.5">
+          <div className="px-3 py-1.5 bg-black/50 backdrop-blur border border-white/10 text-white/60 font-mono text-[10px] space-y-0.5">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-[#00ff41]" />
-              DRAG TO ROTATE &bull; SCROLL TO ZOOM
+              ARRASTRA PARA ROTAR &bull; SCROLL PARA ZOOM
             </div>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-[#ffff00]" />
-              ARROWS TO MOVE
+              FLECHAS PARA MOVER
             </div>
           </div>
         </div>

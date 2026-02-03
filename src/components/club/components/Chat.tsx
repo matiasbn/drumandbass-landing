@@ -127,7 +127,7 @@ export const Chat: React.FC = () => {
           </div>
 
           <p className="text-white/60 text-sm mb-4 font-mono">
-            Choose a name to join the chat
+            Elige un nombre para entrar al chat
           </p>
 
           <form onSubmit={handleSetUsername}>
@@ -152,7 +152,7 @@ export const Chat: React.FC = () => {
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
-                placeholder="Your name..."
+                placeholder="Tu nombre..."
                 maxLength={20}
                 autoFocus
                 className="flex-1 bg-black/50 border border-white/20 text-white px-4 py-3 font-mono text-sm focus:outline-none focus:border-[#00ccff] transition-colors"
@@ -164,12 +164,12 @@ export const Chat: React.FC = () => {
               disabled={nameInput.trim().length < 2}
               className="w-full py-3 bg-gradient-to-r from-[#ff0055] to-[#00ccff] text-white font-mono font-bold tracking-wider uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
             >
-              JOIN CHAT
+              ENTRAR AL CHAT
             </button>
           </form>
 
           <p className="text-white/30 text-xs mt-4 text-center font-mono">
-            2-20 characters
+            2-20 caracteres
           </p>
         </div>
       </div>
@@ -210,7 +210,7 @@ export const Chat: React.FC = () => {
             <div className="overflow-y-auto p-3 space-y-2 max-h-[300px]">
               {messages.length === 0 ? (
                 <p className="text-white/30 text-sm font-mono text-center py-8">
-                  No messages yet. Say something!
+                  No hay mensajes aún. ¡Di algo!
                 </p>
               ) : (
                 messages.map((msg) => (
@@ -251,7 +251,7 @@ export const Chat: React.FC = () => {
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
+                  placeholder="Escribe un mensaje..."
                   maxLength={500}
                   className="flex-1 bg-black/50 border border-white/20 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ccff] transition-colors"
                 />
