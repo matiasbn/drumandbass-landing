@@ -44,7 +44,7 @@ export const DJ: React.FC<DJProps> = ({ isPlayingRef }) => {
   });
 
   return (
-    <group position={[0, 0, -4.8]}>
+    <group position={[0, 0, -5.8]}>
       <mesh position={[0, 1.4, 0]} castShadow>
         <boxGeometry args={[0.6, 0.8, 0.35]} />
         <meshStandardMaterial color="#1a1a1a" />
@@ -55,25 +55,6 @@ export const DJ: React.FC<DJProps> = ({ isPlayingRef }) => {
         <meshStandardMaterial color="#e0c4a8" />
       </mesh>
 
-      <group position={[0, 2.25, 0]}>
-        <mesh>
-          <torusGeometry args={[0.25, 0.03, 8, 16, Math.PI]} />
-          <meshStandardMaterial color="#333333" />
-        </mesh>
-        <mesh position={[-0.28, -0.1, 0]}>
-          <boxGeometry args={[0.08, 0.15, 0.1]} />
-          <meshStandardMaterial color={COLORS.neonPink} emissive={COLORS.neonPink} emissiveIntensity={0.3} />
-        </mesh>
-        <mesh position={[0.28, -0.1, 0]}>
-          <boxGeometry args={[0.08, 0.15, 0.1]} />
-          <meshStandardMaterial color={COLORS.neonPink} emissive={COLORS.neonPink} emissiveIntensity={0.3} />
-        </mesh>
-      </group>
-
-      <mesh position={[0, 2.25, 0.18]}>
-        <boxGeometry args={[0.35, 0.08, 0.02]} />
-        <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={0.5} transparent opacity={0.8} />
-      </mesh>
 
       <group ref={leftArmRef} position={[-0.45, 1.6, 0]}>
         <mesh position={[-0.15, -0.2, 0.1]} castShadow>

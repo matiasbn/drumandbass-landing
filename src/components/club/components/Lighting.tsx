@@ -41,19 +41,22 @@ export const Lighting: React.FC<LightingProps> = ({ isPlayingRef }) => {
 
   return (
     <>
-      <ambientLight intensity={0.5} color="#222233" />
-      <pointLight position={[0, 10, 0]} intensity={50} color="#ffffff" distance={30} decay={2} />
+      <ambientLight intensity={1.0} color="#222233" />
+      <pointLight position={[0, 10, 0]} intensity={60} color="#ffffff" distance={35} decay={2} />
+      {/* DJ booth spotlight - bright and focused */}
       <spotLight
-        position={[0, 6, -2]}
-        angle={0.5}
+        position={[0, 6, -3]}
+        angle={0.6}
         penumbra={0.4}
-        intensity={40}
+        intensity={50}
         color={COLORS.neonPink}
         castShadow
         shadow-mapSize-width={512}
         shadow-mapSize-height={512}
-        target-position={[0, 1, -4]}
+        target-position={[0, 1, -5]}
       />
+      {/* Extra white fill on DJ area */}
+      <pointLight position={[0, 4, -5]} intensity={20} color="#ffffff" distance={10} decay={2} />
       <spotLight
         ref={spotLight1Ref}
         position={[-5, 8, -2]}
@@ -73,6 +76,9 @@ export const Lighting: React.FC<LightingProps> = ({ isPlayingRef }) => {
       <pointLight position={[-4, 0.5, 0]} intensity={8} color={COLORS.cyberBlue} distance={8} decay={2} />
       <pointLight position={[4, 0.5, 0]} intensity={8} color={COLORS.neonPink} distance={8} decay={2} />
       <pointLight position={[0, 0.5, 4]} intensity={8} color={COLORS.matrixGreen} distance={8} decay={2} />
+      {/* Jungle ambient green glow near DJ area */}
+      <pointLight position={[-3, 2, -5]} intensity={5} color="#22cc33" distance={6} decay={2} />
+      <pointLight position={[3, 2, -5]} intensity={5} color="#22cc33" distance={6} decay={2} />
     </>
   );
 };

@@ -11,6 +11,7 @@ import { LogoBanner } from './LogoBanner';
 import { Lighting } from './Lighting';
 import { StageElements } from './StageElements';
 import { Background } from './Background';
+import { JungleDecor } from './JungleDecor';
 
 interface SceneProps {
   isPlayingRef: MutableRefObject<boolean>;
@@ -31,6 +32,7 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef }) => {
       <PlayerDancer isPlayingRef={isPlayingRef} />
       <OtherPlayers isPlayingRef={isPlayingRef} />
       <StageElements isPlayingRef={isPlayingRef} />
+      <JungleDecor isPlayingRef={isPlayingRef} />
     </>
   );
 };

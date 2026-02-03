@@ -55,10 +55,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const rotationRef = useRef(Math.atan2(0, -4 - 2));
 
   const BOUNDS = {
-    minX: -4.5,
-    maxX: 4.5,
+    minX: -6.5,
+    maxX: 6.5,
     minZ: -2,
-    maxZ: 4.5,
+    maxZ: 6.5,
   };
 
   const MOVE_SPEED = 0.08;

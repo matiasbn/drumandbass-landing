@@ -13,7 +13,7 @@ const COLORS = {
 const colorArray = [COLORS.matrixGreen, COLORS.cyberBlue, COLORS.neonPink, COLORS.warningOrange];
 
 export const DanceFloor: React.FC = () => {
-  const gridSize = 10;
+  const gridSize = 14;
   const tileSize = 1;
 
   const tileData = useMemo(() => {
@@ -49,7 +49,7 @@ export const DanceFloor: React.FC = () => {
       </mesh>
 
       {colorArray.map((color, colorIndex) => (
-        <Instances key={colorIndex} limit={25}>
+        <Instances key={colorIndex} limit={49}>
           <boxGeometry args={[tileSize - 0.05, 0.1, tileSize - 0.05]} />
           <meshStandardMaterial
             color={color}
