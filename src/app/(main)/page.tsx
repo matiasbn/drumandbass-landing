@@ -6,13 +6,15 @@ import dayjs from '@/src/lib/date'
 import { getEvents } from '@/src/lib/contentful';
 
 
+export const revalidate = 3600;
+
 const Home = async () => {
   const contentfulEvents = await getEvents();
 
   // Eventos desde ayer en adelante
   const events = contentfulEvents
     .sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix())
-    .filter(event => dayjs(event.date).isAfter(dayjs().subtract(1, 'day')))
+    .filter(event => dayjs(event.endDate ?? event.date).isAfter(dayjs().subtract(1, 'day')))
 
   return (
       <main className="grow">
