@@ -7,8 +7,8 @@ import { useAuth } from '../AuthContext';
 type AuthView = 'login' | 'register' | 'magic-link' | 'profile';
 
 const ENABLED_PROVIDERS = {
-  google: true,
-  apple: true
+  google: false,
+  apple: false
 };
 
 interface AuthModalProps {
