@@ -6,6 +6,11 @@ import { useAuth } from '../AuthContext';
 
 type AuthView = 'login' | 'register' | 'magic-link' | 'profile';
 
+const ENABLED_PROVIDERS = {
+  google: true,
+  apple: true
+};
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose?: () => void;
@@ -208,27 +213,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {currentView === 'login' && (
             <>
               {/* OAuth buttons */}
-              <div className="space-y-3">
-                <button onClick={handleGoogleLogin} className={secondaryButtonClass}>
+              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && (
+                <div className="space-y-3">
+                {ENABLED_PROVIDERS.google && (<button onClick={handleGoogleLogin} className={secondaryButtonClass}>
                   <span className="flex items-center justify-center gap-3">
                     <RiGoogleFill className="w-5 h-5" />
                     CONTINUAR CON GOOGLE
                   </span>
-                </button>
+                </button>)}
 
-                <button onClick={handleAppleLogin} className={secondaryButtonClass}>
+              {ENABLED_PROVIDERS.apple && (<button onClick={handleAppleLogin} className={secondaryButtonClass}>
                   <span className="flex items-center justify-center gap-3">
                     <RiAppleFill className="w-5 h-5" />
                     CONTINUAR CON APPLE
                   </span>
-                </button>
-              </div>
+                </button>)}
+              </div>)}
 
-              <div className="flex items-center gap-4 my-6">
+              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && <div className="flex items-center gap-4 my-6">
                 <div className="flex-1 h-px bg-white/20" />
                 <span className="text-white/40 font-mono text-xs">O</span>
                 <div className="flex-1 h-px bg-white/20" />
-              </div>
+              </div>}
 
               {/* Email form */}
               <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -316,29 +322,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {loading ? 'CARGANDO...' : 'CREAR CUENTA'}
                 </button>
               </form>
-
-              {/* OAuth buttons */}
-              <div className="flex items-center gap-4 my-6">
-                <div className="flex-1 h-px bg-white/20" />
-                <span className="text-white/40 font-mono text-xs">O</span>
-                <div className="flex-1 h-px bg-white/20" />
-              </div>
-
-              <div className="space-y-3">
-                <button onClick={handleGoogleLogin} className={secondaryButtonClass}>
-                  <span className="flex items-center justify-center gap-3">
-                    <RiGoogleFill className="w-5 h-5" />
-                    REGISTRAR CON GOOGLE
-                  </span>
-                </button>
-
-                <button onClick={handleAppleLogin} className={secondaryButtonClass}>
-                  <span className="flex items-center justify-center gap-3">
-                    <RiAppleFill className="w-5 h-5" />
-                    REGISTRAR CON APPLE
-                  </span>
-                </button>
-              </div>
 
               {/* Links */}
               <div className="pt-4 text-center">
