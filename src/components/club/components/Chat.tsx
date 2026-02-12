@@ -27,7 +27,7 @@ export const Chat: React.FC = () => {
 
     const fetchMessages = async () => {
       const { data, error } = await supabase
-        .from('messages')
+        .from('chat_messages')
         .select('*')
         .order('created_at', { ascending: true })
         .limit(50);
@@ -43,13 +43,13 @@ export const Chat: React.FC = () => {
     fetchMessages();
 
     const channel = supabase
-      .channel('messages')
+      .channel('chat_messages')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'messages',
+          table: 'chat_messages',
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
@@ -98,7 +98,7 @@ export const Chat: React.FC = () => {
     setIsLoading(true);
     setNewMessage('');
 
-    const { error } = await supabase.from('messages').insert({
+    const { error } = await supabase.from('chat_messages').insert({
       username,
       message: trimmed,
     });

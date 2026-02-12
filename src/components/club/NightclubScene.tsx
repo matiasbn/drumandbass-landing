@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { RiArrowLeftLine, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
+import { RiLogoutBoxLine, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSLine, RiUserLine } from '@remixicon/react';
 import { NightclubCanvas } from './NightclubCanvas';
 import { AudioPlayer } from './components/AudioPlayer';
 import { Chat } from './components/Chat';
 import { MobileControls } from './components/MobileControls';
 import { PlaybackProvider, usePlayback } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
+import { useAuth } from './AuthContext';
 
 const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => {
   const { isPlaying, trackTitle, togglePlay } = usePlayback();
@@ -51,20 +51,31 @@ const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({
 
 const NightclubScene: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
+  const { profile, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <MultiplayerProvider>
     <PlaybackProvider>
       <div className="relative w-full h-screen bg-black">
         {/* Navigation overlay */}
-        <div className="absolute top-4 left-4 z-10">
-          <Link
-            href="/"
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+          <button
+            onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur border border-white/20 text-white font-mono text-sm hover:bg-white/10 hover:border-white/40 transition-all"
           >
-            <RiArrowLeftLine className="w-4 h-4" />
+            <RiLogoutBoxLine className="w-4 h-4" />
             SALIR
-          </Link>
+          </button>
+          {profile && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-black/50 backdrop-blur border border-[#00ff41]/30 text-[#00ff41] font-mono text-xs">
+              <RiUserLine className="w-3 h-3" />
+              @{profile.username}
+            </div>
+          )}
         </div>
 
         {/* Audio player - desktop: bottom left, above controls hint */}
