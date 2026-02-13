@@ -7,7 +7,7 @@ import { useAuth } from '../AuthContext';
 type AuthView = 'login' | 'register' | 'magic-link' | 'profile';
 
 const ENABLED_PROVIDERS = {
-  google: false,
+  google: true,
   apple: false
 };
 
