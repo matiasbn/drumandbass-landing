@@ -63,6 +63,10 @@ body {
   box-shadow: 8px 8px 0px 0px #FF5500;
 }
 
+.brutalist-shadow-youtube {
+  box-shadow: 8px 8px 0px 0px #CC0000;
+}
+
 .hover-lift:hover {
   transform: translate(-4px, -4px);
   box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 1);

@@ -7,6 +7,8 @@ import { SOCIALS, WHATSAPP_LINK } from '../constants';
 
 const SpIcon = SOCIALS.spotify.icon;
 const InstagramIcon = SOCIALS.instagram.icon;
+const YouTubeIcon = SOCIALS.youtube.icon;
+const SoundcloudIcon = SOCIALS.soundcloud.icon;
 
 const DIRECTORY_LINKS = [
   { href: '/artistas', label: 'Artistas' },
@@ -39,12 +41,20 @@ const HeaderNav = () => {
           <InstagramIcon /> Instagram
         </BrutalistButton>
         <BrutalistButton
+          variant="youtube"
+          className="text-xs py-2 px-4 h-12"
+          href={SOCIALS.youtube.url}
+          external
+        >
+          <YouTubeIcon /> YouTube
+        </BrutalistButton>
+        <BrutalistButton
           className="text-xs py-2 px-4 brutalist-border brutalist-shadow-blue h-12"
           variant="soundcloud"
           href="https://foro.drumandbasschile.cl/"
           external
         >
-          SoundCloud
+          <SoundcloudIcon /> SoundCloud
         </BrutalistButton>
         <div className="relative">
           <button
