@@ -12,7 +12,7 @@ const Header = () => (
           height={395}
           src={Logo}
           alt="logo drum and bass chile"
-          className="w-40 md:w-80"
+          className="w-40 md:w-60"
         />
       </Link>
     </div>
