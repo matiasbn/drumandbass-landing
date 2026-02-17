@@ -36,7 +36,7 @@ function ClubContent() {
         {/* Logo */}
         <div className="absolute top-8 left-1/2 -translate-x-1/2 text-center z-10">
           <h1 className="text-3xl md:text-4xl font-mono text-white tracking-wider mb-2">
-            Drum and BASS CHILE
+            Drum and Bass CHILE
           </h1>
           <p className="text-white/50 font-mono text-sm tracking-widest">CLUB VIRTUAL</p>
         </div>

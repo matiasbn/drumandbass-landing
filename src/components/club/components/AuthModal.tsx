@@ -1,18 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  RiCloseLine,
-  RiGoogleFill,
-  RiAppleFill,
-  RiMailLine,
-  RiLockLine,
-  RiUserLine,
-  RiAtLine,
-} from '@remixicon/react';
+import { RiCloseLine, RiGoogleFill, RiAppleFill, RiUserLine, RiAtLine } from '@remixicon/react';
 import { useAuth } from '../AuthContext';
 
-type AuthView = 'login' | 'register' | 'magic-link' | 'profile';
+type AuthView = 'login' | 'profile';
 
 const ENABLED_PROVIDERS = {
   google: true,
@@ -33,68 +25,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   canClose = true,
 }) => {
   const [view, setView] = useState<AuthView>(initialView);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const {
-    signInWithEmail,
-    signUpWithEmail,
-    signInWithMagicLink,
-    signInWithGoogle,
-    signInWithApple,
-    updateProfile,
-    needsProfile,
-  } = useAuth();
+  const { signInWithGoogle, signInWithApple, updateProfile, needsProfile } = useAuth();
 
   // Show profile setup if needed
   const currentView = needsProfile ? 'profile' : view;
 
   if (!isOpen) return null;
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const { error } = await signInWithEmail(email, password);
-    if (error) {
-      setError(error.message);
-    }
-    setLoading(false);
-  };
-
-  const handleEmailRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const { error } = await signUpWithEmail(email, password);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Revisa tu email para confirmar tu cuenta');
-    }
-    setLoading(false);
-  };
-
-  const handleMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const { error } = await signInWithMagicLink(email);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Revisa tu email para el enlace de acceso');
-    }
-    setLoading(false);
-  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,8 +87,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h2 className="text-xl font-mono text-white tracking-wider">
             {currentView === 'login' && 'INICIAR SESIÓN'}
-            {currentView === 'register' && 'CREAR CUENTA'}
-            {currentView === 'magic-link' && 'ENLACE MÁGICO'}
             {currentView === 'profile' && 'COMPLETAR PERFIL'}
           </h2>
           {canClose && !needsProfile && onClose && (
@@ -224,187 +164,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {currentView === 'login' && (
             <>
               {/* OAuth buttons */}
-              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && (
-                <div className="space-y-3">
-                  {ENABLED_PROVIDERS.google && (
-                    <button onClick={handleGoogleLogin} className={secondaryButtonClass}>
-                      <span className="flex items-center justify-center gap-3">
-                        <RiGoogleFill className="w-5 h-5" />
-                        CONTINUAR CON GOOGLE
-                      </span>
-                    </button>
-                  )}
-
-                  {ENABLED_PROVIDERS.apple && (
-                    <button onClick={handleAppleLogin} className={secondaryButtonClass}>
-                      <span className="flex items-center justify-center gap-3">
-                        <RiAppleFill className="w-5 h-5" />
-                        CONTINUAR CON APPLE
-                      </span>
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && (
-                <div className="flex items-center gap-4 my-6">
-                  <div className="flex-1 h-px bg-white/20" />
-                  <span className="text-white/40 font-mono text-xs">O</span>
-                  <div className="flex-1 h-px bg-white/20" />
-                </div>
-              )}
-
-              {/* Email form */}
-              <form onSubmit={handleEmailLogin} className="space-y-4">
-                <div className="relative">
-                  <RiMailLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={`${inputClass} pl-11`}
-                    required
-                  />
-                </div>
-
-                <div className="relative">
-                  <RiLockLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="password"
-                    placeholder="Contraseña"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={`${inputClass} pl-11`}
-                    required
-                  />
-                </div>
-
-                <button type="submit" disabled={loading} className={primaryButtonClass}>
-                  {loading ? 'CARGANDO...' : 'INICIAR SESIÓN'}
-                </button>
-              </form>
-
-              {/* Links */}
-              <div className="pt-4 space-y-3 text-center">
-                <button
-                  onClick={() => {
-                    setView('magic-link');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="text-white/60 hover:text-[#ff0055] font-mono text-xs transition-colors"
-                >
-                  Iniciar sesión con enlace mágico
-                </button>
-
-                <div className="text-white/40 font-mono text-xs">
-                  ¿No tienes cuenta?{' '}
-                  <button
-                    onClick={() => {
-                      setView('register');
-                      setError('');
-                      setSuccess('');
-                    }}
-                    className="text-[#ff0055] hover:underline"
-                  >
-                    Crear cuenta
+              <div className="space-y-3">
+                {ENABLED_PROVIDERS.google && (
+                  <button onClick={handleGoogleLogin} className={secondaryButtonClass}>
+                    <span className="flex items-center justify-center gap-3">
+                      <RiGoogleFill className="w-5 h-5" />
+                      CONTINUAR CON GOOGLE
+                    </span>
                   </button>
-                </div>
-              </div>
-            </>
-          )}
+                )}
 
-          {/* Register View */}
-          {currentView === 'register' && (
-            <>
-              <form onSubmit={handleEmailRegister} className="space-y-4">
-                <div className="relative">
-                  <RiMailLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={`${inputClass} pl-11`}
-                    required
-                  />
-                </div>
-
-                <div className="relative">
-                  <RiLockLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="password"
-                    placeholder="Contraseña (mín. 6 caracteres)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={`${inputClass} pl-11`}
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                <button type="submit" disabled={loading} className={primaryButtonClass}>
-                  {loading ? 'CARGANDO...' : 'CREAR CUENTA'}
-                </button>
-              </form>
-
-              {/* Links */}
-              <div className="pt-4 text-center">
-                <div className="text-white/40 font-mono text-xs">
-                  ¿Ya tienes cuenta?{' '}
-                  <button
-                    onClick={() => {
-                      setView('login');
-                      setError('');
-                      setSuccess('');
-                    }}
-                    className="text-[#ff0055] hover:underline"
-                  >
-                    Iniciar sesión
+                {ENABLED_PROVIDERS.apple && (
+                  <button onClick={handleAppleLogin} className={secondaryButtonClass}>
+                    <span className="flex items-center justify-center gap-3">
+                      <RiAppleFill className="w-5 h-5" />
+                      CONTINUAR CON APPLE
+                    </span>
                   </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Magic Link View */}
-          {currentView === 'magic-link' && (
-            <>
-              <p className="text-white/70 font-mono text-xs mb-4">
-                Te enviaremos un enlace para iniciar sesión sin contraseña
-              </p>
-
-              <form onSubmit={handleMagicLink} className="space-y-4">
-                <div className="relative">
-                  <RiMailLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={`${inputClass} pl-11`}
-                    required
-                  />
-                </div>
-
-                <button type="submit" disabled={loading} className={primaryButtonClass}>
-                  {loading ? 'ENVIANDO...' : 'ENVIAR ENLACE'}
-                </button>
-              </form>
-
-              {/* Links */}
-              <div className="pt-4 text-center">
-                <button
-                  onClick={() => {
-                    setView('login');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="text-white/60 hover:text-[#ff0055] font-mono text-xs transition-colors"
-                >
-                  ← Volver a iniciar sesión
-                </button>
+                )}
               </div>
             </>
           )}
@@ -413,7 +190,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-white/10">
           <p className="text-white/30 font-mono text-[10px] text-center">
-            Drum and BASS CHILE // CLUB VIRTUAL
+            Drum and Bass CHILE // CLUB VIRTUAL
           </p>
         </div>
       </div>

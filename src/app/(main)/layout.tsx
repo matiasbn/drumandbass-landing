@@ -86,7 +86,7 @@ export default function MainLayout({
         <div>
           <p className="mono font-bold text-xs uppercase opacity-60">Desde 2025</p>
           <h4 className="text-2xl font-black uppercase italic tracking-tighter">
-            Drum and BASS CHILE 🇨🇱{' '}
+            Drum and Bass CHILE 🇨🇱{' '}
           </h4>
         </div>
 
