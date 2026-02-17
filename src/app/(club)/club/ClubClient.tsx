@@ -99,6 +99,12 @@ function ClubContent() {
             >
               YA ESTOY SUSCRITO — ENTRAR AL CLUB
             </button>
+            <a
+              href="/"
+              className="block w-full py-3 font-mono text-sm tracking-wider text-white border border-white/30 hover:bg-white/10 transition-colors text-center"
+            >
+              VOLVER A DRUM AND BASS CHILE
+            </a>
           </div>
         </div>
       </div>
