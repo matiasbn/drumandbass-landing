@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Space_Mono } from 'next/font/google';
 import { GoogleAnalytics } from '@/src/components/GoogleAnalytics';
+import { BASE_URL } from '@/src/constants';
 import '../globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -16,11 +17,42 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Drum and Bass Chile',
-  description: 'Enlaces oficiales de Drum and Bass Chile',
+  metadataBase: new URL(BASE_URL),
+  title: {
+    default: 'Drum and Bass Chile',
+    template: '%s | Drum and Bass Chile',
+  },
+  description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+  keywords: ['Drum and Bass', 'DNB', 'Chile', 'eventos', 'DJs', 'productores', 'bass music', 'drum and bass chile'],
+  authors: [{ name: 'Drum and Bass Chile' }],
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'es_CL',
+    url: BASE_URL,
+    siteName: 'Drum and Bass Chile',
+    title: 'Drum and Bass Chile',
+    description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+    images: [
+      {
+        url: '/logo.png',
+        width: 890,
+        height: 395,
+        alt: 'Drum and Bass Chile',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Drum and Bass Chile',
+    description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+    images: ['/logo.png'],
+  },
+  alternates: {
+    canonical: BASE_URL,
   },
 };
 

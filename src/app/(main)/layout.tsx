@@ -1,7 +1,22 @@
 import Header from '../../components/Header';
-import { SOCIALS, WHATSAPP_LINK, TEAM } from '../../constants';
+import { SOCIALS, WHATSAPP_LINK, TEAM, BASE_URL } from '../../constants';
 import { RiWhatsappLine } from '@remixicon/react';
 import BrutalistButton from '@/src/components/BigButton';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Drum and Bass Chile',
+  url: BASE_URL,
+  logo: `${BASE_URL}/logo.png`,
+  description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+  sameAs: Object.values(SOCIALS).map((s) => s.url),
+  foundingDate: '2025',
+  areaServed: {
+    '@type': 'Country',
+    name: 'Chile',
+  },
+};
 
 export default function MainLayout({
   children,
@@ -10,6 +25,10 @@ export default function MainLayout({
 }>) {
   return (
     <div className="min-h-screen flex flex-col selection:bg-[#ff0000] selection:text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header / Logo Section */}
       <Header />
 
