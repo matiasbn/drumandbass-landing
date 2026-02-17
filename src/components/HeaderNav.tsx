@@ -55,6 +55,13 @@ const HeaderNav = () => {
         >
           <SoundcloudIcon /> SoundCloud
         </BrutalistButton>
+        <BrutalistButton
+          variant="club"
+          className="text-xs py-2 px-4 h-12"
+          href="/club"
+        >
+          CLUB
+        </BrutalistButton>
         <div className="relative">
           <button
             onClick={() => setDirOpen(!dirOpen)}
@@ -121,6 +128,13 @@ const HeaderNav = () => {
             external
           >
             <SoundcloudIcon /> SoundCloud
+          </BrutalistButton>
+          <BrutalistButton
+            variant="club"
+            className="text-sm py-3 px-4 w-full"
+            href="/club"
+          >
+            CLUB
           </BrutalistButton>
           {DIRECTORY_LINKS.map((link) => (
             <a
