@@ -1,4 +1,4 @@
--- Supabase SQL Schema for Drum & Bass Chile Club
+-- Supabase SQL Schema for Drum and Bass Chile Club
 -- Run this in your Supabase SQL Editor
 
 -- Create profiles table

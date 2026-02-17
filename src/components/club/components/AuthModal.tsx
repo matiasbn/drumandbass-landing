@@ -1,14 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { RiCloseLine, RiGoogleFill, RiAppleFill, RiMailLine, RiLockLine, RiUserLine, RiAtLine } from '@remixicon/react';
+import {
+  RiCloseLine,
+  RiGoogleFill,
+  RiAppleFill,
+  RiMailLine,
+  RiLockLine,
+  RiUserLine,
+  RiAtLine,
+} from '@remixicon/react';
 import { useAuth } from '../AuthContext';
 
 type AuthView = 'login' | 'register' | 'magic-link' | 'profile';
 
 const ENABLED_PROVIDERS = {
   google: true,
-  apple: false
+  apple: false,
 };
 
 interface AuthModalProps {
@@ -22,7 +30,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   initialView = 'login',
-  canClose = true
+  canClose = true,
 }) => {
   const [view, setView] = useState<AuthView>(initialView);
   const [email, setEmail] = useState('');
@@ -40,7 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     signInWithGoogle,
     signInWithApple,
     updateProfile,
-    needsProfile
+    needsProfile,
   } = useAuth();
 
   // Show profile setup if needed
@@ -124,8 +132,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (error) setError(error.message);
   };
 
-  const inputClass = "w-full px-4 py-3 bg-black/50 border border-white/20 text-white font-mono text-sm focus:border-[#ff0055] focus:outline-none transition-colors";
-  const buttonClass = "w-full py-3 font-mono text-sm tracking-wider transition-all";
+  const inputClass =
+    'w-full px-4 py-3 bg-black/50 border border-white/20 text-white font-mono text-sm focus:border-[#ff0055] focus:outline-none transition-colors';
+  const buttonClass = 'w-full py-3 font-mono text-sm tracking-wider transition-all';
   const primaryButtonClass = `${buttonClass} bg-[#ff0055] text-white hover:bg-[#ff0055]/80 disabled:opacity-50`;
   const secondaryButtonClass = `${buttonClass} border border-white/30 text-white hover:bg-white/10`;
 
@@ -191,7 +200,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="text"
                   placeholder="Nombre de usuario"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  onChange={(e) =>
+                    setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+                  }
                   className={`${inputClass} pl-11`}
                   required
                   minLength={3}
@@ -215,26 +226,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* OAuth buttons */}
               {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && (
                 <div className="space-y-3">
-                {ENABLED_PROVIDERS.google && (<button onClick={handleGoogleLogin} className={secondaryButtonClass}>
-                  <span className="flex items-center justify-center gap-3">
-                    <RiGoogleFill className="w-5 h-5" />
-                    CONTINUAR CON GOOGLE
-                  </span>
-                </button>)}
+                  {ENABLED_PROVIDERS.google && (
+                    <button onClick={handleGoogleLogin} className={secondaryButtonClass}>
+                      <span className="flex items-center justify-center gap-3">
+                        <RiGoogleFill className="w-5 h-5" />
+                        CONTINUAR CON GOOGLE
+                      </span>
+                    </button>
+                  )}
 
-              {ENABLED_PROVIDERS.apple && (<button onClick={handleAppleLogin} className={secondaryButtonClass}>
-                  <span className="flex items-center justify-center gap-3">
-                    <RiAppleFill className="w-5 h-5" />
-                    CONTINUAR CON APPLE
-                  </span>
-                </button>)}
-              </div>)}
+                  {ENABLED_PROVIDERS.apple && (
+                    <button onClick={handleAppleLogin} className={secondaryButtonClass}>
+                      <span className="flex items-center justify-center gap-3">
+                        <RiAppleFill className="w-5 h-5" />
+                        CONTINUAR CON APPLE
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
 
-              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && <div className="flex items-center gap-4 my-6">
-                <div className="flex-1 h-px bg-white/20" />
-                <span className="text-white/40 font-mono text-xs">O</span>
-                <div className="flex-1 h-px bg-white/20" />
-              </div>}
+              {(ENABLED_PROVIDERS.google || ENABLED_PROVIDERS.apple) && (
+                <div className="flex items-center gap-4 my-6">
+                  <div className="flex-1 h-px bg-white/20" />
+                  <span className="text-white/40 font-mono text-xs">O</span>
+                  <div className="flex-1 h-px bg-white/20" />
+                </div>
+              )}
 
               {/* Email form */}
               <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -270,7 +288,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Links */}
               <div className="pt-4 space-y-3 text-center">
                 <button
-                  onClick={() => { setView('magic-link'); setError(''); setSuccess(''); }}
+                  onClick={() => {
+                    setView('magic-link');
+                    setError('');
+                    setSuccess('');
+                  }}
                   className="text-white/60 hover:text-[#ff0055] font-mono text-xs transition-colors"
                 >
                   Iniciar sesión con enlace mágico
@@ -279,7 +301,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="text-white/40 font-mono text-xs">
                   ¿No tienes cuenta?{' '}
                   <button
-                    onClick={() => { setView('register'); setError(''); setSuccess(''); }}
+                    onClick={() => {
+                      setView('register');
+                      setError('');
+                      setSuccess('');
+                    }}
                     className="text-[#ff0055] hover:underline"
                   >
                     Crear cuenta
@@ -328,7 +354,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="text-white/40 font-mono text-xs">
                   ¿Ya tienes cuenta?{' '}
                   <button
-                    onClick={() => { setView('login'); setError(''); setSuccess(''); }}
+                    onClick={() => {
+                      setView('login');
+                      setError('');
+                      setSuccess('');
+                    }}
                     className="text-[#ff0055] hover:underline"
                   >
                     Iniciar sesión
@@ -366,7 +396,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Links */}
               <div className="pt-4 text-center">
                 <button
-                  onClick={() => { setView('login'); setError(''); setSuccess(''); }}
+                  onClick={() => {
+                    setView('login');
+                    setError('');
+                    setSuccess('');
+                  }}
                   className="text-white/60 hover:text-[#ff0055] font-mono text-xs transition-colors"
                 >
                   ← Volver a iniciar sesión
@@ -379,7 +413,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-white/10">
           <p className="text-white/30 font-mono text-[10px] text-center">
-            DRUM & BASS CHILE // CLUB VIRTUAL
+            Drum and BASS CHILE // CLUB VIRTUAL
           </p>
         </div>
       </div>

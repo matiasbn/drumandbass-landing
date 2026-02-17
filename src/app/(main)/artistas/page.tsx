@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Metadata } from 'next';
 import ARTISTS from '@/src/data/artistas.json';
@@ -6,8 +5,8 @@ import Card from '@/src/components/Card';
 import Grid from '@/src/components/Grid';
 
 export const metadata: Metadata = {
-  title: "Artistas | Drum & Bass Chile",
-  description: "Directorio de DJs, productores y talentos de la escena.",
+  title: 'Artistas | Drum and Bass Chile',
+  description: 'Directorio de DJs, productores y talentos de la escena.',
 };
 
 export default function ArtistDirectory() {

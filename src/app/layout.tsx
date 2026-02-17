@@ -1,26 +1,26 @@
-import type { Metadata } from "next";
-import { Space_Grotesk, Space_Mono } from "next/font/google";
-import { GoogleAnalytics } from "@/src/components/GoogleAnalytics";
-import "../globals.css";
+import type { Metadata } from 'next';
+import { Space_Grotesk, Space_Mono } from 'next/font/google';
+import { GoogleAnalytics } from '@/src/components/GoogleAnalytics';
+import '../globals.css';
 
 const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  weight: ["300", "400", "700"],
+  variable: '--font-space-grotesk',
+  subsets: ['latin'],
+  weight: ['300', '400', '700'],
 });
 
 const spaceMono = Space_Mono({
-  variable: "--font-space-mono",
-  subsets: ["latin"],
-  weight: ["400", "700"],
+  variable: '--font-space-mono',
+  subsets: ['latin'],
+  weight: ['400', '700'],
 });
 
 export const metadata: Metadata = {
-  title: "Drum & Bass Chile",
-  description: "Enlaces oficiales de Drum & Bass Chile",
+  title: 'Drum and Bass Chile',
+  description: 'Enlaces oficiales de Drum and Bass Chile',
   icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
 };
 

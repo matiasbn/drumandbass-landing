@@ -1,7 +1,7 @@
-import Header from "../../components/Header";
-import { SOCIALS, WHATSAPP_LINK, TEAM } from "../../constants";
-import { RiWhatsappLine } from "@remixicon/react";
-import BrutalistButton from "@/src/components/BigButton";
+import Header from '../../components/Header';
+import { SOCIALS, WHATSAPP_LINK, TEAM } from '../../constants';
+import { RiWhatsappLine } from '@remixicon/react';
+import BrutalistButton from '@/src/components/BigButton';
 
 export default function MainLayout({
   children,
@@ -19,18 +19,20 @@ export default function MainLayout({
         <div className="flex-1">
           <h3 className="text-5xl font-black uppercase mb-6 italic">SOCIAL</h3>
           <div className="grid grid-cols-2 gap-4">
-            {Object.keys(SOCIALS).map(key => {
-              const {platform, url, icon: Icon} = SOCIALS[key];
+            {Object.keys(SOCIALS).map((key) => {
+              const { platform, url, icon: Icon } = SOCIALS[key];
               return (
                 <a
                   key={platform}
                   href={url}
                   className="p-6 border-4 border-black hover:bg-[#0000ff] hover:text-white transition-all font-bold uppercase mono text-center brutalist-shadow-blue hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
                 >
-                <div className="text-2xl flex justify-center mb-2"><Icon /></div>
-                {platform}
-              </a>
-              )
+                  <div className="text-2xl flex justify-center mb-2">
+                    <Icon />
+                  </div>
+                  {platform}
+                </a>
+              );
             })}
           </div>
         </div>
@@ -38,10 +40,14 @@ export default function MainLayout({
           <div className="relative z-10">
             <h3 className="text-4xl font-black uppercase mb-4">WHATSAPP</h3>
             <p className="mono font-bold text-lg mb-8 uppercase leading-tight">
-              Únete a nuestro grupo de WhatsApp para estar al tanto de los próximos eventos, lanzamientos exclusivos y
-              conectarte con la comunidad de Drum & Bass en Chile.
+              Únete a nuestro grupo de WhatsApp para estar al tanto de los próximos eventos,
+              lanzamientos exclusivos y conectarte con la comunidad de Drum and Bass en Chile.
             </p>
-            <BrutalistButton variant="whatsapp" className="w-full text-2xl py-8" href={WHATSAPP_LINK}>
+            <BrutalistButton
+              variant="whatsapp"
+              className="w-full text-2xl py-8"
+              href={WHATSAPP_LINK}
+            >
               <RiWhatsappLine /> ÚNETE AL GRUPO
             </BrutalistButton>
           </div>
@@ -56,14 +62,22 @@ export default function MainLayout({
       <footer className="p-6 lg:p-12 bg-black text-white flex flex-col lg:flex-row items-center justify-between gap-8">
         <div>
           <p className="mono font-bold text-xs uppercase opacity-60">Desde 2025</p>
-          <h4 className="text-2xl font-black uppercase italic tracking-tighter">DRUM & BASS CHILE 🇨🇱 </h4>
+          <h4 className="text-2xl font-black uppercase italic tracking-tighter">
+            Drum and BASS CHILE 🇨🇱{' '}
+          </h4>
         </div>
 
         <div className="text-right">
           <p className="mono text-xs font-bold text-[#ff0000] uppercase">TEAM</p>
           <p className="mono text-xs font-bold uppercase flex gap-2">
-            {TEAM.map(member => (
-              <a key={member.name} href={member.instagram} className="underline" target="_blank" rel="noopener noreferrer">
+            {TEAM.map((member) => (
+              <a
+                key={member.name}
+                href={member.instagram}
+                className="underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 @{member.name}
               </a>
             ))}

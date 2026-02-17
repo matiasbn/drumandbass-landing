@@ -4,10 +4,9 @@ import dynamic from 'next/dynamic';
 import { AuthProvider, useAuth } from '../../../components/club/AuthContext';
 import { AuthModal } from '../../../components/club/components/AuthModal';
 
-const NightclubScene = dynamic(
-  () => import('../../../components/club/NightclubScene'),
-  { ssr: false }
-);
+const NightclubScene = dynamic(() => import('../../../components/club/NightclubScene'), {
+  ssr: false,
+});
 
 function ClubContent() {
   const { user, profile, loading, needsProfile } = useAuth();
@@ -37,11 +36,9 @@ function ClubContent() {
         {/* Logo */}
         <div className="absolute top-8 left-1/2 -translate-x-1/2 text-center z-10">
           <h1 className="text-3xl md:text-4xl font-mono text-white tracking-wider mb-2">
-            DRUM & BASS CHILE
+            Drum and BASS CHILE
           </h1>
-          <p className="text-white/50 font-mono text-sm tracking-widest">
-            CLUB VIRTUAL
-          </p>
+          <p className="text-white/50 font-mono text-sm tracking-widest">CLUB VIRTUAL</p>
         </div>
 
         <AuthModal isOpen={true} canClose={false} />
