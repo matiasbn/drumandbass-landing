@@ -5,6 +5,18 @@ import { RiWhatsappLine, RiMenuLine, RiCloseLine, RiFolder2Line } from '@remixic
 import BrutalistButton from './BigButton';
 import { SOCIALS, WHATSAPP_LINK } from '../constants';
 
+const DiscoBallIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
+    <ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <ellipse cx="12" cy="12" rx="10" ry="7" fill="none" stroke="currentColor" strokeWidth="1" />
+    <line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" strokeWidth="1" />
+    <line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1" />
+  </svg>
+);
+
 const InstagramIcon = SOCIALS.instagram.icon;
 const YouTubeIcon = SOCIALS.youtube.icon;
 const SoundcloudIcon = SOCIALS.soundcloud.icon;
@@ -60,7 +72,7 @@ const HeaderNav = () => {
           className="text-xs py-2 px-4 h-12"
           href="/club"
         >
-          CLUB
+          <DiscoBallIcon size={16} /> CLUB
         </BrutalistButton>
         <div className="relative">
           <button
@@ -134,7 +146,7 @@ const HeaderNav = () => {
             className="text-sm py-3 px-4 w-full"
             href="/club"
           >
-            CLUB
+            <DiscoBallIcon size={16} /> CLUB
           </BrutalistButton>
           {DIRECTORY_LINKS.map((link) => (
             <a
