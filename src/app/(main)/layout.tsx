@@ -21,17 +21,20 @@ export default function MainLayout({
           <div className="grid grid-cols-2 gap-4">
             {Object.keys(SOCIALS).map((key) => {
               const { platform, url, icon: Icon } = SOCIALS[key];
+              const variantKey = key as 'instagram' | 'soundcloud' | 'spotify' | 'youtube';
               return (
-                <a
+                <BrutalistButton
                   key={platform}
+                  variant={variantKey}
                   href={url}
-                  className="p-6 border-4 border-black hover:bg-[#0000ff] hover:text-white transition-all font-bold uppercase mono text-center brutalist-shadow-blue hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
+                  external
+                  className="p-6 flex-col text-center"
                 >
                   <div className="text-2xl flex justify-center mb-2">
                     <Icon />
                   </div>
                   {platform}
-                </a>
+                </BrutalistButton>
               );
             })}
           </div>
