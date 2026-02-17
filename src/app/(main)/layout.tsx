@@ -9,7 +9,8 @@ const jsonLd = {
   name: 'Drum and Bass Chile',
   url: BASE_URL,
   logo: `${BASE_URL}/logo.png`,
-  description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+  description:
+    'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
   sameAs: Object.values(SOCIALS).map((s) => s.url),
   foundingDate: '2025',
   areaServed: {
@@ -90,8 +91,8 @@ export default function MainLayout({
         </div>
 
         <div className="text-right">
-          <p className="mono text-xs font-bold text-[#ff0000] uppercase">TEAM</p>
-          <p className="mono text-xs font-bold uppercase flex gap-2">
+          <p className="mono text-xl font-bold text-[#ff0000] uppercase">TEAM</p>
+          <p className="mono text-s font-bold uppercase flex gap-2">
             {TEAM.map((member) => (
               <a
                 key={member.name}
