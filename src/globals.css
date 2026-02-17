@@ -55,6 +55,14 @@ body {
   box-shadow: 8px 8px 0px 0px #1db954;
 }
 
+.brutalist-shadow-instagram {
+  box-shadow: 8px 8px 0px 0px #E1306C;
+}
+
+.brutalist-shadow-soundcloud {
+  box-shadow: 8px 8px 0px 0px #FF5500;
+}
+
 .hover-lift:hover {
   transform: translate(-4px, -4px);
   box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 1);

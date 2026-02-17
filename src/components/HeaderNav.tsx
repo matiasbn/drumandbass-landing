@@ -6,6 +6,7 @@ import BrutalistButton from './BigButton';
 import { SOCIALS, WHATSAPP_LINK } from '../constants';
 
 const SpIcon = SOCIALS.spotify.icon;
+const InstagramIcon = SOCIALS.instagram.icon;
 
 const DIRECTORY_LINKS = [
   { href: '/artistas', label: 'Artistas' },
@@ -21,14 +22,29 @@ const HeaderNav = () => {
     <>
       {/* Desktop nav */}
       <nav className="hidden lg:flex gap-4 w-2/3 justify-end pr-8 items-center">
-        <BrutalistButton variant="spotify" className="text-xs py-2 px-4 h-12" href={SOCIALS.spotify.url} external>
-          <SpIcon /> Playlist
-        </BrutalistButton>
-        <BrutalistButton className="text-xs py-2 px-4 brutalist-border brutalist-shadow-blue h-12" href="https://foro.drumandbasschile.cl/" external>
-          Foro
-        </BrutalistButton>
-        <BrutalistButton variant="whatsapp" className="text-xs py-2 px-4 h-12" href={WHATSAPP_LINK} external>
+        <BrutalistButton
+          variant="whatsapp"
+          className="text-xs py-2 px-4 h-12"
+          href={WHATSAPP_LINK}
+          external
+        >
           <RiWhatsappLine size={16} /> WHATSAPP
+        </BrutalistButton>
+        <BrutalistButton
+          variant="instagram"
+          className="text-xs py-2 px-4 h-12"
+          href={SOCIALS.instagram.url}
+          external
+        >
+          <InstagramIcon /> Instagram
+        </BrutalistButton>
+        <BrutalistButton
+          className="text-xs py-2 px-4 brutalist-border brutalist-shadow-blue h-12"
+          variant="soundcloud"
+          href="https://foro.drumandbasschile.cl/"
+          external
+        >
+          SoundCloud
         </BrutalistButton>
         <div className="relative">
           <button
@@ -74,13 +90,27 @@ const HeaderNav = () => {
               {link.label}
             </a>
           ))}
-          <BrutalistButton variant="spotify" className="text-sm py-3 px-4 w-full" href={SOCIALS.spotify.url} external>
+          <BrutalistButton
+            variant="spotify"
+            className="text-sm py-3 px-4 w-full"
+            href={SOCIALS.spotify.url}
+            external
+          >
             <SpIcon /> Playlist
           </BrutalistButton>
-          <BrutalistButton className="text-sm py-3 px-4 brutalist-border brutalist-shadow-blue w-full" href="https://foro.drumandbasschile.cl/" external>
+          <BrutalistButton
+            className="text-sm py-3 px-4 brutalist-border brutalist-shadow-blue w-full"
+            href="https://foro.drumandbasschile.cl/"
+            external
+          >
             Foro
           </BrutalistButton>
-          <BrutalistButton variant="whatsapp" className="text-sm py-3 px-4 w-full" href={WHATSAPP_LINK} external>
+          <BrutalistButton
+            variant="whatsapp"
+            className="text-sm py-3 px-4 w-full"
+            href={WHATSAPP_LINK}
+            external
+          >
             <RiWhatsappLine size={18} /> WHATSAPP
           </BrutalistButton>
         </div>
