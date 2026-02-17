@@ -5,8 +5,10 @@ import Card from '@/src/components/Card';
 import Grid from '@/src/components/Grid';
 
 export const metadata: Metadata = {
-  title: 'Productores | Drum and Bass Chile',
+  title: 'Productores',
   description: 'Productores de eventos que impulsan la cultura Drum and Bass en la escena chilena.',
+  keywords: ['productores drum and bass', 'productores eventos DNB', 'eventos bass music Chile'],
+  alternates: { canonical: '/productores' },
 };
 
 export default function ProductoresPage() {

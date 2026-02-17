@@ -5,8 +5,10 @@ import Card from '@/src/components/Card';
 import Grid from '@/src/components/Grid';
 
 export const metadata: Metadata = {
-  title: 'Artistas | Drum and Bass Chile',
-  description: 'Directorio de DJs, productores y talentos de la escena.',
+  title: 'Artistas',
+  description: 'Directorio de DJs, productores y talentos de la escena Drum and Bass en Chile.',
+  keywords: ['artistas drum and bass', 'DJs DNB Chile', 'talentos bass music Chile'],
+  alternates: { canonical: '/artistas' },
 };
 
 export default function ArtistDirectory() {

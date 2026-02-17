@@ -11,8 +11,9 @@ const Header = () => (
           width={890}
           height={395}
           src={Logo}
-          alt="logo drum and bass chile"
+          alt="Drum and Bass Chile - Comunidad oficial de DNB en Chile"
           className="w-40 md:w-60"
+          priority
         />
       </Link>
     </div>

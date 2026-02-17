@@ -5,9 +5,11 @@ import Card from '@/src/components/Card';
 import Grid from '@/src/components/Grid';
 
 export const metadata: Metadata = {
-  title: 'Organizaciones | Drum and Bass Chile',
+  title: 'Organizaciones',
   description:
     'Organizaciones, sellos y colectivos que impulsan la cultura Drum and Bass en la escena chilena.',
+  keywords: ['organizaciones drum and bass', 'sellos DNB Chile', 'colectivos bass music Chile'],
+  alternates: { canonical: '/organizaciones' },
 };
 
 export default function OrganizacionesPage() {
