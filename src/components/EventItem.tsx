@@ -1,6 +1,5 @@
-
 import React from 'react';
-import dayjs from 'dayjs'
+import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isTomorrow from 'dayjs/plugin/isTomorrow';
 import Image from 'next/image';
@@ -12,16 +11,22 @@ import BigButton from './BigButton';
 dayjs.extend(isToday);
 dayjs.extend(isTomorrow);
 
-function getProximityBadge(date: string, endDate?: string): { label: string; color: string } | null {
+function getProximityBadge(
+  date: string,
+  endDate?: string,
+): { label: string; color: string } | null {
   const now = dayjs();
   const eventStart = dayjs(date);
   const eventEnd = endDate ? dayjs(endDate) : eventStart;
 
-  if (now.isAfter(eventStart) && now.isBefore(eventEnd)) return { label: 'AHORA', color: 'bg-green-600' };
+  if (now.isAfter(eventStart) && now.isBefore(eventEnd))
+    return { label: 'AHORA', color: 'bg-green-600' };
   if (eventStart.isToday()) return { label: 'HOY', color: 'bg-red-600' };
   if (eventStart.isTomorrow()) return { label: 'MAÑANA', color: 'bg-orange-500' };
   const daysUntil = eventStart.startOf('day').diff(now.startOf('day'), 'day');
-  if (daysUntil > 0 && daysUntil <= 7) return { label: 'ESTA SEMANA', color: 'bg-yellow-500 text-black' };
+  if (daysUntil > 0 && daysUntil <= 7)
+    return { label: 'ESTA SEMANA', color: 'bg-yellow-500 text-black' };
+  if (daysUntil > 7 && daysUntil <= 14) return { label: 'PRÓXIMA SEMANA', color: 'bg-green-600' };
   return null;
 }
 
@@ -31,7 +36,7 @@ interface EventItemProps {
 }
 
 const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
-  const { title, flyer, date, endDate, tickets, description, venue, address } = event
+  const { title, flyer, date, endDate, tickets, description, venue, address } = event;
   const formattedDate = dayjs(date).format('dddd DD  MMMM  YYYY [@] HH:mm');
   const isEven = index % 2 === 0;
   const badge = getProximityBadge(date, endDate);
@@ -73,12 +78,14 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
             )}
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1 lg:mb-2">
-                {badge && (<div className='flex items-center bg-red-600 text-white text-sm lg:text-xl font-black mono px-3 py-1.5 lg:px-4 lg:py-2 border-4 border-black uppercase tracking-widest animate-pulse'>
-                  {['HOY', 'AHORA'].includes(badge.label) && <span className='mr-3 rounded-full bg-white w-2 h-2 inline-block'></span>}
-                  <span>
-                   {badge.label}
-                  </span>
-                </div>)}
+                {badge && (
+                  <div className="flex items-center bg-red-600 text-white text-sm lg:text-xl font-black mono px-3 py-1.5 lg:px-4 lg:py-2 border-4 border-black uppercase tracking-widest animate-pulse">
+                    {['HOY', 'AHORA'].includes(badge.label) && (
+                      <span className="mr-3 rounded-full bg-white w-2 h-2 inline-block"></span>
+                    )}
+                    <span>{badge.label}</span>
+                  </div>
+                )}
                 <div className="mono text-[12px] lg:text-base font-black bg-black text-white px-2 py-1 inline-block">
                   {formattedDate}
                 </div>
@@ -87,18 +94,24 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
                 {event.title}
               </h3>
               <p className="font-bold text-sm lg:text-2xl uppercase tracking-tight text-gray-500 mt-1 lg:mt-2">
-                {address
-                  ? <a href={`https://www.google.com/maps/search/?api=1&query=${address}`} target="_blank" rel="noopener noreferrer">
-                    <span className='text-sm lg:text-xl'>{venue}</span> - <span className='text-xs lg:text-lg'>{address}</span>
+                {address ? (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span className="text-sm lg:text-xl">{venue}</span> -{' '}
+                    <span className="text-xs lg:text-lg">{address}</span>
                   </a>
-                  : <span className='text-sm lg:text-lg'>{venue}</span>
-                }
+                ) : (
+                  <span className="text-sm lg:text-lg">{venue}</span>
+                )}
               </p>
             </div>
           </div>
 
           <div className="w-full lg:w-auto">
-             <BigButton
+            <BigButton
               variant={isEven ? 'blue' : 'red'}
               className="w-full lg:w-auto text-base lg:text-xl py-3 lg:py-4 px-6 lg:px-10"
               href={tickets}
@@ -112,8 +125,10 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
         <div className="mt-2 pt-4 lg:pt-6 border-t-2 border-dashed border-black">
           <div
             className="text-xl lg:text-3xl font-black uppercase italic leading-none cursor-default transition-colors event-description"
-            dangerouslySetInnerHTML={{ __html: description ? documentToHtmlString(description) : '' }}>
-          </div>
+            dangerouslySetInnerHTML={{
+              __html: description ? documentToHtmlString(description) : '',
+            }}
+          ></div>
         </div>
       </div>
       <style>
