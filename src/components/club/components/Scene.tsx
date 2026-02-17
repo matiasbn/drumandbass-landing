@@ -12,19 +12,24 @@ import { Lighting } from './Lighting';
 import { StageElements } from './StageElements';
 import { Background } from './Background';
 import { JungleDecor } from './JungleDecor';
+import { LiveScreen } from './LiveScreen';
 
 interface SceneProps {
   isPlayingRef: MutableRefObject<boolean>;
+  isLive?: boolean;
 }
 
-export const Scene: React.FC<SceneProps> = ({ isPlayingRef }) => {
+export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false }) => {
   return (
     <>
       <Background isPlayingRef={isPlayingRef} />
       <Lighting isPlayingRef={isPlayingRef} />
-      <Suspense fallback={null}>
-        <LogoBanner />
-      </Suspense>
+      {!isLive && (
+        <Suspense fallback={null}>
+          <LogoBanner />
+        </Suspense>
+      )}
+      <LiveScreen isLive={isLive} />
       <DanceFloor />
       <DJBooth />
       <DJ isPlayingRef={isPlayingRef} />

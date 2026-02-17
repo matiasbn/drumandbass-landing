@@ -1,6 +1,6 @@
 import { createClient, type Asset, type EntryFieldTypes } from 'contentful';
 
-import { ContentfulEvent } from '@/src/types/types';
+import { ContentfulEvent, ContentfulStreaming } from '@/src/types/types';
 
 interface EventSkeleton {
   contentTypeId: 'event';
@@ -14,6 +14,16 @@ interface EventSkeleton {
     tickets?: EntryFieldTypes.Text;
     info?: EntryFieldTypes.Text;
     flyer?: EntryFieldTypes.AssetLink;
+  };
+}
+
+interface StreamingSkeleton {
+  contentTypeId: 'streaming';
+  fields: {
+    title: EntryFieldTypes.Text;
+    youtubeUrl: EntryFieldTypes.Text;
+    date: EntryFieldTypes.Text;
+    endDate?: EntryFieldTypes.Text;
   };
 }
 
@@ -49,4 +59,17 @@ export async function getEvents(): Promise<ContentfulEvent[]> {
       flyer
     };
   });
+}
+
+export async function getStreamings(): Promise<ContentfulStreaming[]> {
+  const response = await client.getEntries<StreamingSkeleton>({
+    content_type: 'streaming',
+  });
+  return response.items.map(({ fields, sys }) => ({
+    id: sys.id,
+    title: fields.title as string,
+    youtubeUrl: fields.youtubeUrl as string,
+    date: fields.date as string,
+    endDate: (fields.endDate as string) || undefined,
+  }));
 }

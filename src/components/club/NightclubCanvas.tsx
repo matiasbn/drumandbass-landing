@@ -5,9 +5,11 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Scene } from './components/Scene';
 import { usePlayback } from './PlaybackContext';
+import { useLive } from './LiveContext';
 
 export const NightclubCanvas: React.FC = () => {
   const { isPlayingRef } = usePlayback();
+  const { isLive } = useLive();
 
   return (
     <Canvas
@@ -20,7 +22,7 @@ export const NightclubCanvas: React.FC = () => {
       }}
       style={{ background: '#000000' }}
     >
-      <Scene isPlayingRef={isPlayingRef} />
+      <Scene isPlayingRef={isPlayingRef} isLive={isLive} />
       <OrbitControls
         enablePan={true}
         enableZoom={true}

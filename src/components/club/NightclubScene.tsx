@@ -8,6 +8,7 @@ import { Chat } from './components/Chat';
 import { MobileControls } from './components/MobileControls';
 import { PlaybackProvider, usePlayback } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
+import { LiveProvider, useLive } from './LiveContext';
 import { useAuth } from './AuthContext';
 
 const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => {
@@ -49,16 +50,35 @@ const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({
   );
 };
 
-const NightclubScene: React.FC = () => {
+const YouTubeOverlay: React.FC<{ videoId: string; title: string | null }> = ({ videoId, title }) => (
+  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90vw] max-w-[720px]">
+    <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+        className="absolute inset-0 w-full h-full border-2 border-red-500/60"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+    {title && (
+      <div className="mt-1 px-2 py-1 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400 flex items-center gap-2">
+        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+        LIVE: {title}
+      </div>
+    )}
+  </div>
+);
+
+const NightclubSceneInner: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const { profile, signOut } = useAuth();
+  const { isLive, youtubeVideoId, liveTitle } = useLive();
 
   const handleLogout = async () => {
     await signOut();
   };
 
   return (
-    <MultiplayerProvider>
     <PlaybackProvider>
       <div className="relative w-full h-screen bg-black">
         {/* Navigation overlay */}
@@ -78,18 +98,27 @@ const NightclubScene: React.FC = () => {
           )}
         </div>
 
-        {/* Audio player - desktop: bottom left, above controls hint */}
-        <div className="absolute bottom-24 left-4 z-10 hidden md:block">
-          <AudioPlayer />
-        </div>
+        {/* YouTube live overlay */}
+        {isLive && youtubeVideoId && (
+          <YouTubeOverlay videoId={youtubeVideoId} title={liveTitle} />
+        )}
 
-        {/* Mobile: mini player toggle + collapsible player at top right */}
-        <div className="absolute top-4 right-4 z-10 md:hidden flex flex-col items-end">
-          <MobilePlayerToggle open={mobilePlayerOpen} onToggle={() => setMobilePlayerOpen(o => !o)} />
-          <div className={mobilePlayerOpen ? 'mt-2' : 'hidden'}>
+        {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
+        {!isLive && (
+          <div className="absolute bottom-24 left-4 z-10 hidden md:block">
             <AudioPlayer />
           </div>
-        </div>
+        )}
+
+        {/* Mobile: mini player toggle + collapsible player at top right (hidden when live) */}
+        {!isLive && (
+          <div className="absolute top-4 right-4 z-10 md:hidden flex flex-col items-end">
+            <MobilePlayerToggle open={mobilePlayerOpen} onToggle={() => setMobilePlayerOpen(o => !o)} />
+            <div className={mobilePlayerOpen ? 'mt-2' : 'hidden'}>
+              <AudioPlayer />
+            </div>
+          </div>
+        )}
 
         {/* Controls hint - desktop: bottom left */}
         <div className="absolute bottom-4 left-4 z-10 hidden md:block">
@@ -115,6 +144,15 @@ const NightclubScene: React.FC = () => {
         <Chat />
       </div>
     </PlaybackProvider>
+  );
+};
+
+const NightclubScene: React.FC = () => {
+  return (
+    <MultiplayerProvider>
+    <LiveProvider>
+      <NightclubSceneInner />
+    </LiveProvider>
     </MultiplayerProvider>
   );
 };

@@ -18,6 +18,14 @@ export interface ContentfulEvent {
   };
 }
 
+export interface ContentfulStreaming {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  date: string;
+  endDate?: string;
+}
+
 export interface SocialLink {
   platform: string;
   url: string;
