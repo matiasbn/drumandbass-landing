@@ -10,7 +10,7 @@ const jsonLd = {
   url: BASE_URL,
   logo: `${BASE_URL}/logo.png`,
   description:
-    'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+    'Comunidad de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
   sameAs: Object.values(SOCIALS).map((s) => s.url),
   foundingDate: '2025',
   areaServed: {

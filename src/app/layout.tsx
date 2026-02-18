@@ -22,8 +22,18 @@ export const metadata: Metadata = {
     default: 'Drum and Bass Chile',
     template: '%s | Drum and Bass Chile',
   },
-  description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
-  keywords: ['Drum and Bass', 'DNB', 'Chile', 'eventos', 'DJs', 'productores', 'bass music', 'drum and bass chile'],
+  description:
+    'Comunidad de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+  keywords: [
+    'Drum and Bass',
+    'DNB',
+    'Chile',
+    'eventos',
+    'DJs',
+    'productores',
+    'bass music',
+    'drum and bass chile',
+  ],
   authors: [{ name: 'Drum and Bass Chile' }],
   icons: {
     icon: '/favicon.ico',
@@ -35,7 +45,8 @@ export const metadata: Metadata = {
     url: BASE_URL,
     siteName: 'Drum and Bass Chile',
     title: 'Drum and Bass Chile',
-    description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+    description:
+      'Comunidad de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
     images: [
       {
         url: '/logo.png',
@@ -48,7 +59,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Drum and Bass Chile',
-    description: 'Comunidad oficial de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
+    description:
+      'Comunidad de Drum and Bass en Chile. Eventos, artistas, productores y organizaciones de la escena DNB chilena.',
     images: ['/logo.png'],
   },
   alternates: {
