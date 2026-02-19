@@ -31,7 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { signInWithGoogle, signInWithApple, updateProfile, needsProfile } = useAuth();
+  const { signInWithGoogle, signInWithApple, updateProfile, needsProfile, user } = useAuth();
 
   // Show profile setup if needed
   const currentView = needsProfile ? 'profile' : view;
@@ -119,6 +119,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-white/70 font-mono text-xs mb-4">
                 Completa tu perfil para entrar al club
               </p>
+
+              {user?.email && (
+                <div className="px-3 py-2 bg-white/5 border border-white/10 text-white/50 font-mono text-xs truncate">
+                  {user.email}
+                </div>
+              )}
 
               <div className="relative">
                 <RiUserLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
