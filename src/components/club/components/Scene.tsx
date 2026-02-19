@@ -17,9 +17,10 @@ import { LiveScreen } from './LiveScreen';
 interface SceneProps {
   isPlayingRef: MutableRefObject<boolean>;
   isLive?: boolean;
+  youtubeVideoId?: string | null;
 }
 
-export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false }) => {
+export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, youtubeVideoId }) => {
   return (
     <>
       <Background isPlayingRef={isPlayingRef} />
@@ -29,7 +30,7 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false }) =>
           <LogoBanner />
         </Suspense>
       )}
-      <LiveScreen isLive={isLive} />
+      <LiveScreen isLive={isLive} youtubeVideoId={youtubeVideoId} />
       <DanceFloor />
       <DJBooth />
       <DJ isPlayingRef={isPlayingRef} />

@@ -50,29 +50,10 @@ const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({
   );
 };
 
-const YouTubeOverlay: React.FC<{ videoId: string; title: string | null }> = ({ videoId, title }) => (
-  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90vw] max-w-[720px]">
-    <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-      <iframe
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
-        className="absolute inset-0 w-full h-full border-2 border-red-500/60"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    </div>
-    {title && (
-      <div className="mt-1 px-2 py-1 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400 flex items-center gap-2">
-        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-        LIVE: {title}
-      </div>
-    )}
-  </div>
-);
-
 const NightclubSceneInner: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const { profile, signOut } = useAuth();
-  const { isLive, youtubeVideoId, liveTitle } = useLive();
+  const { isLive, liveTitle } = useLive();
 
   const handleLogout = async () => {
     await signOut();
@@ -82,7 +63,7 @@ const NightclubSceneInner: React.FC = () => {
     <PlaybackProvider>
       <div className="relative w-full h-screen bg-black">
         {/* Navigation overlay */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur border border-white/20 text-white font-mono text-sm hover:bg-white/10 hover:border-white/40 transition-all"
@@ -96,12 +77,13 @@ const NightclubSceneInner: React.FC = () => {
               @{profile.username}
             </div>
           )}
+          {isLive && liveTitle && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              LIVE: {liveTitle}
+            </div>
+          )}
         </div>
-
-        {/* YouTube live overlay */}
-        {isLive && youtubeVideoId && (
-          <YouTubeOverlay videoId={youtubeVideoId} title={liveTitle} />
-        )}
 
         {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
         {!isLive && (

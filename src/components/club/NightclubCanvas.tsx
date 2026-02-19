@@ -9,7 +9,7 @@ import { useLive } from './LiveContext';
 
 export const NightclubCanvas: React.FC = () => {
   const { isPlayingRef } = usePlayback();
-  const { isLive } = useLive();
+  const { isLive, youtubeVideoId } = useLive();
 
   return (
     <Canvas
@@ -22,7 +22,7 @@ export const NightclubCanvas: React.FC = () => {
       }}
       style={{ background: '#000000' }}
     >
-      <Scene isPlayingRef={isPlayingRef} isLive={isLive} />
+      <Scene isPlayingRef={isPlayingRef} isLive={isLive} youtubeVideoId={youtubeVideoId} />
       <OrbitControls
         enablePan={true}
         enableZoom={true}

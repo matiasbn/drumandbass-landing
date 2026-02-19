@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-        revalidatePath('/');
+        revalidatePath('/', 'layout');
+        revalidatePath('/api/live');
         return NextResponse.json({ revalidated: true, now: Date.now() });
   } catch (error) {
         return NextResponse.json(

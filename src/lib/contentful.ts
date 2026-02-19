@@ -20,7 +20,7 @@ interface EventSkeleton {
 interface StreamingSkeleton {
   contentTypeId: 'streaming';
   fields: {
-    title: EntryFieldTypes.Text;
+    name: EntryFieldTypes.Text;
     youtubeUrl: EntryFieldTypes.Text;
     date: EntryFieldTypes.Text;
     endDate?: EntryFieldTypes.Text;
@@ -67,7 +67,7 @@ export async function getStreamings(): Promise<ContentfulStreaming[]> {
   });
   return response.items.map(({ fields, sys }) => ({
     id: sys.id,
-    title: fields.title as string,
+    name: fields.name as string,
     youtubeUrl: fields.youtubeUrl as string,
     date: fields.date as string,
     endDate: (fields.endDate as string) || undefined,
