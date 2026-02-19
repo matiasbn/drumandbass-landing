@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css}\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@contentful/rich-text-html-renderer": "^17.1.6",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
