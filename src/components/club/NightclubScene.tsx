@@ -63,7 +63,7 @@ const NightclubSceneInner: React.FC = () => {
     <PlaybackProvider>
       <div className="relative w-full h-screen bg-black">
         {/* Navigation overlay */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur border border-white/20 text-white font-mono text-sm hover:bg-white/10 hover:border-white/40 transition-all"

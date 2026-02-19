@@ -50,6 +50,7 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
           transform
           position={[0, 0.5, 0.02]}
           distanceFactor={5.5}
+          zIndexRange={[10, 0]}
           style={{
             width: 640,
             height: 360,

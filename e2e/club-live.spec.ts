@@ -100,6 +100,33 @@ test.describe('Club Live Screen', () => {
     // in headless mode. Visual verification must be done manually in a browser.
   });
 
+  test('nav buttons are clickable on mobile when live stream is active', async ({ page, context }) => {
+    await setupClubAuth(page, context);
+
+    await page.route('/api/live', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          isLive: true,
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          title: 'Test Live Stream',
+        }),
+      })
+    );
+
+    // Mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/club');
+
+    const salirButton = page.locator('text=SALIR');
+    await expect(salirButton).toBeVisible({ timeout: 20000 });
+
+    // Verify SALIR button is clickable (not covered by iframe)
+    // force: false ensures it fails if the element is obscured
+    await salirButton.click({ timeout: 5000 });
+  });
+
   test('does not show LIVE indicator when no live stream', async ({ page, context }) => {
     await setupClubAuth(page, context);
 
