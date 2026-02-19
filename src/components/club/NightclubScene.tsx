@@ -50,29 +50,10 @@ const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({
   );
 };
 
-const YouTubePanel: React.FC<{ videoId: string; title: string | null }> = ({ videoId, title }) => (
-  <div data-testid="youtube-panel" className="absolute top-16 right-4 z-20 w-[340px] md:w-[400px]">
-    <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-      <iframe
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
-        className="absolute inset-0 w-full h-full border border-red-500/40"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    </div>
-    {title && (
-      <div className="px-2 py-1 bg-black/80 backdrop-blur border border-t-0 border-red-500/30 font-mono text-[10px] text-red-400 flex items-center gap-2">
-        <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-        LIVE: {title}
-      </div>
-    )}
-  </div>
-);
-
 const NightclubSceneInner: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const { profile, signOut } = useAuth();
-  const { isLive, youtubeVideoId, liveTitle } = useLive();
+  const { isLive, liveTitle } = useLive();
 
   const handleLogout = async () => {
     await signOut();
@@ -98,9 +79,12 @@ const NightclubSceneInner: React.FC = () => {
           )}
         </div>
 
-        {/* YouTube live panel - picture in picture style */}
-        {isLive && youtubeVideoId && (
-          <YouTubePanel videoId={youtubeVideoId} title={liveTitle} />
+        {/* LIVE indicator */}
+        {isLive && liveTitle && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400 flex items-center gap-2">
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            LIVE: {liveTitle}
+          </div>
         )}
 
         {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
