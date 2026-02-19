@@ -20,7 +20,7 @@ export interface ContentfulEvent {
 
 export interface ContentfulStreaming {
   id: string;
-  title: string;
+  name: string;
   youtubeUrl: string;
   date: string;
   endDate?: string;
