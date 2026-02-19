@@ -12,7 +12,7 @@
 
 # testing
 /coverage
-/e2e/test-results/
+/test-results/
 /playwright-report/
 
 # next.js
