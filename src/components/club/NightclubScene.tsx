@@ -61,7 +61,7 @@ const NightclubSceneInner: React.FC = () => {
 
   return (
     <PlaybackProvider>
-      <div className="relative w-full h-screen bg-black">
+      <div className="relative w-full h-screen bg-black overflow-hidden touch-none">
         {/* Navigation overlay */}
         <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
           <button
