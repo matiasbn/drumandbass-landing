@@ -34,13 +34,13 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
         <meshStandardMaterial color="#111111" />
       </mesh>
 
-      {/* Screen surface */}
+      {/* Screen surface - black when video is playing, glow only when live without video */}
       <mesh ref={glowRef}>
         <planeGeometry args={[8.5, 4.8]} />
         <meshStandardMaterial
-          color={isLive ? '#0a0a1a' : '#050508'}
-          emissive={isLive ? '#4444ff' : '#000000'}
-          emissiveIntensity={isLive ? 0.3 : 0}
+          color={isLive && youtubeVideoId ? '#000000' : isLive ? '#0a0a1a' : '#050508'}
+          emissive={isLive && !youtubeVideoId ? '#4444ff' : '#000000'}
+          emissiveIntensity={isLive && !youtubeVideoId ? 0.3 : 0}
         />
       </mesh>
 
