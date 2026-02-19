@@ -48,18 +48,18 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
       {isLive && youtubeVideoId && (
         <Html
           transform
-          position={[0, 0, 0.02]}
-          distanceFactor={8.5}
+          position={[0, 0.5, 0.02]}
+          distanceFactor={5.5}
           style={{
-            width: 854,
-            height: 480,
+            width: 640,
+            height: 360,
           }}
           wrapperClass="pointer-events-none"
         >
           <iframe
             data-testid="youtube-iframe"
             src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0`}
-            style={{ width: 854, height: 480, border: 'none', pointerEvents: 'auto' }}
+            style={{ width: 640, height: 360, border: 'none', pointerEvents: 'auto' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
