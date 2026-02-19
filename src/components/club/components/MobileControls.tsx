@@ -118,7 +118,7 @@ export const MobileControls: React.FC = () => {
       {/* Joystick — bottom left */}
       <div
         ref={joystickRef}
-        className="pointer-events-auto absolute bottom-28 left-6 rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
+        className="pointer-events-auto absolute bottom-36 left-8 rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
         style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
         onTouchStart={onJoystickTouchStart}
         onTouchMove={onJoystickTouchMove}
@@ -138,7 +138,7 @@ export const MobileControls: React.FC = () => {
       </div>
 
       {/* Action buttons — bottom right */}
-      <div className="pointer-events-auto absolute bottom-28 right-6 flex flex-col items-center gap-3 touch-none">
+      <div className="pointer-events-auto absolute bottom-36 right-8 flex flex-col items-center gap-3 touch-none">
         {/* Jump */}
         <button
           className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
