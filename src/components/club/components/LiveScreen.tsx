@@ -15,12 +15,10 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive }) => {
   useFrame(({ clock }) => {
     if (!isLive) return;
     const t = clock.getElapsedTime();
-    // Pulsing glow on screen
     if (glowRef.current) {
       const mat = glowRef.current.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = 0.3 + Math.sin(t * 2) * 0.15;
     }
-    // Blinking LIVE indicator
     if (indicatorRef.current) {
       indicatorRef.current.visible = Math.sin(t * 3) > -0.3;
     }

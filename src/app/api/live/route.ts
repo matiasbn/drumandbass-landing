@@ -45,7 +45,7 @@ export async function GET() {
     return NextResponse.json({
       isLive: !!youtubeVideoId,
       youtubeVideoId,
-      title: liveStreaming.title,
+      title: liveStreaming.name ?? null,
     });
   } catch (error) {
     console.error('Error fetching live status:', error);
