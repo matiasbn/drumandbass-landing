@@ -114,11 +114,11 @@ export const MobileControls: React.FC = () => {
     'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border border-white/20 text-white font-mono font-bold select-none active:bg-white/20 transition-colors';
 
   return (
-    <div className="absolute inset-0 z-20 pointer-events-none">
+    <div className="absolute inset-0 z-20 pointer-events-none touch-none">
       {/* Joystick — bottom left */}
       <div
         ref={joystickRef}
-        className="pointer-events-auto absolute bottom-28 left-6 rounded-full bg-white/10 backdrop-blur border border-white/20"
+        className="pointer-events-auto absolute bottom-28 left-6 rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
         style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
         onTouchStart={onJoystickTouchStart}
         onTouchMove={onJoystickTouchMove}
@@ -138,7 +138,7 @@ export const MobileControls: React.FC = () => {
       </div>
 
       {/* Action buttons — bottom right */}
-      <div className="pointer-events-auto absolute bottom-28 right-6 flex flex-col items-center gap-3">
+      <div className="pointer-events-auto absolute bottom-28 right-6 flex flex-col items-center gap-3 touch-none">
         {/* Jump */}
         <button
           className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
