@@ -77,15 +77,13 @@ const NightclubSceneInner: React.FC = () => {
               @{profile.username}
             </div>
           )}
+          {isLive && liveTitle && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              LIVE: {liveTitle}
+            </div>
+          )}
         </div>
-
-        {/* LIVE indicator */}
-        {isLive && liveTitle && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-black/70 backdrop-blur border border-red-500/30 font-mono text-xs text-red-400 flex items-center gap-2">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            LIVE: {liveTitle}
-          </div>
-        )}
 
         {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
         {!isLive && (
