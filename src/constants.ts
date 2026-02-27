@@ -15,7 +15,7 @@ export const WHATSAPP_LINK = 'https://chat.whatsapp.com/GH1ZogYyOKTFqrV6s70U4R';
 export const BASE_URL = 'https://www.drumandbasschile.cl';
 
 export const TEAM = [
-  { name: 'zeroday.dj', instagram: 'https://www.instagram.com/zeroday.dj/' },
+  { name: 'zeroday.dnb', instagram: 'https://www.instagram.com/zeroday.dnb/' },
   { name: 'killtrobeat', instagram: 'https://www.instagram.com/killtrobeat/' },
   { name: 'alangf', instagram: 'https://www.instagram.com/alangf/' },
 ];
