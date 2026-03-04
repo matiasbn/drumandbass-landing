@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import Header from '../../components/Header';
 import { SOCIALS, WHATSAPP_LINK, TEAM, BASE_URL } from '../../constants';
 import { RiWhatsappLine } from '@remixicon/react';
@@ -90,21 +91,31 @@ export default function MainLayout({
           </h4>
         </div>
 
-        <div className="text-right">
-          <p className="mono text-xl font-bold text-[#ff0000] uppercase">TEAM</p>
-          <p className="mono text-s font-bold uppercase flex gap-2">
-            {TEAM.map((member) => (
-              <a
-                key={member.name}
-                href={member.instagram}
-                className="underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                @{member.name}
-              </a>
-            ))}
-          </p>
+        <div className="flex flex-col items-center lg:items-end gap-4">
+          <div className="text-center lg:text-right">
+            <p className="mono text-xl font-bold text-[#ff0000] uppercase">TEAM</p>
+            <p className="mono text-s font-bold uppercase flex gap-2">
+              {TEAM.map((member) => (
+                <a
+                  key={member.name}
+                  href={member.instagram}
+                  className="underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  @{member.name}
+                </a>
+              ))}
+            </p>
+          </div>
+          <div className="mono text-xs uppercase opacity-60 flex gap-4">
+            <Link href="/terms" className="hover:opacity-100 transition-opacity">
+              Términos de Servicio
+            </Link>
+            <Link href="/privacy" className="hover:opacity-100 transition-opacity">
+              Política de Privacidad
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
