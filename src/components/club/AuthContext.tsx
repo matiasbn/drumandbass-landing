@@ -122,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         scopes: 'https://www.googleapis.com/auth/youtube.force-ssl',
+        queryParams: { prompt: 'select_account' },
       }
     });
     return { error: error as Error | null };
@@ -138,12 +139,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'global' });
     setProfile(null);
   };
 
   const updateProfile = async (data: { name: string; username: string }) => {
     if (!user) return { error: new Error('Not authenticated') };
+
+    // Check if username is already taken by another user
+    const { data: taken } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('username', data.username)
+      .neq('user_id', user.id)
+      .single();
+
+    if (taken) {
+      return { error: new Error('Este nombre de usuario ya está en uso') };
+    }
 
     const profileData = {
       user_id: user.id,
