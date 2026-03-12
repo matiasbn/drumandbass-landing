@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { RiMenuLine, RiLogoutBoxLine, RiSettings3Line, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
+import { RiMenuLine, RiLogoutBoxLine, RiSettings3Line, RiPaletteLine, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
 import { NightclubCanvas } from './NightclubCanvas';
 import { AudioPlayer } from './components/AudioPlayer';
 import { Chat } from './components/Chat';
 import { YouTubeChat } from './components/YouTubeChat';
 import { MobileControls } from './components/MobileControls';
 import { SettingsModal } from './components/SettingsModal';
+import { CharacterCustomModal } from './components/CharacterCustomModal';
 import { PlaybackProvider, usePlayback } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
 import { LiveProvider, useLive } from './LiveContext';
@@ -56,6 +57,7 @@ const NightclubSceneInner: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { profile, signOut } = useAuth();
   const { isLive, liveTitle, youtubeVideoId } = useLive();
@@ -99,6 +101,13 @@ const NightclubSceneInner: React.FC = () => {
                   </div>
                 )}
                 <button
+                  onClick={() => { setMenuOpen(false); setCustomizeOpen(true); }}
+                  className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-white/10 transition-colors text-left"
+                >
+                  <RiPaletteLine className="w-4 h-4" />
+                  PERSONALIZAR
+                </button>
+                <button
                   onClick={() => { setMenuOpen(false); setSettingsOpen(true); }}
                   className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-white/10 transition-colors text-left"
                 >
@@ -124,8 +133,9 @@ const NightclubSceneInner: React.FC = () => {
           )}
         </div>
 
-        {/* Settings Modal */}
+        {/* Modals */}
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <CharacterCustomModal isOpen={customizeOpen} onClose={() => setCustomizeOpen(false)} />
 
         {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
         {!isLive && (
