@@ -8,15 +8,19 @@ interface BrutalistButtonProps {
   variant?: 'primary' | 'red' | 'blue' | 'whatsapp' | 'whiteRed' | 'spotify' | 'instagram' | 'soundcloud' | 'youtube' | 'club';
   href?: string;
   external?: boolean;
+  disabled?: boolean;
+  title?: string;
 }
 
-const BrutalistButton: React.FC<BrutalistButtonProps> = ({ 
-  children, 
-  onClick, 
-  className = '', 
+const BrutalistButton: React.FC<BrutalistButtonProps> = ({
+  children,
+  onClick,
+  className = '',
   variant = 'primary',
   href,
-  external = false
+  external = false,
+  disabled = false,
+  title,
 }) => {
   const baseStyles = "px-6 py-3 font-bold uppercase transition-all brutalist-border duration-100 flex items-center justify-center gap-2 mono";
   const variants = {
@@ -32,20 +36,21 @@ const BrutalistButton: React.FC<BrutalistButtonProps> = ({
     club: "bg-[#7C3AED] text-white hover:bg-[#9b6bf2] brutalist-shadow-club",
   };
   let extra = ''
-  if (href) extra = ' cursor-pointer '
+  if (href && !disabled) extra = ' cursor-pointer '
+  if (disabled) extra = ' opacity-40 pointer-events-none cursor-not-allowed '
 
   const combinedStyles = `${baseStyles} ${variants[variant]} ${className} ${extra}`.trim();
 
-  if (href) {
+  if (href && !disabled) {
     return (
-      <a href={href} className={combinedStyles} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined}>
+      <a href={href} className={combinedStyles} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} title={title}>
         {children}
       </a>
     );
   }
 
   return (
-    <button onClick={onClick} className={combinedStyles}>
+    <button onClick={onClick} className={combinedStyles} disabled={disabled} title={title}>
       {children}
     </button>
   );

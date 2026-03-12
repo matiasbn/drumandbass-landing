@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RiWhatsappLine, RiMenuLine, RiCloseLine, RiFolder2Line } from '@remixicon/react';
 import BrutalistButton from './BigButton';
 import { SOCIALS, WHATSAPP_LINK } from '../constants';
@@ -30,6 +30,14 @@ const DIRECTORY_LINKS = [
 const HeaderNav = () => {
   const [open, setOpen] = useState(false);
   const [dirOpen, setDirOpen] = useState(false);
+  const [isLive, setIsLive] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/live')
+      .then((res) => res.json())
+      .then((data) => setIsLive(data.isLive ?? false))
+      .catch(() => setIsLive(false));
+  }, []);
 
   return (
     <>
@@ -71,6 +79,8 @@ const HeaderNav = () => {
           variant="club"
           className="text-xs py-2 px-4 h-12"
           href="/club"
+          disabled={!isLive}
+          title={!isLive ? 'Solo disponible durante transmisiones en vivo' : undefined}
         >
           <DiscoBallIcon size={16} /> CLUB
         </BrutalistButton>
@@ -145,6 +155,8 @@ const HeaderNav = () => {
             variant="club"
             className="text-sm py-3 px-4 w-full"
             href="/club"
+            disabled={!isLive}
+            title={!isLive ? 'Solo disponible durante transmisiones en vivo' : undefined}
           >
             <DiscoBallIcon size={16} /> CLUB
           </BrutalistButton>
