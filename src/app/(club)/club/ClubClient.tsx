@@ -95,9 +95,9 @@ function ClubContent() {
             </a>
             <button
               onClick={handleContinue}
-              className="w-full py-3 font-mono text-sm tracking-wider text-white/40 hover:text-white/70 transition-colors"
+              className="w-full py-3 font-mono text-sm tracking-wider text-white border border-white/30 hover:bg-white/10 transition-colors"
             >
-              YA ESTOY SUSCRITO — ENTRAR AL CLUB
+              ENTRAR AL CLUB
             </button>
             <a
               href="/"

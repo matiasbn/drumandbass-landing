@@ -24,6 +24,7 @@ export const YouTubeChat: React.FC<YouTubeChatProps> = ({ youtubeVideoId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsYouTubeChannel, setNeedsYouTubeChannel] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +112,8 @@ export const YouTubeChat: React.FC<YouTubeChatProps> = ({ youtubeVideoId }) => {
         const data = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403) {
           setError('Debes re-iniciar sesion con Google para enviar mensajes');
+        } else if (res.status === 400 && data.details?.error?.status === 'INVALID_ARGUMENT') {
+          setNeedsYouTubeChannel(true);
         } else {
           console.error('Failed to send message:', data);
           setNewMessage(trimmed);
@@ -190,7 +193,27 @@ export const YouTubeChat: React.FC<YouTubeChatProps> = ({ youtubeVideoId }) => {
             </div>
 
             {/* Send message */}
-            {providerToken ? (
+            {needsYouTubeChannel ? (
+              <div className="p-3 border-t border-white/10 text-center space-y-2">
+                <p className="text-white/60 text-xs font-mono">
+                  Necesitas un canal de YouTube para enviar mensajes
+                </p>
+                <a
+                  href="https://www.youtube.com/create_channel"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-4 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] text-xs font-mono hover:bg-[#ff0055]/30 transition-colors"
+                >
+                  CREAR CANAL DE YOUTUBE
+                </a>
+                <button
+                  onClick={() => setNeedsYouTubeChannel(false)}
+                  className="block w-full py-2 text-white text-xs font-mono border border-white/30 hover:bg-white/10 transition-colors"
+                >
+                  YA TENGO CANAL — REINTENTAR
+                </button>
+              </div>
+            ) : providerToken ? (
               <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10">
                 <div className="flex gap-2">
                   <input
