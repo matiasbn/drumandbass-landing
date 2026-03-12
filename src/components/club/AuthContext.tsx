@@ -15,7 +15,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  updateProfile: (data: { name?: string; username?: string; player_color?: string; face_type?: number; costume_id?: string }) => Promise<{ error: Error | null }>;
+  updateProfile: (data: { name?: string; username?: string; player_color?: string; face_type?: number; costume_id?: string; accessory_id?: string }) => Promise<{ error: Error | null }>;
   needsProfile: boolean;
 }
 
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
-  const updateProfile = async (data: { name?: string; username?: string; player_color?: string; face_type?: number; costume_id?: string }) => {
+  const updateProfile = async (data: { name?: string; username?: string; player_color?: string; face_type?: number; costume_id?: string; accessory_id?: string }) => {
     if (!user) return { error: new Error('Not authenticated') };
 
     // Check if username is already taken by another user (only if username is being changed)
@@ -170,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data.player_color !== undefined) profileData.player_color = data.player_color;
     if (data.face_type !== undefined) profileData.face_type = data.face_type;
     if (data.costume_id !== undefined) profileData.costume_id = data.costume_id;
+    if (data.accessory_id !== undefined) profileData.accessory_id = data.accessory_id;
 
     // Check if profile exists
     const { data: existing } = await supabase

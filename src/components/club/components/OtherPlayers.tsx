@@ -177,6 +177,7 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
         faceType={player.faceType}
         username={player.username}
         costumeId={player.costumeId}
+        accessoryId={player.accessoryId}
         headRef={headRef}
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}

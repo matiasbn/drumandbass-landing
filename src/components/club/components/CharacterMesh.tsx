@@ -3,6 +3,7 @@
 import React, { useMemo, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { getCostume, resolveColor, CostumeId, CostumeExtra } from './costumes';
+import { getAccessory, AccessoryPiece } from './accessories';
 import { useFaceTexture } from './useFaceTexture';
 
 interface CharacterMeshProps {
@@ -10,6 +11,7 @@ interface CharacterMeshProps {
   faceType?: number;
   username: string;
   costumeId?: CostumeId | string;
+  accessoryId?: string;
   headRef?: MutableRefObject<THREE.Group | null>;
   leftArmRef?: MutableRefObject<THREE.Mesh | null>;
   rightArmRef?: MutableRefObject<THREE.Mesh | null>;
@@ -76,17 +78,50 @@ function ExtraGeometry({ extra, playerColor }: { extra: CostumeExtra; playerColo
   );
 }
 
+function AccessoryGeometry({ piece, playerColor }: { piece: AccessoryPiece; playerColor: string }) {
+  const color = resolveColor(piece.color, playerColor);
+  const rotation = piece.rotation as [number, number, number] | undefined;
+  const scale = piece.scale as [number, number, number] | undefined;
+
+  if (piece.type === 'sphere') {
+    return (
+      <mesh position={piece.position} rotation={rotation} scale={scale} castShadow>
+        <sphereGeometry args={piece.args as [number, number, number]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} />
+      </mesh>
+    );
+  }
+
+  if (piece.type === 'cylinder') {
+    return (
+      <mesh position={piece.position} rotation={rotation} scale={scale} castShadow>
+        <cylinderGeometry args={piece.args as [number, number, number, number]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} />
+      </mesh>
+    );
+  }
+
+  return (
+    <mesh position={piece.position} rotation={rotation} scale={scale} castShadow>
+      <boxGeometry args={piece.args as [number, number, number]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} />
+    </mesh>
+  );
+}
+
 export const CharacterMesh: React.FC<CharacterMeshProps> = ({
   playerColor,
   faceType,
   username,
   costumeId,
+  accessoryId,
   headRef,
   leftArmRef,
   rightArmRef,
 }) => {
   const costume = getCostume(costumeId);
   const isDefault = costume.id === 'default';
+  const accessory = getAccessory(accessoryId);
 
   // Colors
   const headColor = resolveColor(costume.colors.head, playerColor);
@@ -129,6 +164,10 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
         {/* Head extras (ears, eye bulges, stem, etc.) */}
         {headExtras.map((extra, i) => (
           <ExtraGeometry key={i} extra={extra} playerColor={playerColor} />
+        ))}
+        {/* Accessories — only shown when costume is default */}
+        {isDefault && accessory.pieces.map((piece, i) => (
+          <AccessoryGeometry key={`acc-${i}`} piece={piece} playerColor={playerColor} />
         ))}
       </group>
 

@@ -16,7 +16,7 @@ const GRAVITY = 0.006;
 const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
-  const { username, updatePosition, playerColor, faceType, costumeId } = useMultiplayer();
+  const { username, updatePosition, playerColor, faceType, costumeId, accessoryId } = useMultiplayer();
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
@@ -310,6 +310,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         faceType={faceType}
         username={username}
         costumeId={costumeId}
+        accessoryId={accessoryId}
         headRef={headRef}
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}

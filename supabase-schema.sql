@@ -81,3 +81,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS player_color TEXT;
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS face_type INTEGER;
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS costume_id TEXT DEFAULT 'default';
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS accessory_id TEXT DEFAULT 'none';
