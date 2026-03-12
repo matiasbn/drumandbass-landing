@@ -16,7 +16,7 @@ const GRAVITY = 0.006;
 const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
-  const { username, updatePosition } = useMultiplayer();
+  const { username, updatePosition, playerColor, faceType } = useMultiplayer();
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
@@ -33,16 +33,6 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const danceMoveRef = useRef(0);
   const danceStartRef = useRef(0);
   const spinStartRotationRef = useRef(0);
-
-  const playerColor = React.useMemo(() => {
-    if (!username) return '#ffff00';
-    let hash = 0;
-    for (let i = 0; i < username.length; i++) {
-      hash = username.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const colors = ['#ff0055', '#00ccff', '#00ff41', '#ff8800', '#ff00ff', '#ffff00', '#00ffff'];
-    return colors[Math.abs(hash) % colors.length];
-  }, [username]);
 
   const [keys, setKeys] = useState({
     forward: false,
@@ -296,7 +286,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     }
   });
 
-  const faceTexture = useFaceTexture(username || '');
+  const faceTexture = useFaceTexture(username || '', faceType);
 
   if (!username) return null;
 

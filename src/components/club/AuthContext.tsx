@@ -15,7 +15,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signInWithApple: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  updateProfile: (data: { name: string; username: string }) => Promise<{ error: Error | null }>;
+  updateProfile: (data: { name?: string; username?: string; player_color?: string; face_type?: number }) => Promise<{ error: Error | null }>;
   needsProfile: boolean;
 }
 
@@ -143,28 +143,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
-  const updateProfile = async (data: { name: string; username: string }) => {
+  const updateProfile = async (data: { name?: string; username?: string; player_color?: string; face_type?: number }) => {
     if (!user) return { error: new Error('Not authenticated') };
 
-    // Check if username is already taken by another user
-    const { data: taken } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .eq('username', data.username)
-      .neq('user_id', user.id)
-      .single();
+    // Check if username is already taken by another user (only if username is being changed)
+    if (data.username) {
+      const { data: taken } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('username', data.username)
+        .neq('user_id', user.id)
+        .single();
 
-    if (taken) {
-      return { error: new Error('Este nombre de usuario ya está en uso') };
+      if (taken) {
+        return { error: new Error('Este nombre de usuario ya está en uso') };
+      }
     }
 
-    const profileData = {
+    const profileData: Record<string, unknown> = {
       user_id: user.id,
-      name: data.name,
-      username: data.username,
       email: user.email || '',
       updated_at: new Date().toISOString()
     };
+    if (data.name !== undefined) profileData.name = data.name;
+    if (data.username !== undefined) profileData.username = data.username;
+    if (data.player_color !== undefined) profileData.player_color = data.player_color;
+    if (data.face_type !== undefined) profileData.face_type = data.face_type;
 
     // Check if profile exists
     const { data: existing } = await supabase

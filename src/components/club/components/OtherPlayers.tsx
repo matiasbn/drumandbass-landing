@@ -15,7 +15,7 @@ interface RemotePlayerProps {
 const JUMP_HEIGHT_REMOTE = 0.8;
 
 const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => {
-  const faceTexture = useFaceTexture(player.username);
+  const faceTexture = useFaceTexture(player.username, player.faceType);
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
