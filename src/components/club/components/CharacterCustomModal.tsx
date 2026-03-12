@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RiCloseLine } from '@remixicon/react';
 import { useAuth } from '../AuthContext';
 import { stringHash } from 'facehash';
+import { COSTUME_IDS, getCostume, CostumeId } from './costumes';
 
 const NEON_COLORS = ['#ff0055', '#00ccff', '#00ff41', '#ff8800', '#ff00ff', '#ffff00', '#00ffff'];
 
@@ -116,6 +117,7 @@ export const CharacterCustomModal: React.FC<CharacterCustomModalProps> = ({ isOp
 
   const [selectedColor, setSelectedColor] = useState(NEON_COLORS[0]);
   const [selectedFace, setSelectedFace] = useState(0);
+  const [selectedCostume, setSelectedCostume] = useState<CostumeId>('default');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -125,6 +127,7 @@ export const CharacterCustomModal: React.FC<CharacterCustomModalProps> = ({ isOp
     if (isOpen) {
       setSelectedColor(profile?.player_color || defaultColor);
       setSelectedFace(profile?.face_type ?? defaultFaceType);
+      setSelectedCostume((profile?.costume_id as CostumeId) || 'default');
       setError('');
       setSuccess('');
     }
@@ -149,7 +152,7 @@ export const CharacterCustomModal: React.FC<CharacterCustomModalProps> = ({ isOp
     setError('');
     setSuccess('');
     setLoading(true);
-    const { error } = await updateProfile({ player_color: selectedColor, face_type: selectedFace });
+    const { error } = await updateProfile({ player_color: selectedColor, face_type: selectedFace, costume_id: selectedCostume });
     if (error) {
       setError(error.message);
     } else {
@@ -187,9 +190,38 @@ export const CharacterCustomModal: React.FC<CharacterCustomModalProps> = ({ isOp
             </div>
           )}
 
-          {/* Color section */}
+          {/* Costume section */}
           <div>
-            <p className="text-white/60 font-mono text-xs tracking-wider mb-3">COLOR</p>
+            <p className="text-white/60 font-mono text-xs tracking-wider mb-3">DISFRAZ</p>
+            <div className="flex gap-2 flex-wrap">
+              {COSTUME_IDS.map((id) => {
+                const costume = getCostume(id);
+                const isSelected = selectedCostume === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedCostume(id)}
+                    className="flex flex-col items-center gap-1 p-2 border transition-all min-w-[60px]"
+                    style={{
+                      borderColor: isSelected ? selectedColor : 'rgba(255,255,255,0.15)',
+                      boxShadow: isSelected ? `0 0 10px ${selectedColor}44` : 'none',
+                      backgroundColor: isSelected ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    }}
+                  >
+                    <span className="text-2xl">{costume.emoji}</span>
+                    <span className="text-white/50 font-mono text-[9px]">{costume.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color section */}
+          <div style={{ opacity: selectedCostume !== 'default' ? 0.4 : 1, pointerEvents: selectedCostume !== 'default' ? 'none' : 'auto' }}>
+            <p className="text-white/60 font-mono text-xs tracking-wider mb-3">
+              COLOR
+              {selectedCostume !== 'default' && <span className="text-white/30 ml-2">(usa colores del disfraz)</span>}
+            </p>
             <div className="flex gap-3 flex-wrap">
               {NEON_COLORS.map((color) => (
                 <button
@@ -209,8 +241,11 @@ export const CharacterCustomModal: React.FC<CharacterCustomModalProps> = ({ isOp
           </div>
 
           {/* Face section */}
-          <div>
-            <p className="text-white/60 font-mono text-xs tracking-wider mb-3">CARA</p>
+          <div style={{ opacity: selectedCostume !== 'default' ? 0.4 : 1, pointerEvents: selectedCostume !== 'default' ? 'none' : 'auto' }}>
+            <p className="text-white/60 font-mono text-xs tracking-wider mb-3">
+              CARA
+              {selectedCostume !== 'default' && <span className="text-white/30 ml-2">(usa cara del disfraz)</span>}
+            </p>
             <div className="flex gap-3">
               {FACE_LABELS.map((label, i) => (
                 <button

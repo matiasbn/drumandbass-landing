@@ -33,6 +33,7 @@ export interface UserProfile {
   avatar_url?: string;
   player_color?: string;
   face_type?: number;
+  costume_id?: string;
   created_at: string;
   updated_at: string;
 }

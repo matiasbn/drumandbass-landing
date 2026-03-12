@@ -80,3 +80,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
 -- Run this manually in Supabase Dashboard SQL Editor:
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS player_color TEXT;
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS face_type INTEGER;
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS costume_id TEXT DEFAULT 'default';

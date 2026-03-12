@@ -15,6 +15,7 @@ export interface PlayerState {
   danceMove: number;
   jumping: boolean;
   faceType?: number;
+  costumeId?: string;
 }
 
 interface MultiplayerContextType {
@@ -26,6 +27,7 @@ interface MultiplayerContextType {
   isConnected: boolean;
   playerColor: string;
   faceType?: number;
+  costumeId?: string;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextType | null>(null);
@@ -48,6 +50,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const { profile } = useAuth();
   const playerColor = profile?.player_color || fallbackColor;
   const faceType = profile?.face_type;
+  const costumeId = profile?.costume_id;
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const positionRef = useRef({ x: 0, z: 2, rotation: 0, danceMove: 0, jumping: false });
@@ -120,6 +123,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
             danceMove: positionRef.current.danceMove,
             jumping: positionRef.current.jumping,
             faceType,
+            costumeId,
           });
           setIsConnected(true);
         }
@@ -132,7 +136,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
       channelRef.current = null;
       setIsConnected(false);
     };
-  }, [username, localPlayerId, playerColor, faceType]);
+  }, [username, localPlayerId, playerColor, faceType, costumeId]);
 
   const updatePosition = useCallback((x: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
     positionRef.current = { x, z, rotation, danceMove, jumping };
@@ -148,9 +152,10 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         danceMove,
         jumping,
         faceType,
+        costumeId,
       });
     }
-  }, [localPlayerId, username, playerColor, faceType]);
+  }, [localPlayerId, username, playerColor, faceType, costumeId]);
 
   return (
     <MultiplayerContext.Provider
@@ -163,6 +168,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         isConnected,
         playerColor,
         faceType,
+        costumeId,
       }}
     >
       {children}

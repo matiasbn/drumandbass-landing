@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMultiplayer } from '../MultiplayerContext';
-import { useFaceTexture } from './useFaceTexture';
+import { CharacterMesh } from './CharacterMesh';
 
 interface PlayerDancerProps {
   isPlayingRef: MutableRefObject<boolean>;
@@ -16,11 +16,11 @@ const GRAVITY = 0.006;
 const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
-  const { username, updatePosition, playerColor, faceType } = useMultiplayer();
+  const { username, updatePosition, playerColor, faceType, costumeId } = useMultiplayer();
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
-  const headRef = useRef<THREE.Mesh>(null);
+  const headRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
   const lastUpdateRef = useRef(0);
 
@@ -286,8 +286,6 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     }
   });
 
-  const faceTexture = useFaceTexture(username || '', faceType);
-
   if (!username) return null;
 
   return (
@@ -307,44 +305,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         </div>
       </Html>
 
-      {/* Body */}
-      <mesh position={[0, 1, 0]} castShadow>
-        <boxGeometry args={[0.45, 0.65, 0.28]} />
-        <meshStandardMaterial color={playerColor} emissive={playerColor} emissiveIntensity={0.3} />
-      </mesh>
-
-      {/* Head */}
-      <group ref={headRef} position={[0, 1.5, 0]}>
-        <mesh castShadow>
-          <boxGeometry args={[0.32, 0.38, 0.3]} />
-          <meshStandardMaterial color="#e0c4a8" />
-        </mesh>
-        {faceTexture && (
-          <mesh position={[0, 0, 0.151]}>
-            <planeGeometry args={[0.32, 0.38]} />
-            <meshBasicMaterial map={faceTexture} />
-          </mesh>
-        )}
-      </group>
-
-      <mesh ref={leftArmRef} position={[-0.32, 1.1, 0]} castShadow>
-        <boxGeometry args={[0.12, 0.5, 0.12]} />
-        <meshStandardMaterial color={playerColor} />
-      </mesh>
-
-      <mesh ref={rightArmRef} position={[0.32, 1.1, 0]} castShadow>
-        <boxGeometry args={[0.12, 0.5, 0.12]} />
-        <meshStandardMaterial color={playerColor} />
-      </mesh>
-
-      <mesh position={[-0.12, 0.35, 0]} castShadow>
-        <boxGeometry args={[0.15, 0.6, 0.15]} />
-        <meshStandardMaterial color="#222222" />
-      </mesh>
-      <mesh position={[0.12, 0.35, 0]} castShadow>
-        <boxGeometry args={[0.15, 0.6, 0.15]} />
-        <meshStandardMaterial color="#222222" />
-      </mesh>
+      <CharacterMesh
+        playerColor={playerColor}
+        faceType={faceType}
+        username={username}
+        costumeId={costumeId}
+        headRef={headRef}
+        leftArmRef={leftArmRef}
+        rightArmRef={rightArmRef}
+      />
     </group>
   );
 };
