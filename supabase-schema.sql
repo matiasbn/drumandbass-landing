@@ -75,3 +75,10 @@ CREATE POLICY "Authenticated users can insert chat messages" ON chat_messages
 
 -- Enable realtime for chat messages
 ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+
+-- Migration: Add character customization columns to profiles
+-- Run this manually in Supabase Dashboard SQL Editor:
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS player_color TEXT;
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS face_type INTEGER;
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS costume_id TEXT DEFAULT 'default';
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS accessory_id TEXT DEFAULT 'none';

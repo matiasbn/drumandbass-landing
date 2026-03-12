@@ -31,6 +31,10 @@ export interface UserProfile {
   username: string;
   email: string;
   avatar_url?: string;
+  player_color?: string;
+  face_type?: number;
+  costume_id?: string;
+  accessory_id?: string;
   created_at: string;
   updated_at: string;
 }

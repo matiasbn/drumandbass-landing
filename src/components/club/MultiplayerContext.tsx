@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { useAuth } from './AuthContext';
 
 export interface PlayerState {
   id: string;
@@ -13,6 +14,9 @@ export interface PlayerState {
   color: string;
   danceMove: number;
   jumping: boolean;
+  faceType?: number;
+  costumeId?: string;
+  accessoryId?: string;
 }
 
 interface MultiplayerContextType {
@@ -22,6 +26,10 @@ interface MultiplayerContextType {
   setUsername: (name: string) => void;
   updatePosition: (x: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
   isConnected: boolean;
+  playerColor: string;
+  faceType?: number;
+  costumeId?: string;
+  accessoryId?: string;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextType | null>(null);
@@ -40,7 +48,12 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [localPlayerId] = useState(() => generatePlayerId());
   const [username, setUsernameState] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [playerColor] = useState(() => generatePlayerColor());
+  const [fallbackColor] = useState(() => generatePlayerColor());
+  const { profile } = useAuth();
+  const playerColor = profile?.player_color || fallbackColor;
+  const faceType = profile?.face_type;
+  const costumeId = profile?.costume_id;
+  const accessoryId = profile?.accessory_id;
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const positionRef = useRef({ x: 0, z: 2, rotation: 0, danceMove: 0, jumping: false });
@@ -112,6 +125,9 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
             color: playerColor,
             danceMove: positionRef.current.danceMove,
             jumping: positionRef.current.jumping,
+            faceType,
+            costumeId,
+            accessoryId,
           });
           setIsConnected(true);
         }
@@ -124,7 +140,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
       channelRef.current = null;
       setIsConnected(false);
     };
-  }, [username, localPlayerId, playerColor]);
+  }, [username, localPlayerId, playerColor, faceType, costumeId, accessoryId]);
 
   const updatePosition = useCallback((x: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
     positionRef.current = { x, z, rotation, danceMove, jumping };
@@ -139,9 +155,12 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         color: playerColor,
         danceMove,
         jumping,
+        faceType,
+        costumeId,
+        accessoryId,
       });
     }
-  }, [localPlayerId, username, playerColor]);
+  }, [localPlayerId, username, playerColor, faceType, costumeId, accessoryId]);
 
   return (
     <MultiplayerContext.Provider
@@ -152,6 +171,10 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         setUsername,
         updatePosition,
         isConnected,
+        playerColor,
+        faceType,
+        costumeId,
+        accessoryId,
       }}
     >
       {children}

@@ -42,7 +42,7 @@ const EYE_Y_OFFSETS = [-1, 1, 0, 1, 0, 0, -1, -1, 1];
 
 const SIZE = 128;
 
-export function useFaceTexture(name: string): THREE.CanvasTexture | null {
+export function useFaceTexture(name: string, faceTypeOverride?: number): THREE.CanvasTexture | null {
   return useMemo(() => {
     if (typeof document === 'undefined' || !name) return null;
 
@@ -52,7 +52,9 @@ export function useFaceTexture(name: string): THREE.CanvasTexture | null {
     const hashEyes = stringHash(name + '_eyes');
     const hashPos = stringHash(name + '_pos');
 
-    const faceIndex = hashFace % FACE_SVGS.length;
+    const faceIndex = (typeof faceTypeOverride === 'number' && faceTypeOverride >= 0 && faceTypeOverride < FACE_SVGS.length)
+      ? faceTypeOverride
+      : hashFace % FACE_SVGS.length;
     const bgColor = DEFAULT_COLORS[hashColor % DEFAULT_COLORS.length];
     const eyeColor = hashEyes % 2 === 0 ? '#ffffff' : '#000000';
     const eyeYOffset = EYE_Y_OFFSETS[hashPos % EYE_Y_OFFSETS.length];
@@ -105,5 +107,5 @@ export function useFaceTexture(name: string): THREE.CanvasTexture | null {
     img.src = url;
 
     return texture;
-  }, [name]);
+  }, [name, faceTypeOverride]);
 }
