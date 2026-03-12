@@ -120,7 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: 'https://www.googleapis.com/auth/youtube.force-ssl',
       }
     });
     return { error: error as Error | null };

@@ -5,6 +5,7 @@ import { RiLogoutBoxLine, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSL
 import { NightclubCanvas } from './NightclubCanvas';
 import { AudioPlayer } from './components/AudioPlayer';
 import { Chat } from './components/Chat';
+import { YouTubeChat } from './components/YouTubeChat';
 import { MobileControls } from './components/MobileControls';
 import { PlaybackProvider, usePlayback } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
@@ -123,7 +124,11 @@ const NightclubSceneInner: React.FC = () => {
         <NightclubCanvas />
 
         {/* Chat */}
-        <Chat isLive={isLive} youtubeVideoId={youtubeVideoId} />
+        {isLive && youtubeVideoId ? (
+          <YouTubeChat youtubeVideoId={youtubeVideoId} />
+        ) : (
+          <Chat />
+        )}
       </div>
     </PlaybackProvider>
   );
