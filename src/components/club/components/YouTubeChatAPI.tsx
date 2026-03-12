@@ -16,7 +16,7 @@ interface YouTubeChatProps {
   youtubeVideoId: string;
 }
 
-export const YouTubeChat: React.FC<YouTubeChatProps> = ({ youtubeVideoId }) => {
+export const YouTubeChatAPI: React.FC<YouTubeChatProps> = ({ youtubeVideoId }) => {
   const { session } = useAuth();
   const [messages, setMessages] = useState<YouTubeChatMessage[]>([]);
   const [liveChatId, setLiveChatId] = useState<string | null>(null);
