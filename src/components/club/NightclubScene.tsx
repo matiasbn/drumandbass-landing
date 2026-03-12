@@ -53,7 +53,7 @@ const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({
 const NightclubSceneInner: React.FC = () => {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const { profile, signOut } = useAuth();
-  const { isLive, liveTitle } = useLive();
+  const { isLive, liveTitle, youtubeVideoId } = useLive();
 
   const handleLogout = async () => {
     await signOut();
@@ -123,7 +123,7 @@ const NightclubSceneInner: React.FC = () => {
         <NightclubCanvas />
 
         {/* Chat */}
-        <Chat />
+        <Chat isLive={isLive} youtubeVideoId={youtubeVideoId} />
       </div>
     </PlaybackProvider>
   );

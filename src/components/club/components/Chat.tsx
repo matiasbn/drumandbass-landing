@@ -6,7 +6,12 @@ import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiUserLine } from '@remixico
 import { Facehash } from 'facehash';
 import { useMultiplayer } from '../MultiplayerContext';
 
-export const Chat: React.FC = () => {
+interface ChatProps {
+  isLive?: boolean;
+  youtubeVideoId?: string | null;
+}
+
+export const Chat: React.FC<ChatProps> = ({ isLive, youtubeVideoId }) => {
   const { username, setUsername } = useMultiplayer();
   const [nameInput, setNameInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -116,6 +121,38 @@ export const Chat: React.FC = () => {
     const date = new Date(dateStr);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const isYouTubeChat = isLive && youtubeVideoId;
+
+  // YouTube Live Chat mode - skip username requirement
+  if (isYouTubeChat) {
+    return (
+      <div className="fixed bottom-4 right-4 z-20 w-80">
+        <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 flex flex-col">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`flex items-center justify-between px-4 py-2 border-b transition-all ${
+              isOpen ? 'border-[#ff0055]/30 bg-black/50' : 'border-transparent hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <RiChat1Line className={`w-4 h-4 ${isOpen ? 'text-[#ff0055]' : 'text-[#ff0055]'}`} />
+              <span className="font-mono text-sm text-white">LIVE CHAT</span>
+            </div>
+            <RiCloseLine className={`w-4 h-4 text-white/40 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`} />
+          </button>
+
+          {isOpen && (
+            <iframe
+              src={`https://www.youtube.com/live_chat?v=${youtubeVideoId}&embed_domain=${typeof window !== 'undefined' ? window.location.hostname : 'www.dnbchile.cl'}`}
+              className="w-full h-[400px] border-0"
+              allow="autoplay"
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!username) {
     return (
