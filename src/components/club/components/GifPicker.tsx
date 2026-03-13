@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-interface TenorGif {
+interface GiphyGif {
   id: string;
   title: string;
-  media_formats: {
-    tinygif: { url: string };
-    gif: { url: string };
+  images: {
+    fixed_height_small: { url: string };
+    original: { url: string };
   };
 }
 
@@ -16,11 +16,11 @@ interface GifPickerProps {
   onClose: () => void;
 }
 
-const TENOR_API_KEY = process.env.NEXT_PUBLIC_TENOR_API_KEY || '';
+const GIPHY_API_KEY = process.env.NEXT_PUBLIC_GIPHY_API_KEY || '';
 
 export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
   const [query, setQuery] = useState('');
-  const [gifs, setGifs] = useState<TenorGif[]>([]);
+  const [gifs, setGifs] = useState<GiphyGif[]>([]);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -36,17 +36,17 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
   }, [onClose]);
 
   const fetchGifs = useCallback(async (searchQuery: string) => {
-    if (!TENOR_API_KEY) return;
+    if (!GIPHY_API_KEY) return;
     setLoading(true);
     try {
       const endpoint = searchQuery
-        ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchQuery)}&key=${TENOR_API_KEY}&limit=20&media_filter=tinygif,gif`
-        : `https://tenor.googleapis.com/v2/featured?key=${TENOR_API_KEY}&limit=20&media_filter=tinygif,gif`;
+        ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(searchQuery)}&api_key=${GIPHY_API_KEY}&limit=20&rating=g`
+        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20&rating=g`;
       const res = await fetch(endpoint);
       const data = await res.json();
-      setGifs(data.results || []);
+      setGifs(data.data || []);
     } catch (err) {
-      console.error('Tenor fetch error:', err);
+      console.error('GIPHY fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -68,8 +68,8 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
     };
   }, [query, fetchGifs]);
 
-  const handleSelect = (gif: TenorGif) => {
-    const url = gif.media_formats.gif?.url || gif.media_formats.tinygif.url;
+  const handleSelect = (gif: GiphyGif) => {
+    const url = gif.images.original.url;
     onSelect(url);
     onClose();
   };
@@ -102,7 +102,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
                 className="relative overflow-hidden rounded hover:ring-2 hover:ring-[#ff0055] transition-all cursor-pointer"
               >
                 <img
-                  src={gif.media_formats.tinygif.url}
+                  src={gif.images.fixed_height_small.url}
                   alt={gif.title}
                   className="w-full h-24 object-cover"
                   loading="lazy"
@@ -114,7 +114,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
       </div>
 
       <div className="px-2 py-1 border-t border-white/10 text-center">
-        <span className="text-white/30 text-[10px] font-mono">Powered by Tenor</span>
+        <span className="text-white/30 text-[10px] font-mono">Powered by GIPHY</span>
       </div>
     </div>
   );
