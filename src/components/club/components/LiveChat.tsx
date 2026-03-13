@@ -246,8 +246,8 @@ export const LiveChat: React.FC = () => {
       {/* Messages panel */}
       {isOpen && (
         <div
-          className="fixed left-4 right-4 z-20 touch-auto"
-          style={{ top: '35%', bottom: '150px' }}
+          className="fixed left-4 right-4 z-40 touch-auto"
+          style={{ top: '35%', bottom: '115px' }}
         >
           <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full flex flex-col">
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -290,17 +290,29 @@ export const LiveChat: React.FC = () => {
         </div>
       )}
 
-      {/* Toggle button — portaled */}
+      {/* Input — portaled, below chat */}
+      {isOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed left-4 right-4 z-[9999] touch-auto" style={{ bottom: '60px' }}>
+            <div className="bg-black border border-[#ff0055]/30">
+              {inputContent}
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Toggle button — portaled, below input when open */}
       {mounted &&
         createPortal(
           <div
             className="fixed z-[9999] touch-auto"
-            style={isOpen ? { top: 'calc(35% - 40px)', right: '16px' } : { bottom: '16px', right: '16px' }}
+            style={isOpen ? { bottom: '8px', left: '16px', right: '16px' } : { bottom: '16px', right: '16px' }}
           >
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={`flex items-center justify-between px-4 py-2 bg-black/85 backdrop-blur border border-[#ff0055]/30 transition-all ${
-                isOpen ? 'bg-black/50' : 'hover:bg-white/5'
+                isOpen ? 'w-full bg-black/50' : 'hover:bg-white/5'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -318,18 +330,6 @@ export const LiveChat: React.FC = () => {
                 className={`w-4 h-4 text-white/40 ml-2 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`}
               />
             </button>
-          </div>,
-          document.body,
-        )}
-
-      {/* Input — portaled, bottom */}
-      {isOpen &&
-        mounted &&
-        createPortal(
-          <div className="fixed bottom-4 left-4 right-4 z-[9999] touch-auto">
-            <div className="bg-black border border-[#ff0055]/30">
-              {inputContent}
-            </div>
           </div>,
           document.body,
         )}

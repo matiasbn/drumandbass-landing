@@ -168,11 +168,11 @@ const NightclubSceneInner: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile touch controls */}
-        <MobileControls />
-
         {/* 3D Canvas */}
         <NightclubCanvas />
+
+        {/* Mobile touch controls — after canvas so they render on top */}
+        <MobileControls />
 
         {/* Chat */}
         {isLive ? <LiveChat /> : <Chat />}
