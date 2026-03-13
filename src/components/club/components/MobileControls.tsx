@@ -19,7 +19,11 @@ export const MobileControls: React.FC = () => {
   const touchIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   const updateJoystick = useCallback((clientX: number, clientY: number) => {
@@ -136,8 +140,8 @@ export const MobileControls: React.FC = () => {
         </div>
       )}
 
-      {/* Action buttons — bottom right */}
-      <div className={`pointer-events-auto absolute bottom-36 flex flex-col items-center gap-3 touch-none ${isMobile ? 'right-8' : 'left-8'}`}>
+      {/* Action buttons — mobile: bottom right, desktop: left of chat panel */}
+      <div className={`pointer-events-auto absolute flex flex-col items-center gap-3 touch-none ${isMobile ? 'bottom-36 right-8' : 'bottom-4 right-[344px]'}`}>
         {/* Jump */}
         <button
           className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}

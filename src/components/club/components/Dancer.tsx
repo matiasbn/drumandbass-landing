@@ -5,6 +5,17 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useFaceTexture } from './useFaceTexture';
 
+const WANDER_BOUNDS = { minX: -4, maxX: 4, minZ: 0, maxZ: 5 };
+const MOVE_SPEED = 0.4;
+const ARRIVAL_THRESHOLD = 0.3;
+
+function pickRandomTarget() {
+  return {
+    x: WANDER_BOUNDS.minX + Math.random() * (WANDER_BOUNDS.maxX - WANDER_BOUNDS.minX),
+    z: WANDER_BOUNDS.minZ + Math.random() * (WANDER_BOUNDS.maxZ - WANDER_BOUNDS.minZ),
+  };
+}
+
 interface DancerProps {
   position: [number, number, number];
   color?: string;
@@ -31,16 +42,68 @@ export const Dancer: React.FC<DancerProps> = ({
   const headRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
 
-  useFrame(({ clock }) => {
-    const isPlaying = isPlayingRef.current;
+  // Wander state
+  const currentPos = useRef({ x: position[0], z: position[2] });
+  const targetPos = useRef(pickRandomTarget());
+  const currentRotY = useRef(rotationY);
+  const waitTimer = useRef(0);
+  const lastTime = useRef(0);
 
+  useFrame(({ clock }) => {
+    const elapsed = clock.getElapsedTime();
+    const delta = elapsed - lastTime.current;
+    lastTime.current = elapsed;
+
+    // Clamp delta to avoid jumps on tab switch
+    const dt = Math.min(delta, 0.1);
+
+    // --- Wander movement (always active) ---
+    if (waitTimer.current > 0) {
+      waitTimer.current -= dt;
+      if (waitTimer.current <= 0) {
+        targetPos.current = pickRandomTarget();
+      }
+    } else {
+      const dx = targetPos.current.x - currentPos.current.x;
+      const dz = targetPos.current.z - currentPos.current.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (dist < ARRIVAL_THRESHOLD) {
+        // Arrived — wait 1-3 seconds before picking a new target
+        waitTimer.current = 1 + Math.random() * 2;
+      } else {
+        // Move toward target
+        const speed = MOVE_SPEED * animationSpeed * dt;
+        const step = Math.min(speed, dist);
+        currentPos.current.x += (dx / dist) * step;
+        currentPos.current.z += (dz / dist) * step;
+
+        // Rotate to face movement direction
+        const targetAngle = Math.atan2(dx, dz);
+        // Lerp rotation
+        let angleDiff = targetAngle - currentRotY.current;
+        // Normalize to [-PI, PI]
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        currentRotY.current += angleDiff * Math.min(dt * 3, 1);
+      }
+    }
+
+    if (groupRef.current) {
+      groupRef.current.position.x = currentPos.current.x;
+      groupRef.current.position.z = currentPos.current.z;
+      groupRef.current.rotation.y = currentRotY.current;
+    }
+
+    // --- Dance animation (only when music plays) ---
+    const isPlaying = isPlayingRef.current;
     if (isPlaying) {
-      frozenTimeRef.current = clock.getElapsedTime();
+      frozenTimeRef.current = elapsed;
     }
     const time = frozenTimeRef.current * animationSpeed + animationOffset;
 
     if (groupRef.current) {
-      groupRef.current.position.y = position[1] + Math.sin(time * 4) * 0.15;
+      groupRef.current.position.y = Math.sin(time * 4) * 0.15;
     }
 
     if (headRef.current) {
