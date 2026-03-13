@@ -5,7 +5,7 @@ import { RiMenuLine, RiLogoutBoxLine, RiSettings3Line, RiPaletteLine, RiPlayFill
 import { NightclubCanvas } from './NightclubCanvas';
 import { AudioPlayer } from './components/AudioPlayer';
 import { Chat } from './components/Chat';
-import { YouTubeChatIframe } from './components/YouTubeChatIframe';
+import { LiveChat } from './components/LiveChat';
 import { MobileControls } from './components/MobileControls';
 import { SettingsModal } from './components/SettingsModal';
 import { CharacterCustomModal } from './components/CharacterCustomModal';
@@ -175,11 +175,7 @@ const NightclubSceneInner: React.FC = () => {
         <NightclubCanvas />
 
         {/* Chat */}
-        {isLive && youtubeVideoId ? (
-          <YouTubeChatIframe youtubeVideoId={youtubeVideoId} />
-        ) : (
-          <Chat />
-        )}
+        {isLive ? <LiveChat /> : <Chat />}
       </div>
     </PlaybackProvider>
   );
