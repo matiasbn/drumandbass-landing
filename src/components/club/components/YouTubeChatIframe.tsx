@@ -65,7 +65,11 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newMessage.trim();
-    if (!trimmed || !liveChatId || !providerToken || isSending) return;
+    if (!trimmed || !liveChatId || isSending) return;
+    if (!providerToken) {
+      setSendError('Tu sesion de Google expiro. Re-inicia sesion para enviar mensajes.');
+      return;
+    }
 
     setIsSending(true);
     setNewMessage('');
@@ -82,20 +86,19 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
         body: JSON.stringify({ liveChatId, message: trimmed }),
       });
 
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setSendSuccess(true);
         if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
         successTimeoutRef.current = setTimeout(() => setSendSuccess(false), 3000);
+      } else if (res.status === 401 || res.status === 403) {
+        setSendError('Debes re-iniciar sesion con Google para enviar mensajes');
+      } else if (res.status === 400 && data.details?.error?.status === 'INVALID_ARGUMENT') {
+        setNeedsYouTubeChannel(true);
       } else {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 401 || res.status === 403) {
-          setSendError('Debes re-iniciar sesion con Google para enviar mensajes');
-        } else if (res.status === 400 && data.details?.error?.status === 'INVALID_ARGUMENT') {
-          setNeedsYouTubeChannel(true);
-        } else {
-          console.error('Failed to send message:', data);
-          setNewMessage(trimmed);
-        }
+        console.error('Failed to send message:', res.status, data);
+        setSendError('Error al enviar mensaje, intenta de nuevo');
+        setNewMessage(trimmed);
       }
     } catch (err) {
       console.error('Error sending message:', err);
