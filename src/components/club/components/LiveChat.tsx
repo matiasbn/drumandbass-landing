@@ -25,7 +25,11 @@ function useIsMobile() {
   return isMobile;
 }
 
-export const LiveChat: React.FC = () => {
+interface LiveChatProps {
+  videoId?: string;
+}
+
+export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
   const { profile } = useAuth();
   const username = profile?.username ?? null;
   const { sendChatBubble } = useMultiplayer();
@@ -56,11 +60,17 @@ export const LiveChat: React.FC = () => {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('chat_messages')
         .select('*')
         .order('created_at', { ascending: true })
         .limit(50);
+
+      if (videoId) {
+        query = query.eq('video_id', videoId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching messages:', error);
@@ -82,6 +92,7 @@ export const LiveChat: React.FC = () => {
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
+          if (videoId && newMsg.video_id !== videoId) return;
           setMessages((prev) => {
             const updated = [...prev, newMsg];
             return updated.slice(-50);
@@ -96,7 +107,7 @@ export const LiveChat: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [videoId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,6 +152,7 @@ export const LiveChat: React.FC = () => {
     const { error } = await supabase.from('chat_messages').insert({
       username,
       message: trimmed,
+      video_id: videoId ?? null,
     });
 
     if (error) {
@@ -169,6 +181,7 @@ export const LiveChat: React.FC = () => {
     const { error } = await supabase.from('chat_messages').insert({
       username,
       message: encoded,
+      video_id: videoId ?? null,
     });
 
     if (error) {

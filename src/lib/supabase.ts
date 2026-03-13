@@ -22,6 +22,7 @@ export interface ChatMessage {
   username: string;
   message: string;
   created_at: string;
+  video_id?: string;
 }
 
 export interface UserProfile {
