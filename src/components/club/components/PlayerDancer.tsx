@@ -6,6 +6,7 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMultiplayer } from '../MultiplayerContext';
 import { CharacterMesh } from './CharacterMesh';
+import { getBubbleText } from '../../../lib/chatMessage';
 
 interface PlayerDancerProps {
   isPlayingRef: MutableRefObject<boolean>;
@@ -29,7 +30,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
   const truncatedBubble = useMemo(() => {
     if (!visibleBubble) return null;
-    return visibleBubble.length > 60 ? visibleBubble.slice(0, 57) + '...' : visibleBubble;
+    const text = getBubbleText(visibleBubble);
+    return text.length > 60 ? text.slice(0, 57) + '...' : text;
   }, [visibleBubble]);
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);

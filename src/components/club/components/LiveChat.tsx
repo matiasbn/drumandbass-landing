@@ -2,11 +2,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { supabase, ChatMessage } from '../../../lib/supabase';
-import { RiSendPlaneFill, RiChat1Line, RiCloseLine } from '@remixicon/react';
+import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiEmotion2Line, RiFileGifLine } from '@remixicon/react';
 import { Facehash } from 'facehash';
 import { useAuth } from '../AuthContext';
 import { useMultiplayer } from '../MultiplayerContext';
+import { isGifMessage, decodeGifUrl, encodeGifMessage, getBubbleText } from '../../../lib/chatMessage';
+
+const EmojiPicker = dynamic(() => import('./EmojiPicker').then(m => ({ default: m.EmojiPicker })), { ssr: false });
+const GifPicker = dynamic(() => import('./GifPicker').then(m => ({ default: m.GifPicker })), { ssr: false });
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -31,6 +36,8 @@ export const LiveChat: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
@@ -124,6 +131,30 @@ export const LiveChat: React.FC = () => {
     inputRef.current?.focus();
   };
 
+  const handleEmojiSelect = (emoji: string) => {
+    setNewMessage((prev) => prev + emoji);
+    inputRef.current?.focus();
+  };
+
+  const handleGifSelect = async (gifUrl: string) => {
+    if (!username || isLoading) return;
+    setShowGifPicker(false);
+    setIsLoading(true);
+
+    const encoded = encodeGifMessage(gifUrl);
+    const { error } = await supabase.from('chat_messages').insert({
+      username,
+      message: encoded,
+    });
+
+    if (error) {
+      console.error('Error sending GIF:', error);
+    } else {
+      sendChatBubble('[GIF]');
+    }
+    setIsLoading(false);
+  };
+
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -159,7 +190,11 @@ export const LiveChat: React.FC = () => {
                   {formatTime(msg.created_at)}
                 </span>
               </div>
-              <p className="text-white/90 break-words">{msg.message}</p>
+              {isGifMessage(msg.message) ? (
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" />
+              ) : (
+                <p className="text-white/90 break-words">{msg.message}</p>
+              )}
             </div>
           </div>
         ))
@@ -170,24 +205,56 @@ export const LiveChat: React.FC = () => {
 
   const inputContent = username ? (
     <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10">
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Escribe un mensaje..."
-          maxLength={500}
-          disabled={isLoading}
-          className="flex-1 bg-black/50 border border-white/20 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#ff0055] transition-colors disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={!newMessage.trim() || isLoading}
-          className="px-4 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ff0055]/30 transition-colors"
-        >
-          <RiSendPlaneFill className="w-4 h-4" />
-        </button>
+      <div className="relative">
+        {showEmojiPicker && (
+          <EmojiPicker
+            onSelect={handleEmojiSelect}
+            onClose={() => setShowEmojiPicker(false)}
+          />
+        )}
+        {showGifPicker && (
+          <GifPicker
+            onSelect={handleGifSelect}
+            onClose={() => setShowGifPicker(false)}
+          />
+        )}
+        <div className="flex gap-1.5 items-center">
+          <div className="flex-1 flex items-center bg-black/50 border border-white/20 focus-within:border-[#ff0055] transition-colors">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Escribe un mensaje..."
+              maxLength={500}
+              disabled={isLoading}
+              className="flex-1 bg-transparent text-white px-3 py-2 text-sm font-mono focus:outline-none disabled:opacity-50 min-w-0"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
+              className="px-1.5 text-white/40 hover:text-[#ff0055] transition-colors shrink-0"
+              title="Emojis"
+            >
+              <RiEmotion2Line className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
+              className="px-1.5 pr-2 text-white/40 hover:text-[#ff0055] transition-colors shrink-0"
+              title="GIFs"
+            >
+              <RiFileGifLine className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || isLoading}
+            className="px-3 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ff0055]/30 transition-colors shrink-0"
+          >
+            <RiSendPlaneFill className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </form>
   ) : (
@@ -279,7 +346,11 @@ export const LiveChat: React.FC = () => {
                           {formatTime(msg.created_at)}
                         </span>
                       </div>
-                      <p className="text-white/90 break-words">{msg.message}</p>
+                      {isGifMessage(msg.message) ? (
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" />
+              ) : (
+                <p className="text-white/90 break-words">{msg.message}</p>
+              )}
                     </div>
                   </div>
                 ))
