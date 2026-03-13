@@ -6,6 +6,7 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMultiplayer, PlayerState } from '../MultiplayerContext';
 import { CharacterMesh } from './CharacterMesh';
+import { isGifMessage, decodeGifUrl } from '../../../lib/chatMessage';
 
 interface RemotePlayerProps {
   player: PlayerState;
@@ -31,8 +32,11 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
     }
   }, [player.lastMessage, player.lastMessageAt]);
 
+  const isGif = visibleBubble ? isGifMessage(visibleBubble) : false;
+  const gifUrl = isGif && visibleBubble ? decodeGifUrl(visibleBubble) : null;
   const truncatedBubble = useMemo(() => {
     if (!visibleBubble) return null;
+    if (isGifMessage(visibleBubble)) return visibleBubble;
     return visibleBubble.length > 60 ? visibleBubble.slice(0, 57) + '...' : visibleBubble;
   }, [visibleBubble]);
 
@@ -180,25 +184,30 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
     <group ref={groupRef} position={[player.x, 0, player.z]}>
       {/* Chat bubble */}
       {truncatedBubble && (
-        <Html position={[0, 2.8, 0]} center distanceFactor={10}>
+        <Html position={[0, 2.8, 0]} center distanceFactor={10} zIndexRange={[10, 0]}>
           <div
-            className="px-2 py-1 text-xs font-mono pointer-events-none"
+            className="pointer-events-none"
             style={{
               backgroundColor: 'rgba(0,0,0,0.85)',
-              color: '#fff',
               border: '1px solid rgba(255,0,85,0.5)',
               borderRadius: '6px',
-              whiteSpace: 'nowrap',
               textAlign: 'center',
+              overflow: 'hidden',
             }}
           >
-            {truncatedBubble}
+            {isGif && gifUrl ? (
+              <img src={gifUrl} alt="GIF" style={{ maxWidth: '180px', maxHeight: '135px', display: 'block' }} />
+            ) : (
+              <div className="px-4 py-2 text-lg font-mono" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
+                {truncatedBubble}
+              </div>
+            )}
           </div>
         </Html>
       )}
 
       {/* Name label above head */}
-      <Html position={[0, 2.2, 0]} center distanceFactor={10}>
+      <Html position={[0, 2.2, 0]} center distanceFactor={10} zIndexRange={[10, 0]}>
         <div
           className="px-2 py-0.5 text-xs font-bold whitespace-nowrap pointer-events-none"
           style={{

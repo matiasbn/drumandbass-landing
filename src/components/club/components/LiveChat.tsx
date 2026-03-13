@@ -2,11 +2,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { supabase, ChatMessage } from '../../../lib/supabase';
-import { RiSendPlaneFill, RiChat1Line, RiCloseLine } from '@remixicon/react';
+import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiEmotion2Line, RiFileGifLine } from '@remixicon/react';
 import { Facehash } from 'facehash';
 import { useAuth } from '../AuthContext';
 import { useMultiplayer } from '../MultiplayerContext';
+import { isGifMessage, decodeGifUrl, encodeGifMessage, getBubbleText } from '../../../lib/chatMessage';
+
+const EmojiPicker = dynamic(() => import('./EmojiPicker').then(m => ({ default: m.EmojiPicker })), { ssr: false });
+const GifPicker = dynamic(() => import('./GifPicker').then(m => ({ default: m.GifPicker })), { ssr: false });
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -20,7 +25,11 @@ function useIsMobile() {
   return isMobile;
 }
 
-export const LiveChat: React.FC = () => {
+interface LiveChatProps {
+  videoId?: string;
+}
+
+export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
   const { profile } = useAuth();
   const username = profile?.username ?? null;
   const { sendChatBubble } = useMultiplayer();
@@ -31,8 +40,13 @@ export const LiveChat: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [closeOnSend, setCloseOnSend] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const isOpenRef = useRef(isOpen);
   const isMobile = useIsMobile();
 
@@ -46,11 +60,17 @@ export const LiveChat: React.FC = () => {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('chat_messages')
         .select('*')
         .order('created_at', { ascending: true })
         .limit(50);
+
+      if (videoId) {
+        query = query.eq('video_id', videoId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching messages:', error);
@@ -72,6 +92,7 @@ export const LiveChat: React.FC = () => {
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
+          if (videoId && newMsg.video_id !== videoId) return;
           setMessages((prev) => {
             const updated = [...prev, newMsg];
             return updated.slice(-50);
@@ -86,18 +107,38 @@ export const LiveChat: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [videoId]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTop = mobileScrollRef.current.scrollHeight;
+    }
+  };
 
   useEffect(() => {
-    if (isOpen && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (!isOpen) return;
+    const timer = setTimeout(scrollToBottom, 50);
+    return () => clearTimeout(timer);
   }, [messages, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
       setUnreadCount(0);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (chatContainerRef.current && !chatContainerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setShowEmojiPicker(false);
+        setShowGifPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -111,6 +152,7 @@ export const LiveChat: React.FC = () => {
     const { error } = await supabase.from('chat_messages').insert({
       username,
       message: trimmed,
+      video_id: videoId ?? null,
     });
 
     if (error) {
@@ -118,10 +160,37 @@ export const LiveChat: React.FC = () => {
       setNewMessage(trimmed);
     } else {
       sendChatBubble(trimmed);
+      if (closeOnSend) setIsOpen(false);
     }
 
     setIsLoading(false);
     inputRef.current?.focus();
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    setNewMessage((prev) => prev + emoji);
+    inputRef.current?.focus();
+  };
+
+  const handleGifSelect = async (gifUrl: string) => {
+    if (!username || isLoading) return;
+    setShowGifPicker(false);
+    setIsLoading(true);
+
+    const encoded = encodeGifMessage(gifUrl);
+    const { error } = await supabase.from('chat_messages').insert({
+      username,
+      message: encoded,
+      video_id: videoId ?? null,
+    });
+
+    if (error) {
+      console.error('Error sending GIF:', error);
+    } else {
+      sendChatBubble(encoded);
+      if (closeOnSend) setIsOpen(false);
+    }
+    setIsLoading(false);
   };
 
   const formatTime = (dateStr: string) => {
@@ -159,7 +228,11 @@ export const LiveChat: React.FC = () => {
                   {formatTime(msg.created_at)}
                 </span>
               </div>
-              <p className="text-white/90 break-words">{msg.message}</p>
+              {isGifMessage(msg.message) ? (
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
+              ) : (
+                <p className="text-white/90 break-words">{msg.message}</p>
+              )}
             </div>
           </div>
         ))
@@ -170,24 +243,65 @@ export const LiveChat: React.FC = () => {
 
   const inputContent = username ? (
     <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10">
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Escribe un mensaje..."
-          maxLength={500}
-          disabled={isLoading}
-          className="flex-1 bg-black/50 border border-white/20 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#ff0055] transition-colors disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={!newMessage.trim() || isLoading}
-          className="px-4 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ff0055]/30 transition-colors"
-        >
-          <RiSendPlaneFill className="w-4 h-4" />
-        </button>
+      <div className="relative">
+        {showEmojiPicker && (
+          <EmojiPicker
+            onSelect={handleEmojiSelect}
+            onClose={() => setShowEmojiPicker(false)}
+          />
+        )}
+        {showGifPicker && (
+          <GifPicker
+            onSelect={handleGifSelect}
+            onClose={() => setShowGifPicker(false)}
+          />
+        )}
+        <div className="flex gap-1.5 items-center">
+          <div className="flex-1 flex items-center bg-black/50 border border-white/20 focus-within:border-[#ff0055] transition-colors">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Escribe un mensaje..."
+              maxLength={500}
+              disabled={isLoading}
+              className="flex-1 bg-transparent text-white px-3 py-2 text-sm font-mono focus:outline-none disabled:opacity-50 min-w-0"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowGifPicker(false); }}
+              className="px-1.5 text-white/40 hover:text-[#ff0055] transition-colors shrink-0"
+              title="Emojis"
+            >
+              <RiEmotion2Line className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowGifPicker(!showGifPicker); setShowEmojiPicker(false); }}
+              className="px-1.5 pr-2 text-white/40 hover:text-[#ff0055] transition-colors shrink-0"
+              title="GIFs"
+            >
+              <RiFileGifLine className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || isLoading}
+            className="px-3 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ff0055]/30 transition-colors shrink-0"
+          >
+            <RiSendPlaneFill className="w-4 h-4" />
+          </button>
+        </div>
+        <label className="flex items-center gap-1.5 mt-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={closeOnSend}
+            onChange={(e) => setCloseOnSend(e.target.checked)}
+            className="accent-[#ff0055] w-3 h-3"
+          />
+          <span className="text-white/40 text-[10px] font-mono">Cerrar al enviar</span>
+        </label>
       </div>
     </form>
   ) : (
@@ -201,7 +315,7 @@ export const LiveChat: React.FC = () => {
   // Desktop layout
   if (!isMobile) {
     return (
-      <div className="fixed bottom-4 right-4 z-20 w-80">
+      <div ref={chatContainerRef} className="fixed bottom-4 right-4 z-20 w-80">
         <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 flex flex-col">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -243,14 +357,23 @@ export const LiveChat: React.FC = () => {
   // Mobile layout — portaled elements to avoid iframe touch capture
   return (
     <>
+      {/* Backdrop to close chat on outside tap */}
+      {isOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-30"
+          onClick={() => { setIsOpen(false); setShowEmojiPicker(false); setShowGifPicker(false); }}
+        />,
+        document.body,
+      )}
+
       {/* Messages panel */}
       {isOpen && (
         <div
           className="fixed left-4 right-4 z-40 touch-auto"
-          style={{ top: '35%', bottom: '115px' }}
+          style={{ top: '35%', bottom: '140px' }}
         >
           <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div ref={mobileScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
               {messages.length === 0 ? (
                 <p className="text-white/30 text-sm font-mono text-center py-8">
                   No hay mensajes aún. ¡Di algo!
@@ -279,7 +402,11 @@ export const LiveChat: React.FC = () => {
                           {formatTime(msg.created_at)}
                         </span>
                       </div>
-                      <p className="text-white/90 break-words">{msg.message}</p>
+                      {isGifMessage(msg.message) ? (
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
+              ) : (
+                <p className="text-white/90 break-words">{msg.message}</p>
+              )}
                     </div>
                   </div>
                 ))
@@ -318,7 +445,7 @@ export const LiveChat: React.FC = () => {
               <div className="flex items-center gap-2">
                 <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
                 <span className="font-mono text-sm text-white">
-                  {isOpen ? 'CERRAR' : 'LIVE CHAT'}
+                  {isOpen ? 'CERRAR CHAT' : 'LIVE CHAT'}
                 </span>
                 {unreadCount > 0 && !isOpen && (
                   <span className="bg-[#ff0055] text-white text-xs px-1.5 py-0.5 font-bold">
