@@ -175,7 +175,7 @@ const NightclubSceneInner: React.FC = () => {
         <MobileControls />
 
         {/* Chat */}
-        {isLive ? <LiveChat /> : <Chat />}
+        {isLive ? <LiveChat videoId={youtubeVideoId ?? undefined} /> : <Chat />}
       </div>
     </PlaybackProvider>
   );
