@@ -46,7 +46,7 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
   useEffect(() => {
     const fetchLiveChatId = async () => {
       try {
-        const res = await fetch(`/api/chat/messages?videoId=${youtubeVideoId}`);
+        const res = await fetch(`/api/chat/live-chat-id?videoId=${youtubeVideoId}`);
         if (res.ok) {
           const data = await res.json();
           setLiveChatId(data.liveChatId);
