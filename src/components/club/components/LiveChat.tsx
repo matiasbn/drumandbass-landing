@@ -38,6 +38,7 @@ export const LiveChat: React.FC = () => {
   const [mounted, setMounted] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [closeOnSend, setCloseOnSend] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mobileScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,6 +148,7 @@ export const LiveChat: React.FC = () => {
       setNewMessage(trimmed);
     } else {
       sendChatBubble(trimmed);
+      if (closeOnSend) setIsOpen(false);
     }
 
     setIsLoading(false);
@@ -173,6 +175,7 @@ export const LiveChat: React.FC = () => {
       console.error('Error sending GIF:', error);
     } else {
       sendChatBubble(encoded);
+      if (closeOnSend) setIsOpen(false);
     }
     setIsLoading(false);
   };
@@ -277,6 +280,15 @@ export const LiveChat: React.FC = () => {
             <RiSendPlaneFill className="w-4 h-4" />
           </button>
         </div>
+        <label className="flex items-center gap-1.5 mt-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={closeOnSend}
+            onChange={(e) => setCloseOnSend(e.target.checked)}
+            className="accent-[#ff0055] w-3 h-3"
+          />
+          <span className="text-white/40 text-[10px] font-mono">Cerrar al enviar</span>
+        </label>
       </div>
     </form>
   ) : (
@@ -345,7 +357,7 @@ export const LiveChat: React.FC = () => {
       {isOpen && (
         <div
           className="fixed left-4 right-4 z-40 touch-auto"
-          style={{ top: '35%', bottom: '115px' }}
+          style={{ top: '35%', bottom: '140px' }}
         >
           <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full flex flex-col">
             <div ref={mobileScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -420,7 +432,7 @@ export const LiveChat: React.FC = () => {
               <div className="flex items-center gap-2">
                 <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
                 <span className="font-mono text-sm text-white">
-                  {isOpen ? 'CERRAR' : 'LIVE CHAT'}
+                  {isOpen ? 'CERRAR CHAT' : 'LIVE CHAT'}
                 </span>
                 {unreadCount > 0 && !isOpen && (
                   <span className="bg-[#ff0055] text-white text-xs px-1.5 py-0.5 font-bold">
