@@ -65,7 +65,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     maxZ: 6.5,
   };
 
-  const MOVE_SPEED = 0.08;
+  const MOVE_SPEED = 0.14;
   const BASE_JUMP_HEIGHT = 0.15;
 
   useEffect(() => {

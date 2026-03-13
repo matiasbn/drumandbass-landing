@@ -73,11 +73,16 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem('dnbchile_username');
-    if (stored) {
-      setUsernameState(stored);
+    if (profile?.username) {
+      localStorage.setItem('dnbchile_username', profile.username);
+      setUsernameState(profile.username);
+    } else {
+      const stored = localStorage.getItem('dnbchile_username');
+      if (stored) {
+        setUsernameState(stored);
+      }
     }
-  }, []);
+  }, [profile?.username]);
 
   useEffect(() => {
     if (!username) return;
