@@ -40,6 +40,7 @@ export const LiveChat: React.FC = () => {
   const [showGifPicker, setShowGifPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const isOpenRef = useRef(isOpen);
   const isMobile = useIsMobile();
 
@@ -105,6 +106,19 @@ export const LiveChat: React.FC = () => {
     if (isOpen) {
       setUnreadCount(0);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (chatContainerRef.current && !chatContainerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setShowEmojiPicker(false);
+        setShowGifPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -268,7 +282,7 @@ export const LiveChat: React.FC = () => {
   // Desktop layout
   if (!isMobile) {
     return (
-      <div className="fixed bottom-4 right-4 z-20 w-80">
+      <div ref={chatContainerRef} className="fixed bottom-4 right-4 z-20 w-80">
         <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 flex flex-col">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -310,6 +324,15 @@ export const LiveChat: React.FC = () => {
   // Mobile layout — portaled elements to avoid iframe touch capture
   return (
     <>
+      {/* Backdrop to close chat on outside tap */}
+      {isOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-30"
+          onClick={() => { setIsOpen(false); setShowEmojiPicker(false); setShowGifPicker(false); }}
+        />,
+        document.body,
+      )}
+
       {/* Messages panel */}
       {isOpen && (
         <div

@@ -184,7 +184,7 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       {truncatedBubble && (
         <Html position={[0, 2.8, 0]} center distanceFactor={10}>
           <div
-            className="px-2 py-1 text-xs font-mono pointer-events-none"
+            className="px-4 py-2 text-lg font-mono pointer-events-none"
             style={{
               backgroundColor: 'rgba(0,0,0,0.85)',
               color: '#fff',

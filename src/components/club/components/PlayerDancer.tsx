@@ -17,7 +17,16 @@ const GRAVITY = 0.006;
 const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
-  const { username, updatePosition, playerColor, faceType, costumeId, accessoryId, lastMessage, lastMessageAt } = useMultiplayer();
+  const {
+    username,
+    updatePosition,
+    playerColor,
+    faceType,
+    costumeId,
+    accessoryId,
+    lastMessage,
+    lastMessageAt,
+  } = useMultiplayer();
   const [visibleBubble, setVisibleBubble] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,16 +94,16 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
       switch (e.key) {
         case 'ArrowUp':
-          setKeys(k => ({ ...k, forward: true }));
+          setKeys((k) => ({ ...k, forward: true }));
           break;
         case 'ArrowDown':
-          setKeys(k => ({ ...k, backward: true }));
+          setKeys((k) => ({ ...k, backward: true }));
           break;
         case 'ArrowLeft':
-          setKeys(k => ({ ...k, left: true }));
+          setKeys((k) => ({ ...k, left: true }));
           break;
         case 'ArrowRight':
-          setKeys(k => ({ ...k, right: true }));
+          setKeys((k) => ({ ...k, right: true }));
           break;
         case ' ':
           if (!isJumpingRef.current) {
@@ -122,16 +131,16 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     const handleKeyUp = (e: KeyboardEvent) => {
       switch (e.key) {
         case 'ArrowUp':
-          setKeys(k => ({ ...k, forward: false }));
+          setKeys((k) => ({ ...k, forward: false }));
           break;
         case 'ArrowDown':
-          setKeys(k => ({ ...k, backward: false }));
+          setKeys((k) => ({ ...k, backward: false }));
           break;
         case 'ArrowLeft':
-          setKeys(k => ({ ...k, left: false }));
+          setKeys((k) => ({ ...k, left: false }));
           break;
         case 'ArrowRight':
-          setKeys(k => ({ ...k, right: false }));
+          setKeys((k) => ({ ...k, right: false }));
           break;
       }
     };
@@ -165,10 +174,22 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.forward) { moveX += camForward.x * MOVE_SPEED; moveZ += camForward.z * MOVE_SPEED; }
-    if (keys.backward) { moveX -= camForward.x * MOVE_SPEED; moveZ -= camForward.z * MOVE_SPEED; }
-    if (keys.left) { moveX -= camRight.x * MOVE_SPEED; moveZ -= camRight.z * MOVE_SPEED; }
-    if (keys.right) { moveX += camRight.x * MOVE_SPEED; moveZ += camRight.z * MOVE_SPEED; }
+    if (keys.forward) {
+      moveX += camForward.x * MOVE_SPEED;
+      moveZ += camForward.z * MOVE_SPEED;
+    }
+    if (keys.backward) {
+      moveX -= camForward.x * MOVE_SPEED;
+      moveZ -= camForward.z * MOVE_SPEED;
+    }
+    if (keys.left) {
+      moveX -= camRight.x * MOVE_SPEED;
+      moveZ -= camRight.z * MOVE_SPEED;
+    }
+    if (keys.right) {
+      moveX += camRight.x * MOVE_SPEED;
+      moveZ += camRight.z * MOVE_SPEED;
+    }
 
     const isMoving = moveX !== 0 || moveZ !== 0;
 
@@ -319,7 +340,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       {truncatedBubble && (
         <Html position={[0, 2.8, 0]} center distanceFactor={10}>
           <div
-            className="px-2 py-1 text-xs font-mono pointer-events-none"
+            className="px-4 py-2 text-lg font-mono pointer-events-none"
             style={{
               backgroundColor: 'rgba(0,0,0,0.85)',
               color: '#fff',
