@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, MutableRefObject } from 'react';
+import React, { useRef, useState, useEffect, useMemo, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -15,6 +15,27 @@ interface RemotePlayerProps {
 const JUMP_HEIGHT_REMOTE = 0.8;
 
 const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => {
+  const [visibleBubble, setVisibleBubble] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (player.lastMessage && player.lastMessageAt) {
+      setVisibleBubble(player.lastMessage);
+      const age = Date.now() - player.lastMessageAt;
+      const remaining = Math.max(5000 - age, 0);
+      if (remaining <= 0) {
+        setVisibleBubble(null);
+        return;
+      }
+      const timer = setTimeout(() => setVisibleBubble(null), remaining);
+      return () => clearTimeout(timer);
+    }
+  }, [player.lastMessage, player.lastMessageAt]);
+
+  const truncatedBubble = useMemo(() => {
+    if (!visibleBubble) return null;
+    return visibleBubble.length > 60 ? visibleBubble.slice(0, 57) + '...' : visibleBubble;
+  }, [visibleBubble]);
+
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
@@ -157,6 +178,25 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
 
   return (
     <group ref={groupRef} position={[player.x, 0, player.z]}>
+      {/* Chat bubble */}
+      {truncatedBubble && (
+        <Html position={[0, 2.8, 0]} center distanceFactor={10}>
+          <div
+            className="px-2 py-1 text-xs font-mono pointer-events-none"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              color: '#fff',
+              border: '1px solid rgba(255,0,85,0.5)',
+              borderRadius: '6px',
+              whiteSpace: 'nowrap',
+              textAlign: 'center',
+            }}
+          >
+            {truncatedBubble}
+          </div>
+        </Html>
+      )}
+
       {/* Name label above head */}
       <Html position={[0, 2.2, 0]} center distanceFactor={10}>
         <div

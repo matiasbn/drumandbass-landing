@@ -6,6 +6,7 @@ import { supabase, ChatMessage } from '../../../lib/supabase';
 import { RiSendPlaneFill, RiChat1Line, RiCloseLine } from '@remixicon/react';
 import { Facehash } from 'facehash';
 import { useAuth } from '../AuthContext';
+import { useMultiplayer } from '../MultiplayerContext';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -22,6 +23,7 @@ function useIsMobile() {
 export const LiveChat: React.FC = () => {
   const { profile } = useAuth();
   const username = profile?.username ?? null;
+  const { sendChatBubble } = useMultiplayer();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -114,6 +116,8 @@ export const LiveChat: React.FC = () => {
     if (error) {
       console.error('Error sending message:', error);
       setNewMessage(trimmed);
+    } else {
+      sendChatBubble(trimmed);
     }
 
     setIsLoading(false);
