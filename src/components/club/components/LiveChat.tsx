@@ -39,6 +39,7 @@ export const LiveChat: React.FC = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isOpenRef = useRef(isOpen);
@@ -96,10 +97,17 @@ export const LiveChat: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    if (isOpen && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTop = mobileScrollRef.current.scrollHeight;
     }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(scrollToBottom, 50);
+    return () => clearTimeout(timer);
   }, [messages, isOpen]);
 
   useEffect(() => {
@@ -164,7 +172,7 @@ export const LiveChat: React.FC = () => {
     if (error) {
       console.error('Error sending GIF:', error);
     } else {
-      sendChatBubble('[GIF]');
+      sendChatBubble(encoded);
     }
     setIsLoading(false);
   };
@@ -205,7 +213,7 @@ export const LiveChat: React.FC = () => {
                 </span>
               </div>
               {isGifMessage(msg.message) ? (
-                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" />
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
               ) : (
                 <p className="text-white/90 break-words">{msg.message}</p>
               )}
@@ -340,7 +348,7 @@ export const LiveChat: React.FC = () => {
           style={{ top: '35%', bottom: '115px' }}
         >
           <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div ref={mobileScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
               {messages.length === 0 ? (
                 <p className="text-white/30 text-sm font-mono text-center py-8">
                   No hay mensajes aún. ¡Di algo!
@@ -370,7 +378,7 @@ export const LiveChat: React.FC = () => {
                         </span>
                       </div>
                       {isGifMessage(msg.message) ? (
-                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" />
+                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
               ) : (
                 <p className="text-white/90 break-words">{msg.message}</p>
               )}
