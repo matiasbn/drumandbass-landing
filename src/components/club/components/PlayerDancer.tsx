@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState, MutableRefObject } from 'react';
+import React, { useRef, useEffect, useState, useMemo, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -16,7 +16,21 @@ const GRAVITY = 0.006;
 const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
-  const { username, updatePosition, playerColor, faceType, costumeId, accessoryId } = useMultiplayer();
+  const { username, updatePosition, playerColor, faceType, costumeId, accessoryId, lastMessage, lastMessageAt } = useMultiplayer();
+  const [visibleBubble, setVisibleBubble] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lastMessage && lastMessageAt) {
+      setVisibleBubble(lastMessage);
+      const timer = setTimeout(() => setVisibleBubble(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastMessage, lastMessageAt]);
+
+  const truncatedBubble = useMemo(() => {
+    if (!visibleBubble) return null;
+    return visibleBubble.length > 60 ? visibleBubble.slice(0, 57) + '...' : visibleBubble;
+  }, [visibleBubble]);
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
@@ -51,7 +65,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     maxZ: 6.5,
   };
 
-  const MOVE_SPEED = 0.08;
+  const MOVE_SPEED = 0.14;
   const BASE_JUMP_HEIGHT = 0.15;
 
   useEffect(() => {
@@ -129,7 +143,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     };
   }, []);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const isPlaying = isPlayingRef.current;
 
     if (isPlaying) {
@@ -137,13 +151,22 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     }
     const time = frozenTimeRef.current;
 
+    // Get camera forward/right projected onto the XZ plane
+    const camForward = new THREE.Vector3();
+    camera.getWorldDirection(camForward);
+    camForward.y = 0;
+    camForward.normalize();
+
+    const camRight = new THREE.Vector3();
+    camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize();
+
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.forward) moveZ -= MOVE_SPEED;
-    if (keys.backward) moveZ += MOVE_SPEED;
-    if (keys.left) moveX -= MOVE_SPEED;
-    if (keys.right) moveX += MOVE_SPEED;
+    if (keys.forward) { moveX += camForward.x * MOVE_SPEED; moveZ += camForward.z * MOVE_SPEED; }
+    if (keys.backward) { moveX -= camForward.x * MOVE_SPEED; moveZ -= camForward.z * MOVE_SPEED; }
+    if (keys.left) { moveX -= camRight.x * MOVE_SPEED; moveZ -= camRight.z * MOVE_SPEED; }
+    if (keys.right) { moveX += camRight.x * MOVE_SPEED; moveZ += camRight.z * MOVE_SPEED; }
 
     const isMoving = moveX !== 0 || moveZ !== 0;
 
@@ -290,6 +313,25 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
   return (
     <group ref={groupRef} position={[0, 0, 2]}>
+      {/* Chat bubble */}
+      {truncatedBubble && (
+        <Html position={[0, 2.8, 0]} center distanceFactor={10}>
+          <div
+            className="px-2 py-1 text-xs font-mono pointer-events-none"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              color: '#fff',
+              border: '1px solid rgba(255,0,85,0.5)',
+              borderRadius: '6px',
+              whiteSpace: 'nowrap',
+              textAlign: 'center',
+            }}
+          >
+            {truncatedBubble}
+          </div>
+        </Html>
+      )}
+
       {/* Name label above head */}
       <Html position={[0, 2.2, 0]} center distanceFactor={10}>
         <div

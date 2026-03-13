@@ -17,6 +17,8 @@ export interface PlayerState {
   faceType?: number;
   costumeId?: string;
   accessoryId?: string;
+  lastMessage?: string;
+  lastMessageAt?: number;
 }
 
 interface MultiplayerContextType {
@@ -25,6 +27,9 @@ interface MultiplayerContextType {
   username: string | null;
   setUsername: (name: string) => void;
   updatePosition: (x: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
+  sendChatBubble: (message: string) => void;
+  lastMessage: string | null;
+  lastMessageAt: number | null;
   isConnected: boolean;
   playerColor: string;
   faceType?: number;
@@ -55,6 +60,10 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const costumeId = profile?.costume_id;
   const accessoryId = profile?.accessory_id;
 
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
+  const chatBubbleRef = useRef<{ lastMessage?: string; lastMessageAt?: number }>({});
+
   const channelRef = useRef<RealtimeChannel | null>(null);
   const positionRef = useRef({ x: 0, z: 2, rotation: 0, danceMove: 0, jumping: false });
 
@@ -64,11 +73,16 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem('dnbchile_username');
-    if (stored) {
-      setUsernameState(stored);
+    if (profile?.username) {
+      localStorage.setItem('dnbchile_username', profile.username);
+      setUsernameState(profile.username);
+    } else {
+      const stored = localStorage.getItem('dnbchile_username');
+      if (stored) {
+        setUsernameState(stored);
+      }
     }
-  }, []);
+  }, [profile?.username]);
 
   useEffect(() => {
     if (!username) return;
@@ -128,6 +142,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
             faceType,
             costumeId,
             accessoryId,
+            ...chatBubbleRef.current,
           });
           setIsConnected(true);
         }
@@ -158,6 +173,32 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         faceType,
         costumeId,
         accessoryId,
+        ...chatBubbleRef.current,
+      });
+    }
+  }, [localPlayerId, username, playerColor, faceType, costumeId, accessoryId]);
+
+  const sendChatBubble = useCallback((message: string) => {
+    const now = Date.now();
+    chatBubbleRef.current = { lastMessage: message, lastMessageAt: now };
+    setLastMessage(message);
+    setLastMessageAt(now);
+
+    if (channelRef.current && username) {
+      channelRef.current.track({
+        id: localPlayerId,
+        username,
+        x: positionRef.current.x,
+        z: positionRef.current.z,
+        rotation: positionRef.current.rotation,
+        color: playerColor,
+        danceMove: positionRef.current.danceMove,
+        jumping: positionRef.current.jumping,
+        faceType,
+        costumeId,
+        accessoryId,
+        lastMessage: message,
+        lastMessageAt: now,
       });
     }
   }, [localPlayerId, username, playerColor, faceType, costumeId, accessoryId]);
@@ -170,6 +211,9 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         username,
         setUsername,
         updatePosition,
+        sendChatBubble,
+        lastMessage,
+        lastMessageAt,
         isConnected,
         playerColor,
         faceType,
