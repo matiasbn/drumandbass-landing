@@ -94,56 +94,57 @@ export const MobileControls: React.FC = () => {
     }
   }, [resetJoystick]);
 
-  const onActionDown = useCallback((key: string) => (e: React.TouchEvent) => {
+  const onActionDown = useCallback((key: string) => (e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
     dispatchKey(key, 'keydown');
     if (key === ' ') {
-      // Jump is a one-shot, release immediately
       setTimeout(() => dispatchKey(key, 'keyup'), 50);
     }
   }, []);
 
-  const onActionUp = useCallback((key: string) => (e: React.TouchEvent) => {
+  const onActionUp = useCallback((key: string) => (e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
     if (key !== ' ') dispatchKey(key, 'keyup');
   }, []);
-
-  if (!isMobile) return null;
 
   const btnClass =
     'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border border-white/20 text-white font-mono font-bold select-none active:bg-white/20 transition-colors';
 
   return (
-    <div className="absolute inset-0 z-20 pointer-events-none touch-none">
-      {/* Joystick — bottom left */}
-      <div
-        ref={joystickRef}
-        className="pointer-events-auto absolute bottom-36 left-8 rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
-        style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
-        onTouchStart={onJoystickTouchStart}
-        onTouchMove={onJoystickTouchMove}
-        onTouchEnd={onJoystickTouchEnd}
-        onTouchCancel={resetJoystick}
-      >
+    <div className="absolute inset-0 z-30 pointer-events-none touch-none">
+      {/* Joystick — bottom left, mobile only */}
+      {isMobile && (
         <div
-          ref={thumbRef}
-          className="absolute rounded-full bg-white/40 border border-white/60"
-          style={{
-            width: THUMB_SIZE,
-            height: THUMB_SIZE,
-            left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-            top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-          }}
-        />
-      </div>
+          ref={joystickRef}
+          className="pointer-events-auto absolute bottom-36 left-8 rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
+          style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
+          onTouchStart={onJoystickTouchStart}
+          onTouchMove={onJoystickTouchMove}
+          onTouchEnd={onJoystickTouchEnd}
+          onTouchCancel={resetJoystick}
+        >
+          <div
+            ref={thumbRef}
+            className="absolute rounded-full bg-white/40 border border-white/60"
+            style={{
+              width: THUMB_SIZE,
+              height: THUMB_SIZE,
+              left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+              top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+            }}
+          />
+        </div>
+      )}
 
       {/* Action buttons — bottom right */}
-      <div className="pointer-events-auto absolute bottom-36 right-8 flex flex-col items-center gap-3 touch-none">
+      <div className={`pointer-events-auto absolute bottom-36 flex flex-col items-center gap-3 touch-none ${isMobile ? 'right-8' : 'left-8'}`}>
         {/* Jump */}
         <button
           className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
           onTouchStart={onActionDown(' ')}
           onTouchEnd={onActionUp(' ')}
+          onMouseDown={onActionDown(' ')}
+          onMouseUp={onActionUp(' ')}
         >
           <RiArrowUpLine className="w-6 h-6" />
         </button>
@@ -154,6 +155,8 @@ export const MobileControls: React.FC = () => {
             className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
             onTouchStart={onActionDown('1')}
             onTouchEnd={onActionUp('1')}
+            onMouseDown={onActionDown('1')}
+            onMouseUp={onActionUp('1')}
           >
             <RiHandHeartLine className="w-5 h-5" />
           </button>
@@ -161,6 +164,8 @@ export const MobileControls: React.FC = () => {
             className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
             onTouchStart={onActionDown('2')}
             onTouchEnd={onActionUp('2')}
+            onMouseDown={onActionDown('2')}
+            onMouseUp={onActionUp('2')}
           >
             <RiLoopLeftLine className="w-5 h-5" />
           </button>
@@ -168,6 +173,8 @@ export const MobileControls: React.FC = () => {
             className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
             onTouchStart={onActionDown('3')}
             onTouchEnd={onActionUp('3')}
+            onMouseDown={onActionDown('3')}
+            onMouseUp={onActionUp('3')}
           >
             <RiMusic2Line className="w-5 h-5" />
           </button>
