@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, Space_Mono } from 'next/font/google';
 import { GoogleAnalytics } from '@/src/components/GoogleAnalytics';
 import { BASE_URL } from '@/src/constants';
@@ -15,6 +15,13 @@ const spaceMono = Space_Mono({
   subsets: ['latin'],
   weight: ['400', '700'],
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
