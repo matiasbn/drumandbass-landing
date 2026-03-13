@@ -35,15 +35,26 @@ export async function POST(request: NextRequest) {
     }
   );
 
+  const data = await res.json().catch(() => ({}));
+
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    console.error('Failed to send chat message:', errorData);
+    console.error('Failed to send chat message:', res.status, data);
     return NextResponse.json(
-      { error: 'Failed to send message', details: errorData },
+      { error: 'Failed to send message', details: data },
       { status: res.status }
     );
   }
 
-  const data = await res.json();
-  return NextResponse.json({ success: true, message: data });
+  console.log('[chat/send] YouTube response:', JSON.stringify({ status: res.status, id: data.id, snippet: data.snippet }));
+
+  // Validate YouTube actually created the message (returns an id)
+  if (!data.id) {
+    console.error('YouTube returned 200 but no message id:', data);
+    return NextResponse.json(
+      { error: 'Message may not have been sent', details: data },
+      { status: 502 }
+    );
+  }
+
+  return NextResponse.json({ success: true, messageId: data.id });
 }
