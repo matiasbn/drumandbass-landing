@@ -31,6 +31,8 @@ export const NightclubCanvas: React.FC = () => {
         maxDistance={40}
         minPolarAngle={Math.PI / 6}
         maxPolarAngle={Math.PI / 1.8}
+        minAzimuthAngle={-Math.PI / 3}
+        maxAzimuthAngle={Math.PI / 3}
       />
       <fog attach="fog" args={['#050508', 25, 60]} />
     </Canvas>
