@@ -211,17 +211,18 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
   // Mobile: iframe, toggle button, and input are all separate portaled elements
   return (
     <>
-      {/* Iframe */}
+      {/* Iframe — only when open */}
       {isOpen && (
-        <div className="fixed right-4 z-20 w-80 touch-auto" style={{ bottom: '120px' }}>
-          <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30">
-            <div className="h-[350px]">
-              <iframe
-                src={chatUrl}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            </div>
+        <div
+          className="fixed left-4 right-4 z-20 touch-auto"
+          style={{ top: '35%', bottom: '150px' }}
+        >
+          <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full">
+            <iframe
+              src={chatUrl}
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            />
           </div>
         </div>
       )}
@@ -230,28 +231,30 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
       {mounted &&
         createPortal(
           <div
-            className="fixed right-4 z-[9999] touch-auto"
-            style={{ bottom: isOpen ? '68px' : '16px' }}
+            className="fixed z-[9999] touch-auto"
+            style={isOpen ? { top: 'calc(35% - 40px)', right: '16px' } : { bottom: '16px', right: '16px' }}
           >
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className={`flex items-center justify-between w-80 px-4 py-2 bg-black/85 backdrop-blur border border-[#ff0055]/30 transition-all ${
+              className={`flex items-center justify-between px-4 py-2 bg-black/85 backdrop-blur border border-[#ff0055]/30 transition-all ${
                 isOpen ? 'bg-black/50' : 'hover:bg-white/5'
               }`}
             >
               <div className="flex items-center gap-2">
                 <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
-                <span className="font-mono text-sm text-white">LIVE CHAT</span>
+                <span className="font-mono text-sm text-white">
+                  {isOpen ? 'CERRAR' : 'LIVE CHAT'}
+                </span>
               </div>
               <RiCloseLine
-                className={`w-4 h-4 text-white/40 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`}
+                className={`w-4 h-4 text-white/40 ml-2 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`}
               />
             </button>
           </div>,
           document.body,
         )}
 
-      {/* Input — portaled to body, full width at bottom */}
+      {/* Input — portaled to body, bottom with large gap from iframe */}
       {isOpen &&
         mounted &&
         createPortal(
