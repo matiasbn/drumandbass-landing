@@ -9,6 +9,18 @@ interface YouTubeChatIframeProps {
   youtubeVideoId: string;
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+}
+
 export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVideoId }) => {
   const { session } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -21,6 +33,7 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
   const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const isMobile = useIsMobile();
 
   const providerToken = session?.provider_token ?? null;
   const embedDomain = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -30,7 +43,6 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
     setMounted(true);
   }, []);
 
-  // Fetch liveChatId once on mount (single API call, no polling)
   useEffect(() => {
     const fetchLiveChatId = async () => {
       try {
@@ -159,13 +171,10 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
     </>
   );
 
-  return (
-    <>
-      {/* Chat panel with iframe */}
-      <div
-        className="fixed right-4 z-20 w-80 touch-auto"
-        style={{ bottom: isOpen ? '120px' : '16px' }}
-      >
+  // Desktop: everything in one container, no portals needed
+  if (!isMobile) {
+    return (
+      <div className="fixed bottom-4 right-4 z-20 w-80">
         <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 flex flex-col">
           <button
             onClick={() => setIsOpen(!isOpen)}
@@ -183,6 +192,29 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
           </button>
 
           {isOpen && (
+            <>
+              <div className="h-[400px]">
+                <iframe
+                  src={chatUrl}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                />
+              </div>
+              <div className="border-t border-white/10">{inputContent}</div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile: iframe, toggle button, and input are all separate portaled elements
+  return (
+    <>
+      {/* Iframe */}
+      {isOpen && (
+        <div className="fixed right-4 z-20 w-80 touch-auto" style={{ bottom: '120px' }}>
+          <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30">
             <div className="h-[350px]">
               <iframe
                 src={chatUrl}
@@ -190,15 +222,40 @@ export const YouTubeChatIframe: React.FC<YouTubeChatIframeProps> = ({ youtubeVid
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               />
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Input — portaled to body; on mobile positioned left to avoid iframe touch capture */}
+      {/* Toggle button — portaled to body */}
+      {mounted &&
+        createPortal(
+          <div
+            className="fixed right-4 z-[9999] touch-auto"
+            style={{ bottom: isOpen ? '68px' : '16px' }}
+          >
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className={`flex items-center justify-between w-80 px-4 py-2 bg-black/85 backdrop-blur border border-[#ff0055]/30 transition-all ${
+                isOpen ? 'bg-black/50' : 'hover:bg-white/5'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
+                <span className="font-mono text-sm text-white">LIVE CHAT</span>
+              </div>
+              <RiCloseLine
+                className={`w-4 h-4 text-white/40 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`}
+              />
+            </button>
+          </div>,
+          document.body,
+        )}
+
+      {/* Input — portaled to body, full width at bottom */}
       {isOpen &&
         mounted &&
         createPortal(
-          <div className="fixed bottom-4 left-4 md:left-auto md:right-4 z-[9999] w-[calc(100%-2rem)] md:w-80 touch-auto">
+          <div className="fixed bottom-4 left-4 right-4 z-[9999] touch-auto">
             <div className="bg-black border border-[#ff0055]/30">{inputContent}</div>
           </div>,
           document.body,
