@@ -143,7 +143,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     };
   }, []);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const isPlaying = isPlayingRef.current;
 
     if (isPlaying) {
@@ -151,13 +151,22 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     }
     const time = frozenTimeRef.current;
 
+    // Get camera forward/right projected onto the XZ plane
+    const camForward = new THREE.Vector3();
+    camera.getWorldDirection(camForward);
+    camForward.y = 0;
+    camForward.normalize();
+
+    const camRight = new THREE.Vector3();
+    camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize();
+
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.forward) moveZ -= MOVE_SPEED;
-    if (keys.backward) moveZ += MOVE_SPEED;
-    if (keys.left) moveX -= MOVE_SPEED;
-    if (keys.right) moveX += MOVE_SPEED;
+    if (keys.forward) { moveX += camForward.x * MOVE_SPEED; moveZ += camForward.z * MOVE_SPEED; }
+    if (keys.backward) { moveX -= camForward.x * MOVE_SPEED; moveZ -= camForward.z * MOVE_SPEED; }
+    if (keys.left) { moveX -= camRight.x * MOVE_SPEED; moveZ -= camRight.z * MOVE_SPEED; }
+    if (keys.right) { moveX += camRight.x * MOVE_SPEED; moveZ += camRight.z * MOVE_SPEED; }
 
     const isMoving = moveX !== 0 || moveZ !== 0;
 
