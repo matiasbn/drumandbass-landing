@@ -11,7 +11,7 @@ export const WallChatScreen: React.FC<WallChatScreenProps> = ({ youtubeVideoId }
   const embedDomain = typeof window !== 'undefined' ? window.location.hostname : '';
 
   return (
-    <group position={[-7, 3.5, 0]} rotation={[0, Math.PI / 2, 0]}>
+    <group position={[-7, 3.5, -3]} rotation={[0, Math.PI / 2, 0]}>
       {/* Screen frame */}
       <mesh position={[0, 0, -0.05]}>
         <boxGeometry args={[6, 5, 0.1]} />
