@@ -54,19 +54,6 @@ export default function PresskitLandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="p-6 lg:p-12 text-center">
-        <p className="mono text-sm font-bold uppercase opacity-60 mb-4">
-          Gratis. Sin límites. Para la escena.
-        </p>
-        <Link
-          href="/pk/edit"
-          className="inline-flex items-center gap-3 bg-[#ff0055] text-white px-8 py-4 text-xl font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all"
-        >
-          EMPEZAR AHORA
-          <RiArrowRightLine className="w-6 h-6" />
-        </Link>
-      </section>
     </main>
   );
 }
