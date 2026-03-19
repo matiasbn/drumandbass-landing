@@ -18,6 +18,11 @@ export interface PresskitMix {
   url: string;
 }
 
+export interface PresskitLink {
+  title: string;
+  url: string;
+}
+
 export interface Presskit {
   id: string;
   user_id: string;
@@ -30,6 +35,7 @@ export interface Presskit {
   photo_url: string | null;
   socials: PresskitSocial[];
   mixes: PresskitMix[];
+  links: PresskitLink[];
   published: boolean;
   created_at: string;
   updated_at: string;

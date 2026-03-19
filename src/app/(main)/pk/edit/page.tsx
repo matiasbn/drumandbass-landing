@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PkAuthProvider, usePkAuth } from '@/src/components/pk/PkAuthContext';
 import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
-import { Presskit, PresskitSocial, PresskitMix } from '@/src/types/presskit';
+import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
 import {
   RiSaveLine,
@@ -71,6 +71,7 @@ function PresskitEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
   const [mixes, setMixes] = useState<PresskitMix[]>([]);
+  const [links, setLinks] = useState<PresskitLink[]>([]);
   const [published, setPublished] = useState(false);
   const [editingSlug, setEditingSlug] = useState(false);
   const [newSlug, setNewSlug] = useState('');
@@ -96,6 +97,7 @@ function PresskitEditor() {
         setPhotoUrl(pk.photo_url || '');
         setSocials(pk.socials || []);
         setMixes(pk.mixes || []);
+        setLinks(pk.links || []);
         setPublished(pk.published || false);
       }
     } catch (err) {
@@ -185,6 +187,7 @@ function PresskitEditor() {
       photo_url: photoUrl,
       socials: resolvedSocials,
       mixes,
+      links,
       published,
     };
 
@@ -227,6 +230,15 @@ function PresskitEditor() {
     const updated = [...mixes];
     updated[i] = { ...updated[i], [field]: value };
     setMixes(updated);
+  };
+
+  // Link handlers
+  const addLink = () => setLinks([...links, { title: '', url: '' }]);
+  const removeLink = (i: number) => setLinks(links.filter((_, idx) => idx !== i));
+  const updateLink = (i: number, field: keyof PresskitLink, value: string) => {
+    const updated = [...links];
+    updated[i] = { ...updated[i], [field]: value };
+    setLinks(updated);
   };
 
   // Show auth modal if not logged in or needs profile
@@ -562,6 +574,54 @@ function PresskitEditor() {
               ))}
               {mixes.length === 0 && (
                 <p className="mono text-xs opacity-40">Sin mixes agregados</p>
+              )}
+            </div>
+          </div>
+
+          {/* Links */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className={labelClass}>Links</label>
+              <button
+                type="button"
+                onClick={addLink}
+                className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
+              >
+                <RiAddLine className="w-4 h-4" />
+                AGREGAR
+              </button>
+            </div>
+            <p className="mono text-[10px] opacity-40 mb-3">
+              Agrega cualquier link: Linktree, Beatport, demos, riders, etc.
+            </p>
+            <div className="space-y-3">
+              {links.map((link, i) => (
+                <div key={i} className="flex gap-2 items-start">
+                  <input
+                    type="text"
+                    value={link.title}
+                    onChange={(e) => updateLink(i, 'title', e.target.value)}
+                    className={`${inputClass} w-48 shrink-0`}
+                    placeholder="Título"
+                  />
+                  <input
+                    type="url"
+                    value={link.url}
+                    onChange={(e) => updateLink(i, 'url', e.target.value)}
+                    className={inputClass}
+                    placeholder="https://..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeLink(i)}
+                    className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                  >
+                    <RiDeleteBinLine className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {links.length === 0 && (
+                <p className="mono text-xs opacity-40">Sin links agregados</p>
               )}
             </div>
           </div>

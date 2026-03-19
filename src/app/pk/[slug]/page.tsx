@@ -200,6 +200,29 @@ export default async function PublicPresskitPage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      {/* Links */}
+      {presskit.links?.length > 0 && (
+        <section className="border-b-4 border-black p-6 lg:p-12">
+          <h2 className="text-5xl font-black uppercase italic mb-6">LINKS</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {presskit.links.map((link, i) => (
+              <a
+                key={i}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"
+              >
+                <h3 className="text-xl font-black uppercase">{link.title}</h3>
+                <span className="mono text-xs font-bold uppercase opacity-60 break-all">
+                  {link.url}
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

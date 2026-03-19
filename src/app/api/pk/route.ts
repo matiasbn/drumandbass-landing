@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       photo_url: body.photo_url || null,
       socials: body.socials || [],
       mixes: body.mixes || [],
+      links: body.links || [],
       published: body.published || false,
     })
     .select()
@@ -79,6 +80,7 @@ export async function PUT(request: Request) {
       photo_url: body.photo_url || null,
       socials: body.socials || [],
       mixes: body.mixes || [],
+      links: body.links || [],
       published: body.published ?? false,
       updated_at: new Date().toISOString(),
     })
