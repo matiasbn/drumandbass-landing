@@ -298,9 +298,13 @@ function PresskitEditor() {
         setScError(data.error || 'Error al cargar tracks');
         return;
       }
-      setScTracks(data.tracks || []);
-      if (data.tracks?.length > 0) {
-        setScSelectedTrack(String(data.tracks[0].id));
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const available = (data.tracks || []).filter(
+        (t: SoundcloudTrackOption) => !existingUrls.has(t.url)
+      );
+      setScTracks(available);
+      if (available.length > 0) {
+        setScSelectedTrack(String(available[0].id));
       }
     } catch {
       setScError('Error al conectar con SoundCloud');
