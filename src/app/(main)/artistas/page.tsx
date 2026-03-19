@@ -42,7 +42,7 @@ export default async function ArtistDirectory() {
 
     return {
       name: pk.artist_name,
-      photoUrl: pk.photo_url,
+      photoUrl: pk.photo_urls?.length ? pk.photo_urls[0] : pk.photo_url,
       href: slug ? `/pk/${slug}` : undefined,
     };
   });

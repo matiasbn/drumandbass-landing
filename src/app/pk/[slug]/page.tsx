@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
+import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import {
   RiInstagramLine,
   RiSoundcloudLine,
@@ -104,17 +105,10 @@ export default async function PublicPresskitPage({ params }: PageProps) {
     <main className="flex-1">
       {/* Hero */}
       <section className="border-b-4 border-black p-6 lg:p-12 flex flex-col md:flex-row gap-8 items-center">
-        {presskit.photo_url ? (
-          <img
-            src={presskit.photo_url}
-            alt={presskit.artist_name}
-            className="w-full md:w-80 h-80 object-cover brutalist-border brutalist-shadow shrink-0"
-          />
-        ) : (
-          <div className="w-full md:w-80 h-80 bg-gray-300 brutalist-border brutalist-shadow flex items-center justify-center shrink-0">
-            <span className="text-6xl font-black opacity-20 select-none">IMG</span>
-          </div>
-        )}
+        <PhotoCarousel
+          photos={presskit.photo_urls?.length ? presskit.photo_urls : presskit.photo_url ? [presskit.photo_url] : []}
+          artistName={presskit.artist_name}
+        />
         <div className="flex-1">
           <h1 className="text-6xl lg:text-8xl font-black uppercase italic tracking-tighter leading-none mb-2">
             {presskit.artist_name}
