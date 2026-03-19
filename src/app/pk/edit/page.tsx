@@ -134,6 +134,32 @@ function PresskitEditor() {
     }
   }, [user, pkProfile, fetchPresskit]);
 
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('No canvas context'));
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error('Compression failed'))),
+          'image/webp',
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -143,23 +169,29 @@ function PresskitEditor() {
       setSaveMessage('Error: Solo se permiten imágenes');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setSaveMessage('Error: La imagen no puede superar 5MB');
-      return;
-    }
 
     setUploading(true);
     setSaveMessage('');
 
     try {
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      let uploadBlob: Blob = file;
+      let filePath: string;
+
+      if (file.size > MAX_SIZE) {
+        uploadBlob = await compressImage(file);
+        filePath = `${user.id}/photo.webp`;
+      } else {
+        const ext = file.name.split('.').pop() || 'jpg';
+        filePath = `${user.id}/photo.${ext}`;
+      }
+
       const supabase = createClient();
-      const ext = file.name.split('.').pop();
-      const filePath = `${user.id}/photo.${ext}`;
 
       // Upload (upsert to overwrite previous)
       const { error: uploadError } = await supabase.storage
         .from('pk-photos')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, uploadBlob, { upsert: true });
 
       if (uploadError) {
         setSaveMessage(`Error: ${uploadError.message}`);
@@ -551,7 +583,7 @@ function PresskitEditor() {
                   )}
                   {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
                 </button>
-                <p className="mono text-[10px] opacity-40">JPG, PNG o WebP. Máx 5MB.</p>
+                <p className="mono text-[10px] opacity-40">JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente.</p>
               </div>
             </div>
           </div>
