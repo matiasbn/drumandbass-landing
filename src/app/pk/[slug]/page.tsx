@@ -196,7 +196,18 @@ export default async function PublicPresskitPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"
               >
-                <h3 className="text-xl font-black uppercase mb-2">{mix.title}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-xl font-black uppercase">{mix.title}</h3>
+                  {mix.type && (
+                    <span className={`mono text-[10px] font-black uppercase px-2 py-0.5 ${
+                      mix.type === 'release'
+                        ? 'bg-[#ff0055] text-white'
+                        : 'bg-black text-white'
+                    }`}>
+                      {mix.type}
+                    </span>
+                  )}
+                </div>
                 <span className="mono text-xs font-bold uppercase opacity-60">
                   {mix.platform}
                 </span>
