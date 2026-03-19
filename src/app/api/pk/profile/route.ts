@@ -84,3 +84,53 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ profile });
 }
+
+export async function PUT(request: Request) {
+  const supabase = await createSupabaseServer();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  const { slug } = await request.json();
+
+  if (!slug || typeof slug !== 'string') {
+    return NextResponse.json({ error: 'Slug requerido' }, { status: 400 });
+  }
+
+  const cleanSlug = slug.trim().toLowerCase();
+
+  if (cleanSlug.length < 3 || cleanSlug.length > 30) {
+    return NextResponse.json({ error: 'El slug debe tener entre 3 y 30 caracteres' }, { status: 400 });
+  }
+
+  if (!/^[a-z0-9-]+$/.test(cleanSlug)) {
+    return NextResponse.json({ error: 'Solo letras minúsculas, números y guiones' }, { status: 400 });
+  }
+
+  // Check if slug is taken by someone else
+  const { data: slugTaken } = await supabase
+    .from('pk_profiles')
+    .select('id')
+    .eq('slug', cleanSlug)
+    .neq('user_id', user.id)
+    .single();
+
+  if (slugTaken) {
+    return NextResponse.json({ error: 'Este nombre ya está en uso' }, { status: 409 });
+  }
+
+  const { data: profile, error } = await supabase
+    .from('pk_profiles')
+    .update({ slug: cleanSlug, updated_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ profile });
+}

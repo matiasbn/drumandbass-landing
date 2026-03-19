@@ -13,6 +13,7 @@ interface PkAuthContextType {
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   createPkProfile: (slug: string) => Promise<{ error: Error | null }>;
+  updateSlug: (slug: string) => Promise<{ error: Error | null }>;
   needsPkProfile: boolean;
 }
 
@@ -122,6 +123,24 @@ export function PkAuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateSlug = async (slug: string) => {
+    try {
+      const res = await fetch('/api/pk/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: new Error(data.error || 'Error actualizando slug') };
+      }
+      setPkProfile(data.profile);
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  };
+
   const needsPkProfile = !!user && !loading && !pkProfile;
 
   return (
@@ -134,6 +153,7 @@ export function PkAuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         createPkProfile,
+        updateSlug,
         needsPkProfile,
       }}
     >

@@ -16,6 +16,10 @@ import {
   RiExternalLinkLine,
   RiUploadCloud2Line,
   RiImageLine,
+  RiPencilLine,
+  RiAlertLine,
+  RiCheckLine,
+  RiCloseLine,
 } from '@remixicon/react';
 
 const PLATFORM_OPTIONS = [
@@ -49,7 +53,7 @@ function resolveSocialUrl(platform: string, value: string): string {
 const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
 
 function PresskitEditor() {
-  const { user, pkProfile, loading, needsPkProfile, signOut } = usePkAuth();
+  const { user, pkProfile, loading, needsPkProfile, signOut, updateSlug } = usePkAuth();
   const [presskit, setPresskit] = useState<Presskit | null>(null);
   const [loadingPk, setLoadingPk] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,6 +72,10 @@ function PresskitEditor() {
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
   const [mixes, setMixes] = useState<PresskitMix[]>([]);
   const [published, setPublished] = useState(false);
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [newSlug, setNewSlug] = useState('');
+  const [slugError, setSlugError] = useState('');
+  const [savingSlug, setSavingSlug] = useState(false);
 
   const fetchPresskit = useCallback(async () => {
     try {
@@ -258,10 +266,62 @@ function PresskitEditor() {
           <h1 className="text-4xl lg:text-6xl font-black uppercase italic tracking-tighter leading-none">
             EDITAR PRESSKIT
           </h1>
-          {pkProfile && (
-            <p className="mono text-sm opacity-60 mt-1">
-              /pk/{pkProfile.slug}
-            </p>
+          {pkProfile && !editingSlug && (
+            <div className="flex items-center gap-2 mt-1">
+              <p className="mono text-sm opacity-60">/pk/{pkProfile.slug}</p>
+              <button
+                onClick={() => { setEditingSlug(true); setNewSlug(pkProfile.slug); setSlugError(''); }}
+                className="p-1 opacity-40 hover:opacity-100 transition-opacity"
+                title="Cambiar URL"
+              >
+                <RiPencilLine className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {pkProfile && editingSlug && (
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="mono text-sm opacity-60">/pk/</span>
+                <input
+                  type="text"
+                  value={newSlug}
+                  onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  className="px-3 py-1 bg-white brutalist-border text-black font-mono text-sm focus:shadow-[4px_4px_0px_0px_rgba(255,0,85,1)] focus:outline-none w-48"
+                  minLength={3}
+                  maxLength={30}
+                />
+                <button
+                  onClick={async () => {
+                    if (newSlug === pkProfile.slug) { setEditingSlug(false); return; }
+                    setSavingSlug(true);
+                    setSlugError('');
+                    const { error } = await updateSlug(newSlug);
+                    if (error) { setSlugError(error.message); }
+                    else { setEditingSlug(false); }
+                    setSavingSlug(false);
+                  }}
+                  disabled={savingSlug || newSlug.length < 3}
+                  className="p-1 text-green-600 hover:text-green-800 transition-colors disabled:opacity-30"
+                  title="Confirmar"
+                >
+                  {savingSlug ? <RiLoader4Line className="w-5 h-5 animate-spin" /> : <RiCheckLine className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setEditingSlug(false)}
+                  className="p-1 text-red-500 hover:text-red-700 transition-colors"
+                  title="Cancelar"
+                >
+                  <RiCloseLine className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex items-start gap-2 p-2 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 mono text-[11px]">
+                <RiAlertLine className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Al cambiar tu URL, los links anteriores (/pk/{pkProfile.slug}) dejarán de funcionar.</span>
+              </div>
+              {slugError && (
+                <p className="mono text-xs text-red-500">{slugError}</p>
+              )}
+            </div>
           )}
         </div>
         <div className="flex gap-3 items-center">
