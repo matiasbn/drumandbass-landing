@@ -21,6 +21,8 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
 } from '@remixicon/react';
 
 const PLATFORM_OPTIONS = [
@@ -77,7 +79,7 @@ function PresskitEditor() {
   const [country, setCountry] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
@@ -113,7 +115,9 @@ function PresskitEditor() {
         setCountry(pk.country || '');
         setGenresInput((pk.genres || []).join(', '));
         setBio(pk.bio || '');
-        setPhotoUrl(pk.photo_url || '');
+        setPhotoUrls(
+          pk.photo_urls?.length ? pk.photo_urls : pk.photo_url ? [pk.photo_url] : []
+        );
         setSocials(pk.socials || []);
         setMixes(pk.mixes || []);
         setLinks(pk.links || []);
@@ -170,20 +174,26 @@ function PresskitEditor() {
       return;
     }
 
+    if (photoUrls.length >= 5) {
+      setSaveMessage('Error: Máximo 5 fotos por artista');
+      return;
+    }
+
     setUploading(true);
     setSaveMessage('');
 
     try {
       const MAX_SIZE = 5 * 1024 * 1024; // 5MB
       let uploadBlob: Blob = file;
+      const timestamp = Date.now();
       let filePath: string;
 
       if (file.size > MAX_SIZE) {
         uploadBlob = await compressImage(file);
-        filePath = `${user.id}/photo.webp`;
+        filePath = `${user.id}/photo-${timestamp}.webp`;
       } else {
         const ext = file.name.split('.').pop() || 'jpg';
-        filePath = `${user.id}/photo.${ext}`;
+        filePath = `${user.id}/photo-${timestamp}.${ext}`;
       }
 
       const supabase = createClient();
@@ -204,7 +214,7 @@ function PresskitEditor() {
         .getPublicUrl(filePath);
 
       // Append cache buster to force refresh
-      setPhotoUrl(`${publicUrl}?t=${Date.now()}`);
+      setPhotoUrls((prev) => [...prev, `${publicUrl}?t=${Date.now()}`]);
       setSaveMessage('Foto subida correctamente');
       setTimeout(() => setSaveMessage(''), 3000);
     } catch {
@@ -250,7 +260,7 @@ function PresskitEditor() {
       country,
       genres,
       bio,
-      photo_url: photoUrl,
+      photo_urls: photoUrls,
       socials: resolvedSocials,
       mixes: filteredMixes,
       links: filteredLinks,
@@ -548,33 +558,91 @@ function PresskitEditor() {
           </div>
 
           <div>
-            <label className={labelClass}>Foto</label>
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
-              {/* Preview */}
-              {photoUrl ? (
-                <img
-                  src={photoUrl}
-                  alt="Preview"
-                  className="w-32 h-32 object-cover brutalist-border shrink-0"
-                />
-              ) : (
-                <div className="w-32 h-32 bg-gray-200 brutalist-border flex items-center justify-center shrink-0">
+            <label className={labelClass}>Fotos</label>
+            <div className="flex flex-wrap gap-3 mb-3">
+              {photoUrls.map((url, i) => (
+                <div key={url} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Foto ${i + 1}`}
+                    className={`w-28 h-28 object-cover brutalist-border shrink-0 ${i === 0 ? 'ring-2 ring-[#ff0055]' : ''}`}
+                  />
+                  {i === 0 && (
+                    <span className="absolute top-0 left-0 bg-[#ff0055] text-white mono text-[9px] font-bold px-1.5 py-0.5">
+                      PRINCIPAL
+                    </span>
+                  )}
+                  <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...photoUrls];
+                          [updated[i - 1], updated[i]] = [updated[i], updated[i - 1]];
+                          setPhotoUrls(updated);
+                        }}
+                        className="p-1 bg-white brutalist-border hover:bg-black hover:text-white transition-colors"
+                        title="Mover a la izquierda"
+                      >
+                        <RiArrowLeftSLine className="w-3 h-3" />
+                      </button>
+                    )}
+                    {i < photoUrls.length - 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...photoUrls];
+                          [updated[i], updated[i + 1]] = [updated[i + 1], updated[i]];
+                          setPhotoUrls(updated);
+                        }}
+                        className="p-1 bg-white brutalist-border hover:bg-black hover:text-white transition-colors"
+                        title="Mover a la derecha"
+                      >
+                        <RiArrowRightSLine className="w-3 h-3" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        // Extract storage path from URL and delete from storage
+                        try {
+                          const urlObj = new URL(url.split('?')[0]);
+                          const pathMatch = urlObj.pathname.match(/pk-photos\/(.+)$/);
+                          if (pathMatch) {
+                            const supabase = createClient();
+                            await supabase.storage.from('pk-photos').remove([pathMatch[1]]);
+                          }
+                        } catch { /* ignore storage errors */ }
+                        setPhotoUrls((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                      className="p-1 bg-white brutalist-border hover:bg-red-500 hover:text-white transition-colors"
+                      title="Eliminar"
+                    >
+                      <RiDeleteBinLine className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {photoUrls.length === 0 && (
+                <div className="w-28 h-28 bg-gray-200 brutalist-border flex items-center justify-center shrink-0">
                   <RiImageLine className="w-8 h-8 opacity-30" />
                 </div>
               )}
-              <div className="flex flex-col gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadPhoto}
-                  className="hidden"
-                />
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUploadPhoto}
+                className="hidden"
+              />
+              {photoUrls.length < 5 && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50 w-fit"
                 >
                   {uploading ? (
                     <RiLoader4Line className="w-4 h-4 animate-spin" />
@@ -583,8 +651,12 @@ function PresskitEditor() {
                   )}
                   {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
                 </button>
-                <p className="mono text-[10px] opacity-40">JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente.</p>
-              </div>
+              )}
+              <p className="mono text-[10px] opacity-40">
+                {photoUrls.length >= 5
+                  ? 'Máximo 5 fotos. Elimina una para subir otra.'
+                  : `JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente. La primera foto es la principal. (${photoUrls.length}/5)`}
+              </p>
             </div>
           </div>
 
