@@ -32,6 +32,11 @@ function getPlatformConfig(platform: string) {
   return PLATFORM_CONFIG[key] || { icon: RiGlobalLine, variant: 'primary' as const };
 }
 
+function ensureAbsoluteUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `https://${url}`;
+}
+
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -144,7 +149,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
       {presskit.bio && (
         <section className="border-b-4 border-black p-6 lg:p-12">
           <h2 className="text-5xl font-black uppercase italic mb-6">BIO</h2>
-          <p className="text-lg leading-relaxed max-w-3xl whitespace-pre-line">{presskit.bio}</p>
+          <p className="text-lg leading-relaxed max-w-3xl whitespace-pre-line break-words overflow-hidden">{presskit.bio}</p>
         </section>
       )}
 
@@ -160,7 +165,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
                 <BrutalistButton
                   key={platform}
                   variant={config.variant}
-                  href={url}
+                  href={ensureAbsoluteUrl(url)}
                   external
                   className="p-6 flex-col text-center"
                 >
@@ -186,7 +191,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
             {presskit.mixes.map((mix, i) => (
               <a
                 key={i}
-                href={mix.url}
+                href={ensureAbsoluteUrl(mix.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"
@@ -209,7 +214,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
             {presskit.links.map((link, i) => (
               <a
                 key={i}
-                href={link.url}
+                href={ensureAbsoluteUrl(link.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"

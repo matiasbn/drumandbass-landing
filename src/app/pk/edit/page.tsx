@@ -172,10 +172,25 @@ function PresskitEditor() {
       .map((g) => g.trim())
       .filter(Boolean);
 
-    const resolvedSocials = socials.map((s) => ({
-      platform: s.platform,
-      url: resolveSocialUrl(s.platform, s.url),
-    }));
+    const resolvedSocials = socials
+      .filter((s) => s.url.trim())
+      .map((s) => ({
+        platform: s.platform,
+        url: resolveSocialUrl(s.platform, s.url),
+      }));
+
+    const filteredMixes = mixes.filter((m) => m.title.trim() && m.url.trim());
+    const filteredLinks = links.filter((l) => l.title.trim() && l.url.trim());
+
+    const hasEmptySocials = socials.some((s) => !s.url.trim());
+    const hasEmptyMixes = mixes.some((m) => !m.title.trim() || !m.url.trim());
+    const hasEmptyLinks = links.some((l) => !l.title.trim() || !l.url.trim());
+
+    if (hasEmptySocials || hasEmptyMixes || hasEmptyLinks) {
+      setSaveMessage('Error: Completa o elimina los campos vacíos marcados en rojo');
+      setSaving(false);
+      return;
+    }
 
     const body = {
       artist_name: artistName,
@@ -186,8 +201,8 @@ function PresskitEditor() {
       bio,
       photo_url: photoUrl,
       socials: resolvedSocials,
-      mixes,
-      links,
+      mixes: filteredMixes,
+      links: filteredLinks,
       published,
     };
 
@@ -510,7 +525,7 @@ function PresskitEditor() {
                     type="text"
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
                     placeholder={`Nombre de usuario o URL completa`}
                   />
                   <p className="mono text-[10px] opacity-40">
@@ -544,7 +559,7 @@ function PresskitEditor() {
                     type="text"
                     value={mix.title}
                     onChange={(e) => updateMix(i, 'title', e.target.value)}
-                    className={`${inputClass} sm:w-48`}
+                    className={`${inputClass} sm:w-48 ${!mix.title.trim() ? '!border-red-500' : ''}`}
                     placeholder="Título"
                   />
                   <select
@@ -560,7 +575,7 @@ function PresskitEditor() {
                     type="url"
                     value={mix.url}
                     onChange={(e) => updateMix(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!mix.url.trim() ? '!border-red-500' : ''}`}
                     placeholder="https://..."
                   />
                   <button
@@ -596,28 +611,30 @@ function PresskitEditor() {
             </p>
             <div className="space-y-3">
               {links.map((link, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={link.title}
-                    onChange={(e) => updateLink(i, 'title', e.target.value)}
-                    className={`${inputClass} w-48 shrink-0`}
-                    placeholder="Título"
-                  />
+                <div key={i} className="brutalist-border p-4 space-y-3">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={link.title}
+                      onChange={(e) => updateLink(i, 'title', e.target.value)}
+                      className={`${inputClass} flex-1 ${!link.title.trim() ? '!border-red-500' : ''}`}
+                      placeholder="Título"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLink(i)}
+                      className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                    >
+                      <RiDeleteBinLine className="w-4 h-4" />
+                    </button>
+                  </div>
                   <input
                     type="url"
                     value={link.url}
                     onChange={(e) => updateLink(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!link.url.trim() ? '!border-red-500' : ''}`}
                     placeholder="https://..."
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeLink(i)}
-                    className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
-                  >
-                    <RiDeleteBinLine className="w-4 h-4" />
-                  </button>
                 </div>
               ))}
               {links.length === 0 && (
