@@ -16,6 +16,7 @@ export interface PresskitMix {
   title: string;
   platform: string;
   url: string;
+  type?: 'set' | 'release';
 }
 
 export interface PresskitLink {

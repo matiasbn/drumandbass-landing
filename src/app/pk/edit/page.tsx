@@ -20,6 +20,7 @@ import {
   RiAlertLine,
   RiCheckLine,
   RiCloseLine,
+  RiSoundcloudLine,
 } from '@remixicon/react';
 
 const PLATFORM_OPTIONS = [
@@ -51,6 +52,16 @@ function resolveSocialUrl(platform: string, value: string): string {
 }
 
 const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
+const MIX_TYPE_OPTIONS: { value: 'set' | 'release'; label: string }[] = [
+  { value: 'set', label: 'Set' },
+  { value: 'release', label: 'Release' },
+];
+
+interface SoundcloudTrackOption {
+  id: string;
+  title: string;
+  url: string;
+}
 
 function PresskitEditor() {
   const { user, pkProfile, loading, needsPkProfile, signOut, updateSlug } = usePkAuth();
@@ -77,6 +88,14 @@ function PresskitEditor() {
   const [newSlug, setNewSlug] = useState('');
   const [slugError, setSlugError] = useState('');
   const [savingSlug, setSavingSlug] = useState(false);
+
+  // SoundCloud import state
+  const [scTracks, setScTracks] = useState<SoundcloudTrackOption[]>([]);
+  const [scLoading, setScLoading] = useState(false);
+  const [scError, setScError] = useState('');
+  const [scSelectedTrack, setScSelectedTrack] = useState<string>('');
+  const [scSelectedType, setScSelectedType] = useState<'set' | 'release'>('set');
+  const [scDropdownOpen, setScDropdownOpen] = useState(false);
 
   const fetchPresskit = useCallback(async () => {
     try {
@@ -172,10 +191,25 @@ function PresskitEditor() {
       .map((g) => g.trim())
       .filter(Boolean);
 
-    const resolvedSocials = socials.map((s) => ({
-      platform: s.platform,
-      url: resolveSocialUrl(s.platform, s.url),
-    }));
+    const resolvedSocials = socials
+      .filter((s) => s.url.trim())
+      .map((s) => ({
+        platform: s.platform,
+        url: resolveSocialUrl(s.platform, s.url),
+      }));
+
+    const filteredMixes = mixes.filter((m) => m.title.trim() && m.url.trim());
+    const filteredLinks = links.filter((l) => l.title.trim() && l.url.trim());
+
+    const hasEmptySocials = socials.some((s) => !s.url.trim());
+    const hasEmptyMixes = mixes.some((m) => !m.title.trim() || !m.url.trim());
+    const hasEmptyLinks = links.some((l) => !l.title.trim() || !l.url.trim());
+
+    if (hasEmptySocials || hasEmptyMixes || hasEmptyLinks) {
+      setSaveMessage('Error: Completa o elimina los campos vacíos marcados en rojo');
+      setSaving(false);
+      return;
+    }
 
     const body = {
       artist_name: artistName,
@@ -186,8 +220,8 @@ function PresskitEditor() {
       bio,
       photo_url: photoUrl,
       socials: resolvedSocials,
-      mixes,
-      links,
+      mixes: filteredMixes,
+      links: filteredLinks,
       published,
     };
 
@@ -224,9 +258,9 @@ function PresskitEditor() {
   };
 
   // Mix handlers
-  const addMix = () => setMixes([...mixes, { title: '', platform: 'SoundCloud', url: '' }]);
+  const addMix = () => setMixes([...mixes, { title: '', platform: 'SoundCloud', url: '', type: 'set' }]);
   const removeMix = (i: number) => setMixes(mixes.filter((_, idx) => idx !== i));
-  const updateMix = (i: number, field: keyof PresskitMix, value: string) => {
+  const updateMix = (i: number, field: keyof PresskitMix, value: string | PresskitMix['type']) => {
     const updated = [...mixes];
     updated[i] = { ...updated[i], [field]: value };
     setMixes(updated);
@@ -239,6 +273,56 @@ function PresskitEditor() {
     const updated = [...links];
     updated[i] = { ...updated[i], [field]: value };
     setLinks(updated);
+  };
+
+  // SoundCloud helpers
+  const soundcloudUrl = socials.find(
+    (s) => s.platform === 'SoundCloud' && s.url.trim()
+  )?.url;
+
+  const hasSoundcloud = Boolean(soundcloudUrl);
+
+  const fetchScTracks = async () => {
+    if (!soundcloudUrl) return;
+    setScLoading(true);
+    setScError('');
+    setScTracks([]);
+    setScSelectedTrack('');
+    setScDropdownOpen(true);
+
+    try {
+      const resolvedUrl = resolveSocialUrl('SoundCloud', soundcloudUrl);
+      const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(resolvedUrl)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setScError(data.error || 'Error al cargar tracks');
+        return;
+      }
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const available = (data.tracks || []).filter(
+        (t: SoundcloudTrackOption) => !existingUrls.has(t.url)
+      );
+      setScTracks(available);
+      if (available.length > 0) {
+        setScSelectedTrack(String(available[0].id));
+      }
+    } catch {
+      setScError('Error al conectar con SoundCloud');
+    } finally {
+      setScLoading(false);
+    }
+  };
+
+  const addScTrack = () => {
+    const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
+    if (!track) return;
+    setMixes([
+      ...mixes,
+      { title: track.title, platform: 'SoundCloud', url: track.url, type: scSelectedType },
+    ]);
+    setScDropdownOpen(false);
+    setScSelectedTrack('');
+    setScTracks([]);
   };
 
   // Show auth modal if not logged in or needs profile
@@ -510,7 +594,7 @@ function PresskitEditor() {
                     type="text"
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
                     placeholder={`Nombre de usuario o URL completa`}
                   />
                   <p className="mono text-[10px] opacity-40">
@@ -527,16 +611,103 @@ function PresskitEditor() {
           {/* Mixes */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className={labelClass}>Mixes & Releases</label>
-              <button
-                type="button"
-                onClick={addMix}
-                className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
-              >
-                <RiAddLine className="w-4 h-4" />
-                AGREGAR
-              </button>
+              <label className={labelClass}>Sets & Releases</label>
+              <div className="flex gap-2">
+                {hasSoundcloud && (
+                  <button
+                    type="button"
+                    onClick={fetchScTracks}
+                    disabled={scLoading}
+                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#ff5500] hover:text-white transition-colors"
+                  >
+                    {scLoading ? (
+                      <RiLoader4Line className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RiSoundcloudLine className="w-4 h-4" />
+                    )}
+                    AGREGAR DESDE SOUNDCLOUD
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={addMix}
+                  className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
+                >
+                  <RiAddLine className="w-4 h-4" />
+                  AGREGAR MANUAL
+                </button>
+              </div>
             </div>
+
+            {/* SoundCloud message when no SC in socials */}
+            {!hasSoundcloud && (
+              <div className="flex items-start gap-2 p-3 bg-orange-50 border-2 border-orange-300 text-orange-800 mono text-xs mb-3">
+                <RiSoundcloudLine className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Agrega tu SoundCloud en redes sociales para importar tus tracks.</span>
+              </div>
+            )}
+
+            {/* SoundCloud import dropdown */}
+            {scDropdownOpen && (
+              <div className="brutalist-border p-4 mb-3 space-y-3 bg-gray-50">
+                {scLoading && (
+                  <div className="flex items-center gap-2 mono text-xs">
+                    <RiLoader4Line className="w-4 h-4 animate-spin" />
+                    Cargando tracks de SoundCloud...
+                  </div>
+                )}
+                {scError && (
+                  <p className="mono text-xs text-red-500">{scError}</p>
+                )}
+                {!scLoading && scTracks.length > 0 && (
+                  <>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <select
+                        value={scSelectedTrack}
+                        onChange={(e) => setScSelectedTrack(e.target.value)}
+                        className={`${inputClass} flex-1`}
+                      >
+                        {scTracks.map((t) => (
+                          <option key={t.id} value={String(t.id)}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={scSelectedType}
+                        onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')}
+                        className={`${inputClass} sm:w-32`}
+                      >
+                        {MIX_TYPE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={addScTrack}
+                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border bg-[#ff5500] text-white hover:bg-[#cc4400] transition-colors"
+                      >
+                        <RiAddLine className="w-4 h-4" />
+                        AGREGAR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setScDropdownOpen(false); setScTracks([]); setScError(''); }}
+                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
+                      >
+                        CANCELAR
+                      </button>
+                    </div>
+                  </>
+                )}
+                {!scLoading && scTracks.length === 0 && !scError && (
+                  <p className="mono text-xs opacity-40">No se encontraron tracks.</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-3">
               {mixes.map((mix, i) => (
                 <div key={i} className="flex flex-col sm:flex-row gap-2">
@@ -544,7 +715,7 @@ function PresskitEditor() {
                     type="text"
                     value={mix.title}
                     onChange={(e) => updateMix(i, 'title', e.target.value)}
-                    className={`${inputClass} sm:w-48`}
+                    className={`${inputClass} sm:w-48 ${!mix.title.trim() ? '!border-red-500' : ''}`}
                     placeholder="Título"
                   />
                   <select
@@ -556,11 +727,20 @@ function PresskitEditor() {
                       <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
+                  <select
+                    value={mix.type || 'set'}
+                    onChange={(e) => updateMix(i, 'type', e.target.value)}
+                    className={`${inputClass} sm:w-28 shrink-0`}
+                  >
+                    {MIX_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                   <input
                     type="url"
                     value={mix.url}
                     onChange={(e) => updateMix(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!mix.url.trim() ? '!border-red-500' : ''}`}
                     placeholder="https://..."
                   />
                   <button
@@ -596,28 +776,30 @@ function PresskitEditor() {
             </p>
             <div className="space-y-3">
               {links.map((link, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={link.title}
-                    onChange={(e) => updateLink(i, 'title', e.target.value)}
-                    className={`${inputClass} w-48 shrink-0`}
-                    placeholder="Título"
-                  />
+                <div key={i} className="brutalist-border p-4 space-y-3">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={link.title}
+                      onChange={(e) => updateLink(i, 'title', e.target.value)}
+                      className={`${inputClass} flex-1 ${!link.title.trim() ? '!border-red-500' : ''}`}
+                      placeholder="Título"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLink(i)}
+                      className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                    >
+                      <RiDeleteBinLine className="w-4 h-4" />
+                    </button>
+                  </div>
                   <input
                     type="url"
                     value={link.url}
                     onChange={(e) => updateLink(i, 'url', e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} ${!link.url.trim() ? '!border-red-500' : ''}`}
                     placeholder="https://..."
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeLink(i)}
-                    className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
-                  >
-                    <RiDeleteBinLine className="w-4 h-4" />
-                  </button>
                 </div>
               ))}
               {links.length === 0 && (

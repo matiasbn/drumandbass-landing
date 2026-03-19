@@ -8,7 +8,7 @@ declare global {
   interface Window {
     SC: {
       Widget: {
-        (iframe: HTMLIFrameElement): SCWidget;
+        (iframe: HTMLIFrameElement): SoundcloudWidget;
         Events: {
           READY: string;
           PLAY: string;
@@ -21,7 +21,7 @@ declare global {
   }
 }
 
-interface SCWidget {
+interface SoundcloudWidget {
   bind: (event: string, callback: (data?: unknown) => void) => void;
   play: () => void;
   pause: () => void;
@@ -56,7 +56,7 @@ export const AudioPlayer: React.FC = () => {
   const [artistName, setArtistName] = useState('');
   const [isShuffled, setIsShuffled] = useState(true);
   const [trackCount, setTrackCount] = useState(0);
-  const widgetRef = useRef<SCWidget | null>(null);
+  const widgetRef = useRef<SoundcloudWidget | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const shuffleRef = useRef(true);
