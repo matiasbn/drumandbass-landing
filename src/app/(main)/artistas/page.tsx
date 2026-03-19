@@ -40,16 +40,11 @@ export default async function ArtistDirectory() {
     const profile = profileMap.get(pk.user_id);
     const slug = profile?.slug;
 
-    const links = [
-      // Link al presskit
-      ...(slug ? [{ title: 'Presskit', url: `/pk/${slug}` }] : []),
-      // Redes sociales
-      ...pk.socials.map((s) => ({ title: s.platform, url: s.url })),
-    ];
-
-    const items = pk.mixes.map((m) => ({ title: m.title, url: m.url }));
-
-    return { name: pk.artist_name, links, items };
+    return {
+      name: pk.artist_name,
+      photoUrl: pk.photo_url,
+      href: slug ? `/pk/${slug}` : undefined,
+    };
   });
 
   return (
@@ -65,9 +60,8 @@ export default async function ArtistDirectory() {
           <Card
             key={idx}
             name={artist.name}
-            links={artist.links}
-            items={artist.items}
-            itemsLabel="Mixes"
+            photoUrl={artist.photoUrl}
+            href={artist.href}
           />
         ))}
       </Grid>

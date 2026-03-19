@@ -14,18 +14,40 @@ interface ProfileItem {
 
 interface CardProps {
   name: string;
+  photoUrl?: string | null;
+  href?: string;
   links?: ProfileLink[];
   items?: ProfileItem[];
   itemsLabel?: string;
 }
 
-const Card: React.FC<CardProps> = ({ name, links, items, itemsLabel = "Sets" }) => {
+const Card: React.FC<CardProps> = ({ name, photoUrl, href, links, items, itemsLabel = "Sets" }) => {
+  const NameTag = href ? 'a' : 'span';
+  const nameProps = href ? { href } : {};
+
   return (
     <div className="border-b-4 md:border-r-4 border-black p-8 hover:bg-gray-100 transition-colors flex flex-col justify-between group">
       <div>
-        <h3 className="text-5xl font-black uppercase italic mb-6 group-hover:text-[#ff0000] transition-colors">
-          {name}
-        </h3>
+        <NameTag {...nameProps} className={href ? 'block cursor-pointer' : undefined}>
+          <div className="flex items-center gap-4 mb-6 min-w-0">
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={name}
+                className="w-20 h-20 md:w-24 md:h-24 object-cover brutalist-border shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-300 brutalist-border flex items-center justify-center shrink-0">
+                <span className="text-lg font-black opacity-20 select-none">
+                  {name.charAt(0)}
+                </span>
+              </div>
+            )}
+            <h3 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase italic group-hover:text-[#ff0000] transition-colors min-w-0 break-words">
+              {name}
+            </h3>
+          </div>
+        </NameTag>
 
         {links && links.length > 0 && (
           <div className="mb-8">
