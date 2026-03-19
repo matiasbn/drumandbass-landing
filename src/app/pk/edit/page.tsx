@@ -542,7 +542,7 @@ function PresskitEditor() {
           {/* Mixes */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className={labelClass}>Mixes & Releases</label>
+              <label className={labelClass}>Sets & Releases</label>
               <button
                 type="button"
                 onClick={addMix}

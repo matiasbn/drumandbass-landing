@@ -185,7 +185,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         <section className="border-b-4 border-black p-6 lg:p-12">
           <h2 className="text-5xl font-black uppercase italic mb-6">
             <RiMusic2Line className="inline w-10 h-10 mr-2" />
-            MIXES & RELEASES
+            SETS & RELEASES
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {presskit.mixes.map((mix, i) => (
