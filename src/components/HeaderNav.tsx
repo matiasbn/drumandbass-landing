@@ -25,6 +25,7 @@ const DIRECTORY_LINKS = [
   { href: '/artistas', label: 'Artistas' },
   { href: '/productores', label: 'Productores' },
   { href: '/organizaciones', label: 'Organizaciones' },
+  { href: '/pk', label: 'Presskit' },
 ];
 
 const HeaderNav = () => {
