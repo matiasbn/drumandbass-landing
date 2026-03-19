@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { RiMicLine, RiArrowRightLine } from '@remixicon/react';
+import PkHero from '@/src/components/pk/PkHero';
 
 export const metadata: Metadata = {
   title: 'Presskit DJ — Drum and Bass Chile',
@@ -12,26 +11,7 @@ export const metadata: Metadata = {
 export default function PresskitLandingPage() {
   return (
     <main className="flex-1">
-      {/* Hero */}
-      <section className="border-b-4 border-black p-6 lg:p-12 flex flex-col items-center text-center">
-        <div className="mb-8">
-          <RiMicLine className="w-16 h-16 mx-auto mb-4" />
-          <h1 className="text-6xl lg:text-8xl font-black uppercase italic tracking-tighter leading-none mb-4">
-            PRESSKIT
-          </h1>
-          <p className="mono text-lg font-bold uppercase opacity-60 max-w-xl mx-auto">
-            Tu presskit digital como DJ. Bio, mixes, redes sociales — todo en un solo lugar.
-          </p>
-        </div>
-
-        <Link
-          href="/pk/edit"
-          className="inline-flex items-center gap-3 bg-black text-white px-8 py-4 text-xl font-black uppercase tracking-wider brutalist-border hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(255,0,85,1)] transition-all"
-        >
-          CREA TU PRESSKIT
-          <RiArrowRightLine className="w-6 h-6" />
-        </Link>
-      </section>
+      <PkHero />
 
       {/* How it works */}
       <section className="border-b-4 border-black p-6 lg:p-12">
@@ -53,7 +33,6 @@ export default function PresskitLandingPage() {
           ))}
         </div>
       </section>
-
     </main>
   );
 }
