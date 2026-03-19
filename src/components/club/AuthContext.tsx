@@ -117,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
+    document.cookie = 'pk_auth_redirect=/club; path=/; max-age=600; SameSite=Lax';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
