@@ -165,62 +165,64 @@ function PresskitEditor() {
   };
 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !user) return;
 
-    // Validate file
-    if (!file.type.startsWith('image/')) {
+    // Validate all are images
+    const invalidFile = files.find((f) => !f.type.startsWith('image/'));
+    if (invalidFile) {
       setSaveMessage('Error: Solo se permiten imágenes');
-      return;
-    }
-
-    if (photoUrls.length >= 5) {
-      setSaveMessage('Error: Máximo 5 fotos por artista');
       return;
     }
 
     setUploading(true);
     setSaveMessage('');
 
+    const supabase = createClient();
+    const newUrls: string[] = [];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
     try {
-      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-      let uploadBlob: Blob = file;
-      const timestamp = Date.now();
-      let filePath: string;
+      for (const file of files) {
+        let uploadBlob: Blob = file;
+        const timestamp = Date.now() + Math.random();
+        let filePath: string;
 
-      if (file.size > MAX_SIZE) {
-        uploadBlob = await compressImage(file);
-        filePath = `${user.id}/photo-${timestamp}.webp`;
-      } else {
-        const ext = file.name.split('.').pop() || 'jpg';
-        filePath = `${user.id}/photo-${timestamp}.${ext}`;
+        if (file.size > MAX_SIZE) {
+          uploadBlob = await compressImage(file);
+          filePath = `${user.id}/photo-${timestamp}.webp`;
+        } else {
+          const ext = file.name.split('.').pop() || 'jpg';
+          filePath = `${user.id}/photo-${timestamp}.${ext}`;
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from('pk-photos')
+          .upload(filePath, uploadBlob, { upsert: true });
+
+        if (uploadError) {
+          setSaveMessage(`Error: ${uploadError.message}`);
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('pk-photos')
+          .getPublicUrl(filePath);
+
+        newUrls.push(`${publicUrl}?t=${Date.now()}`);
       }
 
-      const supabase = createClient();
-
-      // Upload (upsert to overwrite previous)
-      const { error: uploadError } = await supabase.storage
-        .from('pk-photos')
-        .upload(filePath, uploadBlob, { upsert: true });
-
-      if (uploadError) {
-        setSaveMessage(`Error: ${uploadError.message}`);
-        setUploading(false);
-        return;
+      if (newUrls.length > 0) {
+        setPhotoUrls((prev) => [...prev, ...newUrls]);
+        setSaveMessage(`${newUrls.length} foto(s) subida(s) correctamente`);
+        setTimeout(() => setSaveMessage(''), 3000);
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('pk-photos')
-        .getPublicUrl(filePath);
-
-      // Append cache buster to force refresh
-      setPhotoUrls((prev) => [...prev, `${publicUrl}?t=${Date.now()}`]);
-      setSaveMessage('Foto subida correctamente');
-      setTimeout(() => setSaveMessage(''), 3000);
     } catch {
-      setSaveMessage('Error al subir la foto');
+      setSaveMessage('Error al subir las fotos');
     } finally {
       setUploading(false);
+      // Reset input so same files can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -634,29 +636,32 @@ function PresskitEditor() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleUploadPhoto}
                 className="hidden"
               />
-              {photoUrls.length < 5 && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50 w-fit"
-                >
-                  {uploading ? (
-                    <RiLoader4Line className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RiUploadCloud2Line className="w-4 h-4" />
-                  )}
-                  {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
-                </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50 w-fit"
+              >
+                {uploading ? (
+                  <RiLoader4Line className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RiUploadCloud2Line className="w-4 h-4" />
+                )}
+                {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
+              </button>
+              {photoUrls.length > 5 ? (
+                <p className="mono text-xs font-bold text-red-500">
+                  Tienes {photoUrls.length} fotos. Elimina {photoUrls.length - 5} para poder guardar (máximo 5).
+                </p>
+              ) : (
+                <p className="mono text-[10px] opacity-40">
+                  JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente. La primera foto es la principal. ({photoUrls.length}/5)
+                </p>
               )}
-              <p className="mono text-[10px] opacity-40">
-                {photoUrls.length >= 5
-                  ? 'Máximo 5 fotos. Elimina una para subir otra.'
-                  : `JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente. La primera foto es la principal. (${photoUrls.length}/5)`}
-              </p>
             </div>
           </div>
 
@@ -946,7 +951,7 @@ function PresskitEditor() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleSave}
-              disabled={saving || !artistName}
+              disabled={saving || !artistName || photoUrls.length > 5}
               className="inline-flex items-center gap-2 bg-[#ff0055] text-white px-8 py-3 font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
             >
               {saving ? (
