@@ -572,7 +572,7 @@ function PresskitEditor() {
                       PRINCIPAL
                     </span>
                   )}
-                  <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-1 right-1 flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     {i > 0 && (
                       <button
                         type="button"
