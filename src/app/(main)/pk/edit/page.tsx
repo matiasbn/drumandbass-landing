@@ -23,6 +23,29 @@ const PLATFORM_OPTIONS = [
   'Facebook', 'TikTok', 'Twitter', 'Bandcamp',
 ];
 
+const PLATFORM_BASE_URLS: Record<string, string> = {
+  Instagram: 'https://instagram.com/',
+  SoundCloud: 'https://soundcloud.com/',
+  Spotify: 'https://open.spotify.com/artist/',
+  YouTube: 'https://youtube.com/@',
+  Facebook: 'https://facebook.com/',
+  TikTok: 'https://tiktok.com/@',
+  Twitter: 'https://x.com/',
+  Bandcamp: 'https://',
+};
+
+function resolveSocialUrl(platform: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  // If it's already a URL, return as-is
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  // Strip leading @ if present
+  const clean = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  const base = PLATFORM_BASE_URLS[platform];
+  if (!base) return trimmed;
+  return `${base}${clean}`;
+}
+
 const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
 
 function PresskitEditor() {
@@ -139,6 +162,11 @@ function PresskitEditor() {
       .map((g) => g.trim())
       .filter(Boolean);
 
+    const resolvedSocials = socials.map((s) => ({
+      platform: s.platform,
+      url: resolveSocialUrl(s.platform, s.url),
+    }));
+
     const body = {
       artist_name: artistName,
       real_name: realName,
@@ -147,7 +175,7 @@ function PresskitEditor() {
       genres,
       bio,
       photo_url: photoUrl,
-      socials,
+      socials: resolvedSocials,
       mixes,
       published,
     };
@@ -387,30 +415,35 @@ function PresskitEditor() {
             </div>
             <div className="space-y-3">
               {socials.map((social, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <select
-                    value={social.platform}
-                    onChange={(e) => updateSocial(i, 'platform', e.target.value)}
-                    className={`${inputClass} w-40 shrink-0`}
-                  >
-                    {PLATFORM_OPTIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+                <div key={i} className="brutalist-border p-4 space-y-3">
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={social.platform}
+                      onChange={(e) => updateSocial(i, 'platform', e.target.value)}
+                      className={`${inputClass} flex-1`}
+                    >
+                      {PLATFORM_OPTIONS.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeSocial(i)}
+                      className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                    >
+                      <RiDeleteBinLine className="w-4 h-4" />
+                    </button>
+                  </div>
                   <input
-                    type="url"
+                    type="text"
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
                     className={inputClass}
-                    placeholder="https://..."
+                    placeholder={`Nombre de usuario o URL completa`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeSocial(i)}
-                    className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
-                  >
-                    <RiDeleteBinLine className="w-4 h-4" />
-                  </button>
+                  <p className="mono text-[10px] opacity-40">
+                    Ej: @tu_usuario o https://{social.platform.toLowerCase()}.com/tu_usuario
+                  </p>
                 </div>
               ))}
               {socials.length === 0 && (
