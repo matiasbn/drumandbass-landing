@@ -90,10 +90,11 @@ export function PkAuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, fetchPkProfile]);
 
   const signInWithGoogle = async () => {
+    document.cookie = 'pk_auth_redirect=/pk/edit; path=/; max-age=600; SameSite=Lax';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/pk/edit`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: { prompt: 'select_account' },
       }
     });

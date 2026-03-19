@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/club';
+  const next = searchParams.get('next') ?? '/';
 
   if (code) {
     const cookieStore = await cookies();
@@ -36,7 +36,16 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Check for PK redirect cookie
+      const pkRedirect = cookieStore.get('pk_auth_redirect')?.value;
+      const redirectTo = pkRedirect || next;
+
+      const response = NextResponse.redirect(`${origin}${redirectTo}`);
+      // Clear the cookie
+      if (pkRedirect) {
+        response.cookies.set('pk_auth_redirect', '', { path: '/', maxAge: 0 });
+      }
+      return response;
     }
   }
 
