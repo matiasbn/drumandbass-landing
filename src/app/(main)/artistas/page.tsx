@@ -1,6 +1,7 @@
 import React from 'react';
 import { Metadata } from 'next';
-import ARTISTS from '@/src/data/artistas.json';
+import { createSupabaseServer } from '@/src/lib/supabase-server';
+import { Presskit, PkProfile } from '@/src/types/presskit';
 import Card from '@/src/components/Card';
 import Grid from '@/src/components/Grid';
 
@@ -11,13 +12,51 @@ export const metadata: Metadata = {
   alternates: { canonical: '/artistas' },
 };
 
-export default function ArtistDirectory() {
-  const artists = ARTISTS.sort((a, b) => a.name.localeCompare(b.name));
+export const revalidate = 60;
+
+export default async function ArtistDirectory() {
+  const supabase = await createSupabaseServer();
+
+  const { data: presskits } = await supabase
+    .from('presskits')
+    .select('*')
+    .eq('published', true)
+    .order('artist_name', { ascending: true });
+
+  const publishedPresskits = (presskits || []) as Presskit[];
+
+  // Fetch pk_profiles for slugs
+  const userIds = publishedPresskits.map((pk) => pk.user_id);
+  const { data: profiles } = await supabase
+    .from('pk_profiles')
+    .select('*')
+    .in('user_id', userIds.length > 0 ? userIds : ['none']);
+
+  const profileMap = new Map(
+    ((profiles || []) as PkProfile[]).map((p) => [p.user_id, p])
+  );
+
+  const artists = publishedPresskits.map((pk) => {
+    const profile = profileMap.get(pk.user_id);
+    const slug = profile?.slug;
+
+    const links = [
+      // Link al presskit
+      ...(slug ? [{ title: 'Presskit', url: `/pk/${slug}` }] : []),
+      // Redes sociales
+      ...pk.socials.map((s) => ({ title: s.platform, url: s.url })),
+    ];
+
+    const items = pk.mixes.map((m) => ({ title: m.title, url: m.url }));
+
+    return { name: pk.artist_name, links, items };
+  });
+
   return (
     <div className="bg-white min-h-screen">
       <Grid
         title="Artistas"
-        subtitle={metadata.description}
+        subtitle={metadata.description as string}
         count={artists.length}
         countLabel="TALENTOS REGISTRADOS"
         bgColor="bg-[#0000ff]"
@@ -27,8 +66,8 @@ export default function ArtistDirectory() {
             key={idx}
             name={artist.name}
             links={artist.links}
-            items={artist.sets}
-            itemsLabel="Sets"
+            items={artist.items}
+            itemsLabel="Mixes"
           />
         ))}
       </Grid>
