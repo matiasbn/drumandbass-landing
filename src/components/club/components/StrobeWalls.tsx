@@ -22,8 +22,7 @@ uniform float u_time;
 uniform vec2 u_res;
 
 #define PI 3.141592653589793
-#define TAU 6.283185307179586
-#define MAX_SHAPES 8
+#define MAX_SHAPES 5
 
 vec3 ACESFilm(vec3 x) {
   float a = 2.51;
@@ -113,20 +112,21 @@ float evalShape(vec2 p, int type, float scale) {
 }
 
 vec3 decayColor(float phase) {
-  // Floor colors: matrixGreen, cyberBlue, neonPink, warningOrange
-  vec3 green = vec3(0.0, 1.0, 0.255);
-  vec3 cyan = vec3(0.0, 0.8, 1.0);
-  vec3 pink = vec3(1.0, 0.0, 0.333);
-  vec3 orange = vec3(1.0, 0.533, 0.0);
-  vec3 dark = vec3(0.02, 0.01, 0.03);
+  // Moody cyberpunk palette — deep purple, indigo, plum
+  vec3 lavender = vec3(0.5, 0.3, 0.9);
+  vec3 cyan = vec3(0.0, 0.6, 0.8);
+  vec3 indigo = vec3(0.3, 0.1, 0.7);
+  vec3 plum = vec3(0.5, 0.15, 0.5);
+  vec3 deepBlue = vec3(0.05, 0.1, 0.4);
+  vec3 dark = vec3(0.02, 0.01, 0.04);
 
   vec3 col = dark;
-  if (phase < 0.03) col = mix(green, cyan, phase / 0.03);
-  else if (phase < 0.15) col = mix(cyan, pink, (phase - 0.03) / 0.12);
-  else if (phase < 0.35) col = mix(pink, orange, (phase - 0.15) / 0.20);
-  else if (phase < 0.55) col = mix(orange, cyan, (phase - 0.35) / 0.20);
-  else if (phase < 0.75) col = mix(cyan, green, (phase - 0.55) / 0.20);
-  else col = mix(green * 0.3, dark, (phase - 0.75) / 0.25);
+  if (phase < 0.05) col = mix(lavender, cyan, phase / 0.05);
+  else if (phase < 0.20) col = mix(cyan, indigo, (phase - 0.05) / 0.15);
+  else if (phase < 0.40) col = mix(indigo, plum, (phase - 0.20) / 0.20);
+  else if (phase < 0.60) col = mix(plum, deepBlue, (phase - 0.40) / 0.20);
+  else if (phase < 0.80) col = mix(deepBlue, dark * 3.0, (phase - 0.60) / 0.20);
+  else col = mix(dark * 2.0, dark, (phase - 0.80) / 0.20);
   return col;
 }
 
@@ -172,8 +172,7 @@ void main() {
 
   // Background
   vec3 bg = vec3(0.015, 0.012, 0.025);
-  float bgNoise = vnoise(p * 3.0 + t * 0.05) * 0.4 + vnoise(p * 7.0 - t * 0.03) * 0.3;
-  bgNoise += vnoise(p * 1.5 + vec2(t * 0.02, -t * 0.01)) * 0.3;
+  float bgNoise = vnoise(p * 3.0 + t * 0.05);
   bg += vec3(0.008, 0.006, 0.015) * bgNoise;
 
   float currentShapeIdx = floor(cycleTime / flashInterval);
@@ -185,31 +184,13 @@ void main() {
 
   vec3 col = bg;
 
-  for (int ci = 0; ci < 2; ci++) {
-    for (int i = 0; i < MAX_SHAPES; i++) {
+  for (int i = 0; i < MAX_SHAPES; i++) {
       ShapeData shape = getShape(i, flashInterval, t);
       float birthT = shape.birthTime;
       float fi = float(i);
       bool isStrong = (mod(fi, 2.0) < 0.5);
 
-      if (ci == 1) {
-        float prevCycle = floor(t / cycleLen) - 1.0;
-        float seed = fi * 13.37 + prevCycle * 97.31;
-        shape.center = (hash2(seed + 1.0) * 2.0 - 1.0) * vec2(0.25, 0.20);
-        float baseAngle = floor(hash(seed + 2.0) * 8.0) * (PI / 4.0);
-        float angleJitter = (hash(seed + 5.0) - 0.5) * (PI / 6.0);
-        shape.rotation = baseAngle + angleJitter;
-        float baseScale = 0.2 + hash(seed + 3.0) * 0.5;
-        shape.scale = isStrong ? baseScale * 1.3 : baseScale * 0.7;
-        shape.type = int(mod(hash(seed + 4.0) * 5.0, 5.0));
-        float jitter = (hash(seed + 10.0) - 0.5) * 0.2 * flashInterval;
-        shape.birthTime = fi * flashInterval + jitter;
-        birthT = shape.birthTime - cycleLen;
-      }
-
       float age = cycleTime - birthT;
-      if (ci == 1) age = cycleTime + cycleLen - shape.birthTime;
-
       if (age < 0.0 || age > decayDuration) continue;
 
       float phase = age / decayDuration;
@@ -251,7 +232,6 @@ void main() {
         float hotBloom = exp(-abs(d) / hotBloomWidth) * isFlashing;
         col += decayColor(0.0) * hotBloom * 0.3 * beatMul;
       }
-    }
   }
 
   // Scanlines
@@ -294,7 +274,7 @@ const StrobePanel: React.FC<{
       fragmentShader: strobeFragmentShader,
       uniforms: {
         u_time: { value: timeOffset },
-        u_res: { value: new THREE.Vector2(size[0] * 128, size[1] * 128) },
+        u_res: { value: new THREE.Vector2(size[0] * 48, size[1] * 48) },
       },
       transparent: true,
       blending: THREE.AdditiveBlending,
@@ -320,7 +300,7 @@ const StrobePanel: React.FC<{
 export const StrobeWalls: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
   return (
     <group>
-      {/* Left side panels */}
+      {/* Left side */}
       <StrobePanel
         position={[-11, 4.5, -1]}
         rotation={[0, Math.PI / 5, 0]}
@@ -328,14 +308,7 @@ export const StrobeWalls: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
         timeOffset={0}
         isPlayingRef={isPlayingRef}
       />
-      <StrobePanel
-        position={[-10, 3.5, 6]}
-        rotation={[0, Math.PI / 4, 0.05]}
-        size={[6, 8]}
-        timeOffset={3.5}
-        isPlayingRef={isPlayingRef}
-      />
-      {/* Right side panels */}
+      {/* Right side */}
       <StrobePanel
         position={[11, 4.5, -1]}
         rotation={[0, -Math.PI / 5, 0]}
@@ -343,14 +316,7 @@ export const StrobeWalls: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
         timeOffset={7}
         isPlayingRef={isPlayingRef}
       />
-      <StrobePanel
-        position={[10, 3.5, 6]}
-        rotation={[0, -Math.PI / 4, -0.05]}
-        size={[6, 8]}
-        timeOffset={10.5}
-        isPlayingRef={isPlayingRef}
-      />
-      {/* Behind DJ panels */}
+      {/* Behind DJ */}
       <StrobePanel
         position={[-4, 5, -8]}
         rotation={[0.05, 0.15, 0]}

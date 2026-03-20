@@ -16,6 +16,9 @@ import { LiveScreen } from './LiveScreen';
 import { WallChatScreen } from './WallChatScreen';
 import { StrobeWalls } from './StrobeWalls';
 
+// Toggle YouTube live chat wall screen
+const SHOW_YOUTUBE_CHAT = false;
+
 interface SceneProps {
   isPlayingRef: MutableRefObject<boolean>;
   isLive?: boolean;
@@ -33,7 +36,7 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, yout
         </Suspense>
       )}
       <LiveScreen isLive={isLive} youtubeVideoId={youtubeVideoId} />
-      {isLive && youtubeVideoId && <WallChatScreen youtubeVideoId={youtubeVideoId} />}
+      {SHOW_YOUTUBE_CHAT && isLive && youtubeVideoId && <WallChatScreen youtubeVideoId={youtubeVideoId} />}
       <DanceFloor />
       <StrobeWalls isPlayingRef={isPlayingRef} />
       <DJBooth />
