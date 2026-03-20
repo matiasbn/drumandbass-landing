@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { RiArrowUpLine, RiHandHeartLine, RiLoopLeftLine, RiMusic2Line, RiScissorsCutLine, RiRefreshLine } from '@remixicon/react';
+import { RiArrowUpLine, RiHandHeartLine, RiLoopLeftLine, RiMusic2Line, RiScissorsCutLine, RiRefreshLine, RiHand2 } from '@remixicon/react';
 
 function dispatchKey(key: string, type: 'keydown' | 'keyup') {
   window.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true }));
@@ -199,6 +199,15 @@ export const MobileControls: React.FC = () => {
             onMouseUp={onActionUp('5')}
           >
             <RiRefreshLine className="w-5 h-5" />
+          </button>
+          <button
+            className={`${btnClass} w-11 h-11 border-[#00ccff]/40 text-[#00ccff]`}
+            onTouchStart={onActionDown('6')}
+            onTouchEnd={onActionUp('6')}
+            onMouseDown={onActionDown('6')}
+            onMouseUp={onActionUp('6')}
+          >
+            <RiHand2 className="w-5 h-5" />
           </button>
         </div>
       </div>

@@ -12,6 +12,9 @@ import { CharacterCustomModal } from './components/CharacterCustomModal';
 import { PlaybackProvider, usePlayback } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
 import { LiveProvider, useLive } from './LiveContext';
+import { ScoreProvider } from './ScoreContext';
+import { ScoreHUD } from './components/ScoreHUD';
+import { GameInstructions } from './components/GameInstructions';
 import { useAuth } from './AuthContext';
 
 const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => {
@@ -174,6 +177,12 @@ const NightclubSceneInner: React.FC = () => {
         {/* Mobile touch controls — after canvas so they render on top */}
         <MobileControls />
 
+        {/* Score HUD */}
+        <ScoreHUD />
+
+        {/* Game Instructions */}
+        <GameInstructions />
+
         {/* Chat */}
         {isLive ? <LiveChat videoId={youtubeVideoId ?? undefined} /> : <Chat />}
       </div>
@@ -185,7 +194,9 @@ const NightclubScene: React.FC = () => {
   return (
     <MultiplayerProvider>
     <LiveProvider>
+    <ScoreProvider>
       <NightclubSceneInner />
+    </ScoreProvider>
     </LiveProvider>
     </MultiplayerProvider>
   );

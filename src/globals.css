@@ -104,3 +104,23 @@ body {
 .marquee-content:hover {
   animation-play-state: paused;
 }
+
+/* Score popup animation */
+@keyframes score-popup {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-30px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px) scale(0.8);
+  }
+}
+
+.animate-score-popup {
+  animation: score-popup 1.5s ease-out forwards;
+}

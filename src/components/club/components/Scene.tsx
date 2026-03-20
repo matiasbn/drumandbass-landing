@@ -15,6 +15,7 @@ import { JungleDecor } from './JungleDecor';
 import { LiveScreen } from './LiveScreen';
 import { WallChatScreen } from './WallChatScreen';
 import { StrobeWalls } from './StrobeWalls';
+import { SpecialEffects } from './SpecialEffects';
 
 // Toggle YouTube live chat wall screen
 const SHOW_YOUTUBE_CHAT = false;
@@ -46,6 +47,7 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, yout
       <OtherPlayers isPlayingRef={isPlayingRef} />
       <StageElements isPlayingRef={isPlayingRef} />
       <JungleDecor isPlayingRef={isPlayingRef} />
+      <SpecialEffects />
     </>
   );
 };
