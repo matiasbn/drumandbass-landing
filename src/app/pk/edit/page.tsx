@@ -21,6 +21,8 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
 } from '@remixicon/react';
 
 const PLATFORM_OPTIONS = [
@@ -77,7 +79,7 @@ function PresskitEditor() {
   const [country, setCountry] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
@@ -113,7 +115,9 @@ function PresskitEditor() {
         setCountry(pk.country || '');
         setGenresInput((pk.genres || []).join(', '));
         setBio(pk.bio || '');
-        setPhotoUrl(pk.photo_url || '');
+        setPhotoUrls(
+          pk.photo_urls?.length ? pk.photo_urls : pk.photo_url ? [pk.photo_url] : []
+        );
         setSocials(pk.socials || []);
         setMixes(pk.mixes || []);
         setLinks(pk.links || []);
@@ -161,11 +165,12 @@ function PresskitEditor() {
   };
 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !user) return;
 
-    // Validate file
-    if (!file.type.startsWith('image/')) {
+    // Validate all are images
+    const invalidFile = files.find((f) => !f.type.startsWith('image/'));
+    if (invalidFile) {
       setSaveMessage('Error: Solo se permiten imágenes');
       return;
     }
@@ -173,44 +178,51 @@ function PresskitEditor() {
     setUploading(true);
     setSaveMessage('');
 
+    const supabase = createClient();
+    const newUrls: string[] = [];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
     try {
-      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-      let uploadBlob: Blob = file;
-      let filePath: string;
+      for (const file of files) {
+        let uploadBlob: Blob = file;
+        const timestamp = Date.now() + Math.random();
+        let filePath: string;
 
-      if (file.size > MAX_SIZE) {
-        uploadBlob = await compressImage(file);
-        filePath = `${user.id}/photo.webp`;
-      } else {
-        const ext = file.name.split('.').pop() || 'jpg';
-        filePath = `${user.id}/photo.${ext}`;
+        if (file.size > MAX_SIZE) {
+          uploadBlob = await compressImage(file);
+          filePath = `${user.id}/photo-${timestamp}.webp`;
+        } else {
+          const ext = file.name.split('.').pop() || 'jpg';
+          filePath = `${user.id}/photo-${timestamp}.${ext}`;
+        }
+
+        const { error: uploadError } = await supabase.storage
+          .from('pk-photos')
+          .upload(filePath, uploadBlob, { upsert: true });
+
+        if (uploadError) {
+          setSaveMessage(`Error: ${uploadError.message}`);
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('pk-photos')
+          .getPublicUrl(filePath);
+
+        newUrls.push(`${publicUrl}?t=${Date.now()}`);
       }
 
-      const supabase = createClient();
-
-      // Upload (upsert to overwrite previous)
-      const { error: uploadError } = await supabase.storage
-        .from('pk-photos')
-        .upload(filePath, uploadBlob, { upsert: true });
-
-      if (uploadError) {
-        setSaveMessage(`Error: ${uploadError.message}`);
-        setUploading(false);
-        return;
+      if (newUrls.length > 0) {
+        setPhotoUrls((prev) => [...prev, ...newUrls]);
+        setSaveMessage(`${newUrls.length} foto(s) subida(s) correctamente`);
+        setTimeout(() => setSaveMessage(''), 3000);
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('pk-photos')
-        .getPublicUrl(filePath);
-
-      // Append cache buster to force refresh
-      setPhotoUrl(`${publicUrl}?t=${Date.now()}`);
-      setSaveMessage('Foto subida correctamente');
-      setTimeout(() => setSaveMessage(''), 3000);
     } catch {
-      setSaveMessage('Error al subir la foto');
+      setSaveMessage('Error al subir las fotos');
     } finally {
       setUploading(false);
+      // Reset input so same files can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -250,7 +262,7 @@ function PresskitEditor() {
       country,
       genres,
       bio,
-      photo_url: photoUrl,
+      photo_urls: photoUrls,
       socials: resolvedSocials,
       mixes: filteredMixes,
       links: filteredLinks,
@@ -548,43 +560,108 @@ function PresskitEditor() {
           </div>
 
           <div>
-            <label className={labelClass}>Foto</label>
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
-              {/* Preview */}
-              {photoUrl ? (
-                <img
-                  src={photoUrl}
-                  alt="Preview"
-                  className="w-32 h-32 object-cover brutalist-border shrink-0"
-                />
-              ) : (
-                <div className="w-32 h-32 bg-gray-200 brutalist-border flex items-center justify-center shrink-0">
+            <label className={labelClass}>Fotos</label>
+            <div className="flex flex-wrap gap-3 mb-3">
+              {photoUrls.map((url, i) => (
+                <div key={url} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Foto ${i + 1}`}
+                    className={`w-28 h-28 object-cover brutalist-border shrink-0 ${i === 0 ? 'ring-2 ring-[#ff0055]' : ''}`}
+                  />
+                  {i === 0 && (
+                    <span className="absolute top-0 left-0 bg-[#ff0055] text-white mono text-[9px] font-bold px-1.5 py-0.5">
+                      PRINCIPAL
+                    </span>
+                  )}
+                  <div className="absolute top-1 right-1 flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...photoUrls];
+                          [updated[i - 1], updated[i]] = [updated[i], updated[i - 1]];
+                          setPhotoUrls(updated);
+                        }}
+                        className="p-1 bg-white brutalist-border hover:bg-black hover:text-white transition-colors"
+                        title="Mover a la izquierda"
+                      >
+                        <RiArrowLeftSLine className="w-3 h-3" />
+                      </button>
+                    )}
+                    {i < photoUrls.length - 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...photoUrls];
+                          [updated[i], updated[i + 1]] = [updated[i + 1], updated[i]];
+                          setPhotoUrls(updated);
+                        }}
+                        className="p-1 bg-white brutalist-border hover:bg-black hover:text-white transition-colors"
+                        title="Mover a la derecha"
+                      >
+                        <RiArrowRightSLine className="w-3 h-3" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        // Extract storage path from URL and delete from storage
+                        try {
+                          const urlObj = new URL(url.split('?')[0]);
+                          const pathMatch = urlObj.pathname.match(/pk-photos\/(.+)$/);
+                          if (pathMatch) {
+                            const supabase = createClient();
+                            await supabase.storage.from('pk-photos').remove([pathMatch[1]]);
+                          }
+                        } catch { /* ignore storage errors */ }
+                        setPhotoUrls((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                      className="p-1 bg-white brutalist-border hover:bg-red-500 hover:text-white transition-colors"
+                      title="Eliminar"
+                    >
+                      <RiDeleteBinLine className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {photoUrls.length === 0 && (
+                <div className="w-28 h-28 bg-gray-200 brutalist-border flex items-center justify-center shrink-0">
                   <RiImageLine className="w-8 h-8 opacity-30" />
                 </div>
               )}
-              <div className="flex flex-col gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadPhoto}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <RiLoader4Line className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RiUploadCloud2Line className="w-4 h-4" />
-                  )}
-                  {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
-                </button>
-                <p className="mono text-[10px] opacity-40">JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente.</p>
-              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleUploadPhoto}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50 w-fit"
+              >
+                {uploading ? (
+                  <RiLoader4Line className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RiUploadCloud2Line className="w-4 h-4" />
+                )}
+                {uploading ? 'SUBIENDO...' : 'SUBIR IMAGEN'}
+              </button>
+              {photoUrls.length > 5 ? (
+                <p className="mono text-xs font-bold text-red-500">
+                  Tienes {photoUrls.length} fotos. Elimina {photoUrls.length - 5} para poder guardar (máximo 5).
+                </p>
+              ) : (
+                <p className="mono text-[10px] opacity-40">
+                  JPG, PNG o WebP. Imágenes grandes se comprimen automáticamente. La primera foto es la principal. ({photoUrls.length}/5)
+                </p>
+              )}
             </div>
           </div>
 
@@ -874,7 +951,7 @@ function PresskitEditor() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleSave}
-              disabled={saving || !artistName}
+              disabled={saving || !artistName || photoUrls.length > 5}
               className="inline-flex items-center gap-2 bg-[#ff0055] text-white px-8 py-3 font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
             >
               {saving ? (

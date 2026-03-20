@@ -1,6 +1,6 @@
 {
   "name": "drumandbass-landing",
-  "version": "2.12.0",
+  "version": "2.13.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3600",
@@ -10,7 +10,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css}\"",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@contentful/rich-text-html-renderer": "^17.1.6",
