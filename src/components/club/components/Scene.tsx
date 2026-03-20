@@ -14,6 +14,7 @@ import { Background } from './Background';
 import { JungleDecor } from './JungleDecor';
 import { LiveScreen } from './LiveScreen';
 import { WallChatScreen } from './WallChatScreen';
+import { StrobeWalls } from './StrobeWalls';
 
 interface SceneProps {
   isPlayingRef: MutableRefObject<boolean>;
@@ -34,6 +35,7 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, yout
       <LiveScreen isLive={isLive} youtubeVideoId={youtubeVideoId} />
       {isLive && youtubeVideoId && <WallChatScreen youtubeVideoId={youtubeVideoId} />}
       <DanceFloor />
+      <StrobeWalls isPlayingRef={isPlayingRef} />
       <DJBooth />
       <DJ isPlayingRef={isPlayingRef} />
       <DancerGroup isPlayingRef={isPlayingRef} />
