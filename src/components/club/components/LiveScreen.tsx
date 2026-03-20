@@ -60,7 +60,7 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
           <div style={{ position: 'relative', width: 640, height: 360 }}>
             <iframe
               data-testid="youtube-iframe"
-              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0`}
+              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=1&rel=0`}
               style={{ width: 640, height: 360, border: 'none' }}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen

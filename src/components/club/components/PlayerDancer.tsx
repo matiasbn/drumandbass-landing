@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMultiplayer } from '../MultiplayerContext';
+import { useScore } from '../ScoreContext';
 import { CharacterMesh } from './CharacterMesh';
 import { isGifMessage, decodeGifUrl } from '../../../lib/chatMessage';
 
@@ -26,7 +27,9 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     accessoryId,
     lastMessage,
     lastMessageAt,
+    players,
   } = useMultiplayer();
+  const { scoreAction, setPlayerPosition } = useScore();
   const [visibleBubble, setVisibleBubble] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,6 +65,13 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const danceMoveRef = useRef(0);
   const danceStartRef = useRef(0);
   const spinStartRotationRef = useRef(0);
+  const lastDanceScoreSecondRef = useRef(0);
+
+  // Score refs for use in callbacks
+  const scoreActionRef = useRef(scoreAction);
+  scoreActionRef.current = scoreAction;
+  const setPlayerPositionRef = useRef(setPlayerPosition);
+  setPlayerPositionRef.current = setPlayerPosition;
 
   const [keys, setKeys] = useState({
     forward: false,
@@ -114,28 +124,38 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
             isJumpingRef.current = true;
             jumpVelocityRef.current = JUMP_VELOCITY;
             jumpYRef.current = 0;
+            scoreActionRef.current('jump', 'Jump');
           }
           break;
         case '1':
           danceMoveRef.current = 1;
           danceStartRef.current = frozenTimeRef.current;
+          lastDanceScoreSecondRef.current = 0;
           break;
         case '2':
           danceMoveRef.current = 2;
           danceStartRef.current = frozenTimeRef.current;
           spinStartRotationRef.current = rotationRef.current;
+          lastDanceScoreSecondRef.current = 0;
           break;
         case '3':
           danceMoveRef.current = 3;
           danceStartRef.current = frozenTimeRef.current;
+          lastDanceScoreSecondRef.current = 0;
           break;
         case '4':
           danceMoveRef.current = 4;
           danceStartRef.current = frozenTimeRef.current;
+          lastDanceScoreSecondRef.current = 0;
           break;
         case '5':
           danceMoveRef.current = 5;
           danceStartRef.current = frozenTimeRef.current;
+          lastDanceScoreSecondRef.current = 0;
+          break;
+        case '6':
+          // Wave at nearby player
+          scoreActionRef.current('wave', 'Wave');
           break;
       }
     };
@@ -205,12 +225,20 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
     const isMoving = moveX !== 0 || moveZ !== 0;
 
-    // Auto-stop dance after duration
+    // Auto-stop dance after duration + score periodically while dancing
     const danceMove = danceMoveRef.current;
     if (danceMove > 0) {
       const elapsed = time - danceStartRef.current;
       if (elapsed > DANCE_DURATION[danceMove]) {
+        scoreActionRef.current('danceComplete', 'Baile');
         danceMoveRef.current = 0;
+      } else {
+        // Score +1 every second while dancing
+        const secondsElapsed = Math.floor(elapsed);
+        if (secondsElapsed > lastDanceScoreSecondRef.current) {
+          lastDanceScoreSecondRef.current = secondsElapsed;
+          scoreActionRef.current('jump', 'Bailando');
+        }
       }
     }
 
@@ -252,6 +280,44 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         groupRef.current.rotation.y = rotationRef.current;
       }
     }
+
+    // Player interactions — check nearby players
+    const myX = positionRef.current.x;
+    const myZ = positionRef.current.z;
+    const myDance = danceMoveRef.current;
+
+    players.forEach((other) => {
+      const dx = other.x - myX;
+      const dz = other.z - myZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      // Bump: walk into another player within 1 unit
+      if (dist < 1.0 && isMoving) {
+        scoreActionRef.current('bump', 'Bump!');
+      }
+
+      // Dance Sync: same dance within 3 units
+      if (dist < 3.0 && myDance > 0 && other.danceMove === myDance) {
+        scoreActionRef.current('danceSync', 'Sync!');
+      }
+    });
+
+    // Crowd Hype: 3+ players dancing nearby = bonus
+    if (myDance > 0) {
+      let nearbyDancers = 0;
+      players.forEach((other) => {
+        const dx = other.x - myX;
+        const dz = other.z - myZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 4.0 && (other.danceMove ?? 0) > 0) nearbyDancers++;
+      });
+      if (nearbyDancers >= 2) {
+        scoreActionRef.current('crowdHype', 'Crowd Hype!');
+      }
+    }
+
+    // Report position to score system
+    setPlayerPositionRef.current(myX, myZ);
 
     // Broadcast state
     const now = Date.now();

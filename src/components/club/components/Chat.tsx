@@ -5,9 +5,11 @@ import { supabase, ChatMessage } from '../../../lib/supabase';
 import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiUserLine } from '@remixicon/react';
 import { Facehash } from 'facehash';
 import { useMultiplayer } from '../MultiplayerContext';
+import { useScore } from '../ScoreContext';
 
 export const Chat: React.FC = () => {
   const { username, setUsername } = useMultiplayer();
+  const { scoreAction } = useScore();
   const [nameInput, setNameInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -106,6 +108,8 @@ export const Chat: React.FC = () => {
     if (error) {
       console.error('Error sending message:', error);
       setNewMessage(trimmed);
+    } else {
+      scoreAction('chat', 'Chat');
     }
 
     setIsLoading(false);
