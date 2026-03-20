@@ -14,7 +14,7 @@ interface PlayerDancerProps {
 
 const JUMP_VELOCITY = 0.15;
 const GRAVITY = 0.006;
-const DANCE_DURATION = [0, 2, 1, 2]; // seconds per dance move (index 0 unused)
+const DANCE_DURATION = [0, 4, 3, 4, 4, 3]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const {
@@ -47,6 +47,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
+  const leftLegRef = useRef<THREE.Mesh>(null);
+  const rightLegRef = useRef<THREE.Mesh>(null);
   const headRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
   const lastUpdateRef = useRef(0);
@@ -127,6 +129,14 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           danceMoveRef.current = 3;
           danceStartRef.current = frozenTimeRef.current;
           break;
+        case '4':
+          danceMoveRef.current = 4;
+          danceStartRef.current = frozenTimeRef.current;
+          break;
+        case '5':
+          danceMoveRef.current = 5;
+          danceStartRef.current = frozenTimeRef.current;
+          break;
       }
     };
 
@@ -195,11 +205,6 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
     const isMoving = moveX !== 0 || moveZ !== 0;
 
-    // Cancel dance on movement
-    if (isMoving && danceMoveRef.current !== 0) {
-      danceMoveRef.current = 0;
-    }
-
     // Auto-stop dance after duration
     const danceMove = danceMoveRef.current;
     if (danceMove > 0) {
@@ -241,7 +246,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       if (danceMoveRef.current === 2) {
         const elapsed = time - danceStartRef.current;
         const progress = Math.min(elapsed / DANCE_DURATION[2], 1);
-        groupRef.current.rotation.y = spinStartRotationRef.current + progress * Math.PI * 2;
+        const totalSpins = Math.floor(DANCE_DURATION[2]); // 1 spin per second
+        groupRef.current.rotation.y = spinStartRotationRef.current + progress * Math.PI * 2 * totalSpins;
       } else {
         groupRef.current.rotation.y = rotationRef.current;
       }
@@ -282,6 +288,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       // Body bounce
       if (groupRef.current) {
         groupRef.current.position.y += Math.abs(Math.sin(danceTime * 5)) * 0.12;
+        groupRef.current.rotation.x = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
       }
     } else if (activeDance === 2) {
       // Spin — arms extend out
@@ -298,6 +313,17 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         headRef.current.rotation.x = 0;
         headRef.current.position.y = 1.5;
       }
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
     } else if (activeDance === 3) {
       // Headbang — head bobs, arms pump
       if (headRef.current) {
@@ -312,6 +338,102 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       if (rightArmRef.current) {
         rightArmRef.current.rotation.x = -0.5 + Math.sin(danceTime * 12 + Math.PI) * 0.5;
         rightArmRef.current.rotation.z = 0.3;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
+    } else if (activeDance === 4) {
+      // Split leg — drop to floor, legs rotate 90° outward into a full split
+      const cycleTime = danceTime % 3.0; // 3s cycle: go down, hold, come up
+      let spread: number;
+      if (cycleTime < 0.8) {
+        spread = cycleTime / 0.8; // ease into split
+      } else if (cycleTime < 2.2) {
+        spread = 1.0; // hold split
+      } else {
+        spread = 1.0 - (cycleTime - 2.2) / 0.8; // come back up
+      }
+      spread = spread * spread * (3 - 2 * spread); // smoothstep
+
+      // Pivot from hip (top of leg). Leg center is 0.3 below hip.
+      const legHalf = 0.3;
+      const hipY = 0.65; // top of leg = 0.35 + 0.3
+      const angle = spread * (Math.PI / 2);
+
+      // Front leg (forward kick): rotate around hip
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(-angle, 0, 0);
+        leftLegRef.current.position.set(-0.12, hipY - legHalf * Math.cos(angle), -legHalf * Math.sin(angle));
+      }
+      // Back leg (backward kick): rotate around hip
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(angle, 0, 0);
+        rightLegRef.current.position.set(0.12, hipY - legHalf * Math.cos(angle), legHalf * Math.sin(angle));
+      }
+      // Drop body as legs spread
+      if (groupRef.current) {
+        groupRef.current.position.y += -spread * 0.55;
+        groupRef.current.rotation.x = 0;
+      }
+      // Arms out for balance
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.z = -(0.3 + spread * 0.9);
+        leftArmRef.current.rotation.x = Math.sin(danceTime * 4) * 0.2;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.z = 0.3 + spread * 0.9;
+        rightArmRef.current.rotation.x = Math.sin(danceTime * 4 + Math.PI) * 0.2;
+      }
+      if (headRef.current) {
+        headRef.current.rotation.z = Math.sin(danceTime * 2) * 0.1;
+        headRef.current.rotation.x = spread * 0.15;
+        headRef.current.position.y = 1.5;
+      }
+    } else if (activeDance === 5) {
+      // Backflip — tuck and rotate around body core, then land
+      const flipDuration = 1.0;
+      const flipCycle = danceTime % (flipDuration + 0.5); // flip + pause
+      const flipping = flipCycle < flipDuration;
+      const flipProgress = Math.min(flipCycle / flipDuration, 1);
+      const pivotY = 1.4; // rotate around upper body/head
+
+      if (groupRef.current) {
+        if (flipping) {
+          const angle = -flipProgress * Math.PI * 2;
+          const jumpHeight = Math.sin(flipProgress * Math.PI) * 1.2;
+          groupRef.current.rotation.x = angle;
+          // Offset position to rotate around core instead of feet
+          groupRef.current.position.y += jumpHeight + pivotY * (1 - Math.cos(angle));
+        } else {
+          groupRef.current.rotation.x = 0;
+        }
+      }
+      // Tuck arms in during flip, spread on land
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.z = flipping ? -0.1 : -0.8;
+        leftArmRef.current.rotation.x = flipping ? -1.2 : 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.z = flipping ? 0.1 : 0.8;
+        rightArmRef.current.rotation.x = flipping ? -1.2 : 0;
+      }
+      if (headRef.current) {
+        headRef.current.rotation.x = flipping ? -0.3 : 0;
+        headRef.current.rotation.z = 0;
+        headRef.current.position.y = 1.5;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(flipping ? 0.6 : 0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(flipping ? 0.6 : 0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
       }
     } else {
       // Default idle/move animation
@@ -330,6 +452,19 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       if (rightArmRef.current) {
         rightArmRef.current.rotation.z = 0.3 - Math.sin(time * animSpeed + Math.PI) * animIntensity;
         rightArmRef.current.rotation.x = Math.sin(time * animSpeed + 1.5) * animIntensity;
+      }
+      // Reset legs
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(isMoving ? Math.sin(time * animSpeed) * 0.4 : 0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(isMoving ? Math.sin(time * animSpeed + Math.PI) * 0.4 : 0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
+      // Reset group rotation.x (from backflip)
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
       }
     }
   });
@@ -386,6 +521,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         headRef={headRef}
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}
+        leftLegRef={leftLegRef}
+        rightLegRef={rightLegRef}
       />
     </group>
   );
