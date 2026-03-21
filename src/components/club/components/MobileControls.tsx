@@ -126,7 +126,7 @@ export const MobileControls: React.FC = () => {
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-none touch-none">
-      {/* Left side — Joystick above dance buttons, mobile only */}
+      {/* Left side — Joystick, mobile only */}
       {isMobile && (
         <div className="pointer-events-auto absolute bottom-28 left-4 flex flex-col items-center gap-3 touch-none">
           {/* Joystick */}
@@ -150,9 +150,25 @@ export const MobileControls: React.FC = () => {
               }}
             />
           </div>
+        </div>
+      )}
 
-          {/* Dance moves row */}
-          <div className="flex gap-1.5">
+      {/* Right side — Jump + Dance column above chat toggle, mobile only */}
+      {isMobile && (
+        <div className="pointer-events-auto absolute right-4 flex flex-row items-end gap-2 touch-none" style={{ bottom: '60px' }}>
+          {/* Jump button — left of dance column */}
+          <button
+            className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
+            onTouchStart={onActionDown(' ')}
+            onTouchEnd={onActionUp(' ')}
+            onMouseDown={onActionDown(' ')}
+            onMouseUp={onActionUp(' ')}
+          >
+            <RiArrowUpLine className="w-6 h-6" />
+          </button>
+
+          {/* Dance moves column */}
+          <div className="flex flex-col gap-1.5">
             <button
               className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
               onTouchStart={onActionDown('1')}
@@ -208,22 +224,6 @@ export const MobileControls: React.FC = () => {
               <RiHand2 className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Right side — Jump + Special moves, mobile only */}
-      {isMobile && (
-        <div className="pointer-events-auto absolute bottom-28 right-4 flex flex-col items-center gap-2 touch-none">
-          {/* Jump */}
-          <button
-            className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
-            onTouchStart={onActionDown(' ')}
-            onTouchEnd={onActionUp(' ')}
-            onMouseDown={onActionDown(' ')}
-            onMouseUp={onActionUp(' ')}
-          >
-            <RiArrowUpLine className="w-6 h-6" />
-          </button>
 
           {/* Special moves */}
           {enabled && unlockedSpecials > 0 && (
