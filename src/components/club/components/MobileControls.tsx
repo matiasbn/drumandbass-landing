@@ -155,7 +155,7 @@ export const MobileControls: React.FC = () => {
 
       {/* Right side — Jump + Dance column above chat toggle, mobile only */}
       {isMobile && (
-        <div className="pointer-events-auto absolute right-4 flex flex-row items-end gap-2 touch-none" style={{ bottom: '64px' }}>
+        <div className="pointer-events-auto fixed right-4 flex flex-row items-end gap-2 touch-none z-[9998]" style={{ bottom: '64px' }}>
           {/* Jump button — left of dance column */}
           <button
             className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
