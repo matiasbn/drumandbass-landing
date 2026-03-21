@@ -146,11 +146,11 @@ const LightBeams: React.FC = () => {
 };
 
 const Fireflies: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPlayingRef }) => {
-  const ref = useRef<THREE.Points>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
   const count = 30;
 
-  const basePositions = useMemo(() => {
+  const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       pos[i * 3] = (Math.random() - 0.5) * 16;
@@ -176,25 +176,23 @@ const Fireflies: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPl
     if (isPlayingRef.current) {
       frozenTimeRef.current = clock.getElapsedTime();
     }
-    if (ref.current) {
-      const geo = ref.current.geometry;
-      const posAttr = geo.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < count; i++) {
-        posAttr.setY(i, basePositions[i * 3 + 1] + Math.sin(frozenTimeRef.current * 0.5 + i * 2) * 0.3);
-        posAttr.setX(i, basePositions[i * 3] + Math.sin(frozenTimeRef.current * 0.3 + i) * 0.2);
-      }
-      posAttr.needsUpdate = true;
+    if (groupRef.current) {
+      const t = frozenTimeRef.current;
+      groupRef.current.position.y = Math.sin(t * 0.5) * 0.3;
+      groupRef.current.position.x = Math.sin(t * 0.3) * 0.2;
     }
   });
 
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[new Float32Array(basePositions), 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.18} vertexColors transparent opacity={0.9} sizeAttenuation />
-    </points>
+    <group ref={groupRef}>
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+          <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+        </bufferGeometry>
+        <pointsMaterial size={0.18} vertexColors transparent opacity={0.9} sizeAttenuation />
+      </points>
+    </group>
   );
 };
 

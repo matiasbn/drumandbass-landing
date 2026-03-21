@@ -3,14 +3,15 @@
 import React, { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 
-const COLORS = {
-  matrixGreen: '#00ff41',
-  cyberBlue: '#00ccff',
-  neonPink: '#ff0055',
-  warningOrange: '#ff8800',
-};
-
-const colorArray = [COLORS.matrixGreen, COLORS.cyberBlue, COLORS.neonPink, COLORS.warningOrange];
+// Moody cyberpunk palette — deep tones with subtle glow
+const colorArray = [
+  '#1a0a2e', // deep purple
+  '#0d1b2a', // midnight blue
+  '#1b1128', // dark plum
+  '#0a1628', // navy
+  '#12062e', // indigo
+  '#0f1a24', // dark slate
+];
 
 export const DanceFloor: React.FC = () => {
   const gridSize = 14;
@@ -34,7 +35,8 @@ export const DanceFloor: React.FC = () => {
   }, []);
 
   const tilesByColor = useMemo(() => {
-    const grouped: Record<number, [number, number, number][]> = { 0: [], 1: [], 2: [], 3: [] };
+    const grouped: Record<number, [number, number, number][]> = {};
+    colorArray.forEach((_, i) => { grouped[i] = []; });
     tileData.forEach(({ position, colorIndex }) => {
       grouped[colorIndex].push(position);
     });
@@ -45,7 +47,7 @@ export const DanceFloor: React.FC = () => {
     <group position={[0, -0.5, 0]}>
       <mesh position={[0, -0.1, 0]} receiveShadow>
         <boxGeometry args={[gridSize * tileSize + 0.5, 0.2, gridSize * tileSize + 0.5]} />
-        <meshStandardMaterial color="#111111" metalness={0.9} roughness={0.1} />
+        <meshStandardMaterial color="#0a0a0f" metalness={0.7} roughness={0.3} />
       </mesh>
 
       {colorArray.map((color, colorIndex) => (
@@ -54,9 +56,9 @@ export const DanceFloor: React.FC = () => {
           <meshStandardMaterial
             color={color}
             emissive={color}
-            emissiveIntensity={0.2}
-            metalness={0.8}
-            roughness={0.2}
+            emissiveIntensity={0.6}
+            metalness={0.3}
+            roughness={0.7}
           />
           {tilesByColor[colorIndex].map((pos, i) => (
             <Instance key={i} position={pos} />

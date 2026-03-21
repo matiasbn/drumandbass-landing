@@ -15,6 +15,8 @@ interface CharacterMeshProps {
   headRef?: MutableRefObject<THREE.Group | null>;
   leftArmRef?: MutableRefObject<THREE.Mesh | null>;
   rightArmRef?: MutableRefObject<THREE.Mesh | null>;
+  leftLegRef?: MutableRefObject<THREE.Mesh | null>;
+  rightLegRef?: MutableRefObject<THREE.Mesh | null>;
 }
 
 const COSTUME_FACE_SIZE = 128;
@@ -118,6 +120,8 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
   headRef,
   leftArmRef,
   rightArmRef,
+  leftLegRef,
+  rightLegRef,
 }) => {
   const costume = getCostume(costumeId);
   const isDefault = costume.id === 'default';
@@ -186,11 +190,11 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
       )}
 
       {/* Legs */}
-      <mesh position={[-0.12, 0.35, 0]} castShadow>
+      <mesh ref={leftLegRef} position={[-0.12, 0.35, 0]} castShadow>
         <boxGeometry args={[0.15, 0.6, 0.15]} />
         <meshStandardMaterial color={legColor} emissive={legColor} emissiveIntensity={isDefault ? 0 : 0.15} />
       </mesh>
-      <mesh position={[0.12, 0.35, 0]} castShadow>
+      <mesh ref={rightLegRef} position={[0.12, 0.35, 0]} castShadow>
         <boxGeometry args={[0.15, 0.6, 0.15]} />
         <meshStandardMaterial color={legColor} emissive={legColor} emissiveIntensity={isDefault ? 0 : 0.15} />
       </mesh>

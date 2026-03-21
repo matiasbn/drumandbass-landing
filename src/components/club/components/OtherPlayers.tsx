@@ -43,6 +43,8 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
+  const leftLegRef = useRef<THREE.Mesh>(null);
+  const rightLegRef = useRef<THREE.Mesh>(null);
   const headRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
 
@@ -101,8 +103,10 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       // Spin dance overrides rotation
       if (danceMove === 2) {
         const elapsed = time - danceStartRef.current;
-        const progress = Math.min(elapsed / 1.0, 1);
-        groupRef.current.rotation.y = spinStartRotationRef.current + progress * Math.PI * 2;
+        const spinDuration = 3.0; // match DANCE_DURATION[2]
+        const progress = Math.min(elapsed / spinDuration, 1);
+        const totalSpins = Math.floor(spinDuration); // 1 spin per second
+        groupRef.current.rotation.y = spinStartRotationRef.current + progress * Math.PI * 2 * totalSpins;
       } else {
         groupRef.current.rotation.y = currentRotation.current;
       }
@@ -127,6 +131,15 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       }
       if (groupRef.current) {
         groupRef.current.position.y += Math.abs(Math.sin(danceTime * 5)) * 0.12;
+        groupRef.current.rotation.x = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
       }
     } else if (danceMove === 2) {
       // Spin
@@ -143,6 +156,17 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
         headRef.current.rotation.x = 0;
         headRef.current.position.y = 1.5;
       }
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
     } else if (danceMove === 3) {
       // Headbang
       if (headRef.current) {
@@ -157,6 +181,95 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       if (rightArmRef.current) {
         rightArmRef.current.rotation.x = -0.5 + Math.sin(danceTime * 12 + Math.PI) * 0.5;
         rightArmRef.current.rotation.z = 0.3;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
+    } else if (danceMove === 4) {
+      // Split leg — drop to floor, legs rotate 90° outward
+      const cycleTime = danceTime % 3.0;
+      let spread: number;
+      if (cycleTime < 0.8) {
+        spread = cycleTime / 0.8;
+      } else if (cycleTime < 2.2) {
+        spread = 1.0;
+      } else {
+        spread = 1.0 - (cycleTime - 2.2) / 0.8;
+      }
+      spread = spread * spread * (3 - 2 * spread); // smoothstep
+
+      const legHalf = 0.3;
+      const hipY = 0.65;
+      const angle = spread * (Math.PI / 2);
+
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(-angle, 0, 0);
+        leftLegRef.current.position.set(-0.12, hipY - legHalf * Math.cos(angle), -legHalf * Math.sin(angle));
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(angle, 0, 0);
+        rightLegRef.current.position.set(0.12, hipY - legHalf * Math.cos(angle), legHalf * Math.sin(angle));
+      }
+      if (groupRef.current) {
+        groupRef.current.position.y += -spread * 0.55;
+        groupRef.current.rotation.x = 0;
+      }
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.z = -(0.3 + spread * 0.9);
+        leftArmRef.current.rotation.x = Math.sin(danceTime * 4) * 0.2;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.z = 0.3 + spread * 0.9;
+        rightArmRef.current.rotation.x = Math.sin(danceTime * 4 + Math.PI) * 0.2;
+      }
+      if (headRef.current) {
+        headRef.current.rotation.z = Math.sin(danceTime * 2) * 0.1;
+        headRef.current.rotation.x = spread * 0.15;
+        headRef.current.position.y = 1.5;
+      }
+    } else if (danceMove === 5) {
+      // Backflip — rotate around upper body
+      const flipDuration = 1.0;
+      const flipCycle = danceTime % (flipDuration + 0.5);
+      const flipping = flipCycle < flipDuration;
+      const flipProgress = Math.min(flipCycle / flipDuration, 1);
+      const pivotY = 1.4;
+
+      if (groupRef.current) {
+        if (flipping) {
+          const angle = -flipProgress * Math.PI * 2;
+          const jumpHeight = Math.sin(flipProgress * Math.PI) * 1.2;
+          groupRef.current.rotation.x = angle;
+          groupRef.current.position.y += jumpHeight + pivotY * (1 - Math.cos(angle));
+        } else {
+          groupRef.current.rotation.x = 0;
+        }
+      }
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.z = flipping ? -0.1 : -0.8;
+        leftArmRef.current.rotation.x = flipping ? -1.2 : 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.z = flipping ? 0.1 : 0.8;
+        rightArmRef.current.rotation.x = flipping ? -1.2 : 0;
+      }
+      if (headRef.current) {
+        headRef.current.rotation.x = flipping ? -0.3 : 0;
+        headRef.current.rotation.z = 0;
+        headRef.current.position.y = 1.5;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(flipping ? 0.6 : 0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(flipping ? 0.6 : 0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
       }
     } else {
       // Default idle/move
@@ -176,6 +289,19 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       if (rightArmRef.current) {
         rightArmRef.current.rotation.z = 0.3 - Math.sin(time * animSpeed + Math.PI + offset) * animIntensity;
         rightArmRef.current.rotation.x = Math.sin(time * animSpeed + 1.5 + offset) * animIntensity;
+      }
+      // Reset legs
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.set(isMoving ? Math.sin(time * animSpeed + offset) * 0.4 : 0, 0, 0);
+        leftLegRef.current.position.set(-0.12, 0.35, 0);
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.set(isMoving ? Math.sin(time * animSpeed + Math.PI + offset) * 0.4 : 0, 0, 0);
+        rightLegRef.current.position.set(0.12, 0.35, 0);
+      }
+      // Reset group rotation.x (from backflip)
+      if (groupRef.current) {
+        groupRef.current.rotation.x = 0;
       }
     }
   });
@@ -230,6 +356,8 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
         headRef={headRef}
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}
+        leftLegRef={leftLegRef}
+        rightLegRef={rightLegRef}
       />
     </group>
   );

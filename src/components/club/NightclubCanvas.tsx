@@ -30,7 +30,7 @@ export const NightclubCanvas: React.FC = () => {
         minDistance={8}
         maxDistance={40}
         minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 1.8}
+        maxPolarAngle={Math.PI / 2.3}
         minAzimuthAngle={-Math.PI / 3}
         maxAzimuthAngle={Math.PI / 3}
       />

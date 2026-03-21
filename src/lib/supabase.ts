@@ -36,6 +36,8 @@ export interface UserProfile {
   face_type?: number;
   costume_id?: string;
   accessory_id?: string;
+  score?: number;
+  high_score?: number;
   created_at: string;
   updated_at: string;
 }

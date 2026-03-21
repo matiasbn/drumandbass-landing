@@ -8,6 +8,7 @@ import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiEmotion2Line, RiFileGifLin
 import { Facehash } from 'facehash';
 import { useAuth } from '../AuthContext';
 import { useMultiplayer } from '../MultiplayerContext';
+import { useScore } from '../ScoreContext';
 import { isGifMessage, decodeGifUrl, encodeGifMessage, getBubbleText } from '../../../lib/chatMessage';
 
 const EmojiPicker = dynamic(() => import('./EmojiPicker').then(m => ({ default: m.EmojiPicker })), { ssr: false });
@@ -33,6 +34,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
   const { profile } = useAuth();
   const username = profile?.username ?? null;
   const { sendChatBubble } = useMultiplayer();
+  const { scoreAction } = useScore();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -160,6 +162,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
       setNewMessage(trimmed);
     } else {
       sendChatBubble(trimmed);
+      scoreAction('chat', 'Chat');
       if (closeOnSend) setIsOpen(false);
     }
 
@@ -325,7 +328,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
           >
             <div className="flex items-center gap-2">
               <RiChat1Line className={`w-4 h-4 ${isOpen ? 'text-[#ff0055]' : 'text-[#ff0055]'}`} />
-              <span className="font-mono text-sm text-white">LIVE CHAT</span>
+              <span className="font-mono text-sm text-white">CHAT</span>
               {unreadCount > 0 && !isOpen && (
                 <span className="bg-[#ff0055] text-white text-xs px-1.5 py-0.5 font-bold">
                   {unreadCount}
@@ -445,7 +448,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
               <div className="flex items-center gap-2">
                 <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
                 <span className="font-mono text-sm text-white">
-                  {isOpen ? 'CERRAR CHAT' : 'LIVE CHAT'}
+                  {isOpen ? 'CERRAR CHAT' : 'CHAT'}
                 </span>
                 {unreadCount > 0 && !isOpen && (
                   <span className="bg-[#ff0055] text-white text-xs px-1.5 py-0.5 font-bold">
