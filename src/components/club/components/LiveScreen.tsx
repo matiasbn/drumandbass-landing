@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -13,6 +13,7 @@ interface LiveScreenProps {
 export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }) => {
   const glowRef = useRef<THREE.Mesh>(null);
   const indicatorRef = useRef<THREE.Mesh>(null);
+  const [interacting, setInteracting] = useState(false);
 
   useFrame(({ clock }) => {
     if (!isLive) return;
@@ -55,7 +56,7 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
             width: 640,
             height: 360,
           }}
-          wrapperClass="pointer-events-none"
+          wrapperClass={interacting ? '' : 'pointer-events-none'}
         >
           <div style={{ position: 'relative', width: 640, height: 360 }}>
             <iframe
@@ -65,14 +66,22 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              zIndex: 1,
-            }} />
+            {/* Overlay: blocks interaction by default so 3D drag works. Tap to unlock video controls. */}
+            {!interacting && (
+              <div
+                onClick={() => setInteracting(true)}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  zIndex: 1,
+                  cursor: 'pointer',
+                  pointerEvents: 'auto',
+                }}
+              />
+            )}
           </div>
         </Html>
       )}
