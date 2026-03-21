@@ -128,7 +128,7 @@ export const MobileControls: React.FC = () => {
     <div className="absolute inset-0 z-30 pointer-events-none touch-none">
       {/* Left side — Joystick, mobile only */}
       {isMobile && (
-        <div className="pointer-events-auto absolute left-4 flex flex-col items-center gap-3 touch-none" style={{ bottom: 'calc(112px + env(safe-area-inset-bottom, 0px))' }}>
+        <div className="pointer-events-auto absolute bottom-28 left-4 flex flex-col items-center gap-3 touch-none">
           {/* Joystick */}
           <div
             ref={joystickRef}
@@ -155,7 +155,7 @@ export const MobileControls: React.FC = () => {
 
       {/* Right side — Jump + Dance column above chat toggle, mobile only */}
       {isMobile && (
-        <div className="pointer-events-auto absolute right-4 flex flex-row items-end gap-2 touch-none" style={{ bottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
+        <div className="pointer-events-auto absolute right-4 flex flex-row items-end gap-2 touch-none" style={{ bottom: '64px' }}>
           {/* Jump button — left of dance column */}
           <button
             className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}

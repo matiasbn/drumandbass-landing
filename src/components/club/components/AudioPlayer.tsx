@@ -86,8 +86,6 @@ export const AudioPlayer: React.FC = () => {
               const randomIndex = Math.floor(Math.random() * count);
               widget.skip(randomIndex);
             }
-            // Auto-start playback
-            setTimeout(() => widget.play(), 300);
           });
           widget.getCurrentSound((sound) => {
             if (sound) {
@@ -194,7 +192,7 @@ export const AudioPlayer: React.FC = () => {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const soundcloudUrl = 'https://soundcloud.com/drum-and-bass-chile';
-  const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(soundcloudUrl)}&color=%23ff0055&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=true&show_teaser=false&visual=false`;
+  const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(soundcloudUrl)}&color=%23ff0055&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=true&show_teaser=false&visual=false`;
 
   return (
     <div className="flex flex-col gap-2">

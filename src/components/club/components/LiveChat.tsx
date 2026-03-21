@@ -424,7 +424,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
       {isOpen &&
         mounted &&
         createPortal(
-          <div className="fixed left-4 right-4 z-[9999] touch-auto" style={{ bottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
+          <div className="fixed left-4 right-4 z-[9999] touch-auto" style={{ bottom: '60px' }}>
             <div className="bg-black border border-[#ff0055]/30">
               {inputContent}
             </div>
@@ -437,7 +437,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
         createPortal(
           <div
             className="fixed z-[9999] touch-auto"
-            style={isOpen ? { bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))', left: '16px', right: '16px' } : { bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))', right: '16px' }}
+            style={isOpen ? { bottom: '8px', left: '16px', right: '16px' } : { bottom: '16px', right: '16px' }}
           >
             <button
               onClick={() => setIsOpen(!isOpen)}
