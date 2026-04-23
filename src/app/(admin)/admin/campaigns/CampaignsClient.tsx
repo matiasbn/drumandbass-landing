@@ -91,6 +91,7 @@ export default function CampaignsClient() {
   const [totalUnique, setTotalUnique] = useState(0);
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [subject, setSubject] = useState('');
+  const [htmlPreview, setHtmlPreview] = useState('');
 
   const editor = useEditor({
     extensions: [
@@ -99,6 +100,12 @@ export default function CampaignsClient() {
     ],
     content: '<p>Escribe el contenido del email aqui...</p>',
     immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      setHtmlPreview(editor.getHTML());
+    },
+    onCreate: ({ editor }) => {
+      setHtmlPreview(editor.getHTML());
+    },
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[200px] focus:outline-none p-4',
@@ -247,7 +254,7 @@ export default function CampaignsClient() {
                 <div
                   className="prose prose-sm max-w-none"
                   dangerouslySetInnerHTML={{
-                    __html: editor?.getHTML() || '',
+                    __html: htmlPreview,
                   }}
                 />
               </div>
