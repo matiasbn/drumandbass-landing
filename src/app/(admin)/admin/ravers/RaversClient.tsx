@@ -25,9 +25,11 @@ interface Subscriber {
   email: string;
   instagram: string | null;
   created_at: string;
+  is_registered: boolean;
+  is_pk: boolean;
 }
 
-export default function NewsletterClient() {
+export default function RaversClient() {
   const { loading, isAdmin } = useAdminAuth();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loadingSubscribers, setLoadingSubscribers] = useState(true);
@@ -47,7 +49,7 @@ export default function NewsletterClient() {
   const fetchSubscribers = useCallback(async () => {
     setLoadingSubscribers(true);
     try {
-      const res = await fetch('/api/admin/newsletter');
+      const res = await fetch('/api/admin/ravers');
       const data = await res.json();
       if (data.subscribers) setSubscribers(data.subscribers);
     } catch {
@@ -137,7 +139,7 @@ export default function NewsletterClient() {
     setImportResults(parsedRows.map((r) => ({ email: r.email, status: 'pending' })));
 
     try {
-      const res = await fetch('/api/admin/newsletter', {
+      const res = await fetch('/api/admin/ravers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: parsedRows }),
@@ -175,7 +177,7 @@ export default function NewsletterClient() {
     if (!editingId) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/newsletter', {
+      const res = await fetch('/api/admin/ravers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingId, ...editForm }),
@@ -193,9 +195,9 @@ export default function NewsletterClient() {
   };
 
   const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Eliminar suscriptor ${email}?`)) return;
+    if (!confirm(`Eliminar raver ${email}?`)) return;
     try {
-      const res = await fetch(`/api/admin/newsletter?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/ravers?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         setSubscribers((prev) => prev.filter((s) => s.id !== id));
@@ -247,13 +249,13 @@ export default function NewsletterClient() {
           <Link href="/admin" className="mono text-sm text-gray-600 hover:text-black uppercase">
             &larr; Volver al Admin
           </Link>
-          <h1 className="text-3xl font-black uppercase mt-2">Newsletter</h1>
+          <h1 className="text-3xl font-black uppercase mt-2">Ravers</h1>
         </div>
       </div>
 
       {/* Upload Section */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow mb-8">
-        <h2 className="text-xl font-black uppercase mb-4">Importar Suscriptores</h2>
+        <h2 className="text-xl font-black uppercase mb-4">Importar Ravers</h2>
         <p className="mono text-sm text-gray-600 mb-4">
           Sube un archivo Excel (.xlsx) con columnas: NAME, LAST_NAME, EMAIL, INSTAGRAM
         </p>
@@ -340,7 +342,7 @@ export default function NewsletterClient() {
       {/* Existing Subscribers */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow">
         <h2 className="text-xl font-black uppercase mb-4">
-          Suscriptores ({loadingSubscribers ? '...' : subscribers.length})
+          Ravers ({loadingSubscribers ? '...' : subscribers.length})
         </h2>
 
         {loadingSubscribers ? (
@@ -348,7 +350,7 @@ export default function NewsletterClient() {
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-black border-r-transparent" />
           </div>
         ) : subscribers.length === 0 ? (
-          <p className="mono text-sm text-gray-600">No hay suscriptores aun.</p>
+          <p className="mono text-sm text-gray-600">No hay ravers aun.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full mono text-sm">
@@ -358,6 +360,7 @@ export default function NewsletterClient() {
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('last_name')}>Apellido{sortArrow('last_name')}</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('email')}>Email{sortArrow('email')}</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('instagram')}>Instagram{sortArrow('instagram')}</th>
+                  <th className="text-left py-2 pr-4">Tipo</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('created_at')}>Fecha{sortArrow('created_at')}</th>
                   <th className="text-left py-2">Acciones</th>
                 </tr>
@@ -399,6 +402,12 @@ export default function NewsletterClient() {
                             placeholder="Instagram"
                           />
                         </td>
+                        <td className="py-2 pr-4">
+                          <div className="flex gap-1 flex-wrap">
+                            {sub.is_pk && <span className="bg-blue-200 text-blue-800 px-2 py-0.5 text-xs font-bold uppercase">PK</span>}
+                            {sub.is_registered && <span className="bg-green-200 text-green-800 px-2 py-0.5 text-xs font-bold uppercase">Usuario</span>}
+                          </div>
+                        </td>
                         <td className="py-2 pr-4 text-gray-500 whitespace-nowrap">{new Date(sub.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                         <td className="py-2">
                           <div className="flex gap-2">
@@ -424,6 +433,12 @@ export default function NewsletterClient() {
                         <td className="py-2 pr-4">{sub.last_name || '-'}</td>
                         <td className="py-2 pr-4">{sub.email}</td>
                         <td className="py-2 pr-4">{sub.instagram || '-'}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex gap-1 flex-wrap">
+                            {sub.is_pk && <span className="bg-blue-200 text-blue-800 px-2 py-0.5 text-xs font-bold uppercase">PK</span>}
+                            {sub.is_registered && <span className="bg-green-200 text-green-800 px-2 py-0.5 text-xs font-bold uppercase">Usuario</span>}
+                          </div>
+                        </td>
                         <td className="py-2 pr-4 whitespace-nowrap">{new Date(sub.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                         <td className="py-2">
                           <div className="flex gap-2">

@@ -54,9 +54,9 @@ export default function AdminClient() {
       href: '/admin/users',
     },
     {
-      title: 'Newsletter',
-      description: 'Importar y ver suscriptores de newsletter',
-      href: '/admin/newsletter',
+      title: 'Ravers',
+      description: 'Importar y ver ravers registrados',
+      href: '/admin/ravers',
     },
     {
       title: 'Press Kits',

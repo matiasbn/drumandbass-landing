@@ -47,16 +47,30 @@ export async function GET() {
     return NextResponse.json({ subscribers: [], error: 'No autorizado' }, { status: 403 });
   }
 
-  const { data, error } = await supabase
-    .from('newsletter_subscribers')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const [subscribersRes, profilesRes, pkProfilesRes] = await Promise.all([
+    supabase.from('newsletter_subscribers').select('*').order('created_at', { ascending: false }),
+    supabase.from('profiles').select('email'),
+    supabase.from('pk_profiles').select('email'),
+  ]);
 
-  if (error) {
-    return NextResponse.json({ subscribers: [], error: error.message }, { status: 500 });
+  if (subscribersRes.error) {
+    return NextResponse.json({ subscribers: [], error: subscribersRes.error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ subscribers: data });
+  const registeredEmails = new Set(
+    (profilesRes.data || []).map((p) => p.email?.toLowerCase()).filter(Boolean)
+  );
+  const pkEmails = new Set(
+    (pkProfilesRes.data || []).map((p) => p.email?.toLowerCase()).filter(Boolean)
+  );
+
+  const enriched = (subscribersRes.data || []).map((sub) => ({
+    ...sub,
+    is_registered: registeredEmails.has(sub.email?.toLowerCase()),
+    is_pk: pkEmails.has(sub.email?.toLowerCase()),
+  }));
+
+  return NextResponse.json({ subscribers: enriched });
 }
 
 interface ImportRow {

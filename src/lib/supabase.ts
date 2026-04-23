@@ -25,7 +25,7 @@ export interface ChatMessage {
   video_id?: string;
 }
 
-export interface NewsletterSubscriber {
+export interface Raver {
   id: string;
   name: string | null;
   last_name: string | null;
