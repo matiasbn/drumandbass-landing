@@ -134,3 +134,11 @@ CREATE POLICY "Admins can update newsletter subscribers" ON newsletter_subscribe
       SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true
     )
   );
+
+-- Only admins can delete newsletter subscribers
+CREATE POLICY "Admins can delete newsletter subscribers" ON newsletter_subscribers
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true
+    )
+  );

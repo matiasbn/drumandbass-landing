@@ -145,3 +145,73 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ results, summary: { inserted, updated, errors } });
 }
+
+export async function PATCH(request: NextRequest) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServer(cookieStore);
+
+  const { isAdmin } = await verifyAdmin(supabase);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, ...fields } = body;
+
+  if (!id || typeof id !== 'string') {
+    return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
+  }
+
+  const allowed = ['name', 'last_name', 'email', 'instagram'];
+  const updateData: Record<string, unknown> = {};
+  for (const key of Object.keys(fields)) {
+    if (allowed.includes(key)) {
+      updateData[key] = fields[key]?.trim() || null;
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('newsletter_subscribers')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ subscriber: data });
+}
+
+export async function DELETE(request: NextRequest) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServer(cookieStore);
+
+  const { isAdmin } = await verifyAdmin(supabase);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (!id) {
+    return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('newsletter_subscribers')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

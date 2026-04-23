@@ -38,6 +38,9 @@ export default function NewsletterClient() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; last_name: string; email: string; instagram: string }>({ name: '', last_name: '', email: '', instagram: '' });
+  const [saving, setSaving] = useState(false);
 
   const fetchSubscribers = useCallback(async () => {
     setLoadingSubscribers(true);
@@ -149,6 +152,54 @@ export default function NewsletterClient() {
       setImportResults(parsedRows.map((r) => ({ email: r.email, status: 'error', error: 'Error de red' })));
     } finally {
       setImporting(false);
+    }
+  };
+
+  const startEdit = (sub: Subscriber) => {
+    setEditingId(sub.id);
+    setEditForm({
+      name: sub.name || '',
+      last_name: sub.last_name || '',
+      email: sub.email,
+      instagram: sub.instagram || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/newsletter', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingId, ...editForm }),
+      });
+      const data = await res.json();
+      if (data.subscriber) {
+        setSubscribers((prev) => prev.map((s) => s.id === editingId ? data.subscriber : s));
+        setEditingId(null);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string, email: string) => {
+    if (!confirm(`Eliminar suscriptor ${email}?`)) return;
+    try {
+      const res = await fetch(`/api/admin/newsletter?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setSubscribers((prev) => prev.filter((s) => s.id !== id));
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -286,17 +337,91 @@ export default function NewsletterClient() {
                   <th className="text-left py-2 pr-4">Apellido</th>
                   <th className="text-left py-2 pr-4">Email</th>
                   <th className="text-left py-2 pr-4">Instagram</th>
-                  <th className="text-left py-2">Fecha</th>
+                  <th className="text-left py-2 pr-4">Fecha</th>
+                  <th className="text-left py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {subscribers.map((sub) => (
                   <tr key={sub.id} className="border-b border-gray-300">
-                    <td className="py-2 pr-4">{sub.name || '-'}</td>
-                    <td className="py-2 pr-4">{sub.last_name || '-'}</td>
-                    <td className="py-2 pr-4">{sub.email}</td>
-                    <td className="py-2 pr-4">{sub.instagram || '-'}</td>
-                    <td className="py-2">{new Date(sub.created_at).toLocaleDateString('es-CL')}</td>
+                    {editingId === sub.id ? (
+                      <>
+                        <td className="py-2 pr-2">
+                          <input
+                            value={editForm.name}
+                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                            className="w-full border-2 border-black px-2 py-1 text-sm"
+                            placeholder="Nombre"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            value={editForm.last_name}
+                            onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                            className="w-full border-2 border-black px-2 py-1 text-sm"
+                            placeholder="Apellido"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            value={editForm.email}
+                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                            className="w-full border-2 border-black px-2 py-1 text-sm"
+                            placeholder="Email"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            value={editForm.instagram}
+                            onChange={(e) => setEditForm({ ...editForm, instagram: e.target.value })}
+                            className="w-full border-2 border-black px-2 py-1 text-sm"
+                            placeholder="Instagram"
+                          />
+                        </td>
+                        <td className="py-2 pr-4 text-gray-500">{new Date(sub.created_at).toLocaleDateString('es-CL')}</td>
+                        <td className="py-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={saveEdit}
+                              disabled={saving}
+                              className="bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-900 cursor-pointer disabled:opacity-50"
+                            >
+                              {saving ? '...' : 'Guardar'}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="border-2 border-black px-3 py-1 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-2 pr-4">{sub.name || '-'}</td>
+                        <td className="py-2 pr-4">{sub.last_name || '-'}</td>
+                        <td className="py-2 pr-4">{sub.email}</td>
+                        <td className="py-2 pr-4">{sub.instagram || '-'}</td>
+                        <td className="py-2 pr-4">{new Date(sub.created_at).toLocaleDateString('es-CL')}</td>
+                        <td className="py-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => startEdit(sub)}
+                              className="border-2 border-black px-3 py-1 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(sub.id, sub.email)}
+                              className="border-2 border-red-600 text-red-600 px-3 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
