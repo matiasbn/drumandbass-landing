@@ -38,6 +38,8 @@ export default function NewsletterClient() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sortKey, setSortKey] = useState<keyof Subscriber>('created_at');
+  const [sortAsc, setSortAsc] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; last_name: string; email: string; instagram: string }>({ name: '', last_name: '', email: '', instagram: '' });
   const [saving, setSaving] = useState(false);
@@ -203,6 +205,25 @@ export default function NewsletterClient() {
     }
   };
 
+  const toggleSort = (key: keyof Subscriber) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
+  };
+
+  const sortedSubscribers = [...subscribers].sort((a, b) => {
+    const valA = (a[sortKey] ?? '') as string;
+    const valB = (b[sortKey] ?? '') as string;
+    const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base' });
+    return sortAsc ? cmp : -cmp;
+  });
+
+  const sortArrow = (key: keyof Subscriber) =>
+    sortKey === key ? (sortAsc ? ' ↑' : ' ↓') : '';
+
   const statusBadge = (status: string) => {
     switch (status) {
       case 'inserted':
@@ -333,16 +354,16 @@ export default function NewsletterClient() {
             <table className="w-full mono text-sm">
               <thead>
                 <tr className="border-b-4 border-black">
-                  <th className="text-left py-2 pr-4">Nombre</th>
-                  <th className="text-left py-2 pr-4">Apellido</th>
-                  <th className="text-left py-2 pr-4">Email</th>
-                  <th className="text-left py-2 pr-4">Instagram</th>
-                  <th className="text-left py-2 pr-4">Fecha</th>
+                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('name')}>Nombre{sortArrow('name')}</th>
+                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('last_name')}>Apellido{sortArrow('last_name')}</th>
+                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('email')}>Email{sortArrow('email')}</th>
+                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('instagram')}>Instagram{sortArrow('instagram')}</th>
+                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('created_at')}>Fecha{sortArrow('created_at')}</th>
                   <th className="text-left py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {subscribers.map((sub) => (
+                {sortedSubscribers.map((sub) => (
                   <tr key={sub.id} className="border-b border-gray-300">
                     {editingId === sub.id ? (
                       <>
