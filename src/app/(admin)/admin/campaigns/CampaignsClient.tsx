@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
+import { buildEmailHtml } from '@/src/lib/emailTemplate';
 
 type AudienceKey = 'ravers' | 'registered' | 'pks';
 
@@ -199,6 +200,14 @@ export default function CampaignsClient() {
   };
 
   const isStep2Valid = subject.trim() && title.trim();
+
+  const previewHtml = useMemo(() => buildEmailHtml({
+    title: title || 'Titulo del correo',
+    body: bodyHtml || '<p style="color:#666;">Contenido del correo...</p>',
+    imageBase64: imagePreview || undefined,
+    buttonText: buttonText || undefined,
+    buttonUrl: buttonUrl || undefined,
+  }), [title, bodyHtml, imagePreview, buttonText, buttonUrl]);
 
   const handleSend = async () => {
     const totalRecipients = totalUnique + extraEmails.size;
@@ -467,49 +476,18 @@ export default function CampaignsClient() {
           {/* Preview */}
           <div className="lg:col-span-2 brutalist-border bg-white p-6 brutalist-shadow h-fit lg:sticky lg:top-6">
             <h3 className="font-black uppercase text-sm mb-4">Vista previa</h3>
-            <div className="brutalist-border bg-gray-900 text-white p-5 space-y-4">
-              {/* Subject line */}
-              <p className="font-bold text-sm">
-                Asunto: {subject || '(sin asunto)'}
-              </p>
-
-              {/* Email body preview */}
-              <div className="bg-gray-800 p-4 space-y-4">
-                {/* Image */}
-                {imagePreview ? (
-                  <div className="flex justify-center">
-                    <img src={imagePreview} alt="Email" className="max-w-[180px] max-h-[180px] object-contain" />
-                  </div>
-                ) : (
-                  <div className="flex justify-center">
-                    <div className="w-[180px] h-[120px] bg-gray-700 flex items-center justify-center">
-                      <span className="text-gray-500 text-3xl">🖼</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Title */}
-                <h2 className="text-lg font-black leading-tight">
-                  {title || 'Titulo del correo'}
-                </h2>
-
-                {/* Body */}
-                <div
-                  className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{
-                    __html: bodyHtml || '<p class="text-gray-500">Contenido del correo...</p>',
-                  }}
-                />
-
-                {/* CTA Button */}
-                {buttonText && (
-                  <div className="pt-2">
-                    <span className="inline-block bg-[#ff0055] text-white font-bold uppercase text-sm px-6 py-3">
-                      {buttonText}
-                    </span>
-                  </div>
-                )}
+            <div className="brutalist-border overflow-hidden">
+              <div className="bg-black px-3 py-2">
+                <p className="text-white font-bold text-xs mono">
+                  Asunto: {subject || '(sin asunto)'}
+                </p>
               </div>
+              <iframe
+                srcDoc={previewHtml}
+                className="w-full border-0"
+                style={{ height: 500 }}
+                title="Email preview"
+              />
             </div>
           </div>
         </div>

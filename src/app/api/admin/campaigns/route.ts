@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { buildEmailHtml } from '@/src/lib/emailTemplate';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -121,62 +122,6 @@ export async function GET(request: NextRequest) {
   const { counts, totalUnique } = await getEmailsByAudiences(supabase, audiences);
 
   return NextResponse.json({ counts, totalUnique });
-}
-
-function buildEmailHtml({
-  title,
-  body,
-  imageBase64,
-  buttonText,
-  buttonUrl,
-}: {
-  title: string;
-  body: string;
-  imageBase64?: string;
-  buttonText?: string;
-  buttonUrl?: string;
-}) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 0; background-color: #000; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    .container { max-width: 600px; margin: 0 auto; background-color: #111; }
-    .header { background-color: #000; padding: 24px; text-align: center; border-bottom: 4px solid #ff0055; }
-    .header h1 { color: #fff; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin: 0; }
-    .content { padding: 32px 24px; }
-    .email-image { text-align: center; margin-bottom: 24px; }
-    .email-image img { max-width: 100%; height: auto; }
-    .email-title { color: #fff; font-size: 24px; font-weight: 900; line-height: 1.2; margin: 0 0 16px 0; }
-    .email-body { color: #ccc; font-size: 15px; line-height: 1.6; }
-    .email-body a { color: #ff0055; }
-    .cta { text-align: center; padding: 24px 0; }
-    .cta a { display: inline-block; background-color: #ff0055; color: #fff; font-weight: 700; text-transform: uppercase; font-size: 14px; padding: 14px 32px; text-decoration: none; letter-spacing: 1px; }
-    .footer { background-color: #000; padding: 20px 24px; text-align: center; border-top: 4px solid #333; }
-    .footer p { color: #666; font-size: 11px; margin: 4px 0; }
-    .footer a { color: #ff0055; text-decoration: none; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Drum and Bass Chile</h1>
-    </div>
-    <div class="content">
-      ${imageBase64 ? `<div class="email-image"><img src="${imageBase64}" alt="" width="180" /></div>` : ''}
-      <h2 class="email-title">${title}</h2>
-      <div class="email-body">${body}</div>
-      ${buttonText && buttonUrl ? `<div class="cta"><a href="${buttonUrl}">${buttonText}</a></div>` : ''}
-    </div>
-    <div class="footer">
-      <p>Drum and Bass Chile</p>
-      <p><a href="https://drumandbasschile.cl">drumandbasschile.cl</a></p>
-    </div>
-  </div>
-</body>
-</html>`;
 }
 
 export async function POST(request: NextRequest) {
