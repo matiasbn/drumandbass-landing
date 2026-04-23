@@ -33,9 +33,14 @@ CREATE POLICY "Profiles are viewable by everyone" ON profiles
 CREATE POLICY "Users can insert their own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Users can only update their own profile
-CREATE POLICY "Users can update their own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = user_id);
+-- Users can update their own profile, admins can update any profile
+CREATE POLICY "Users can update their own profile or admin can update any" ON profiles
+  FOR UPDATE USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true
+    )
+  );
 
 -- Function to handle updated_at timestamp
 CREATE OR REPLACE FUNCTION handle_updated_at()

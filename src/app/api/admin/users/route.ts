@@ -1,11 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
-  const cookieStore = await cookies();
-
-  const supabase = createServerClient(
+function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
@@ -25,26 +23,32 @@ export async function GET() {
       },
     }
   );
+}
 
-  // Verify the requester is authenticated
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+async function verifyAdmin(supabase: ReturnType<typeof createSupabaseServer>) {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return { user: null, isAdmin: false };
 
-  if (authError || !user) {
-    return NextResponse.json({ users: [], error: 'No autenticado' }, { status: 401 });
-  }
-
-  // Verify the requester is admin
   const { data: adminProfile } = await supabase
     .from('profiles')
     .select('is_admin')
     .eq('user_id', user.id)
     .single();
 
-  if (!adminProfile?.is_admin) {
+  return { user, isAdmin: adminProfile?.is_admin === true };
+}
+
+const EDITABLE_FIELDS = ['name', 'username', 'email', 'score', 'high_score', 'is_admin', 'player_color', 'costume_id', 'accessory_id', 'face_type'];
+
+export async function GET() {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServer(cookieStore);
+
+  const { isAdmin } = await verifyAdmin(supabase);
+  if (!isAdmin) {
     return NextResponse.json({ users: [], error: 'No autorizado' }, { status: 403 });
   }
 
-  // Fetch all profiles
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -55,4 +59,46 @@ export async function GET() {
   }
 
   return NextResponse.json({ users: data });
+}
+
+export async function PATCH(request: NextRequest) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServer(cookieStore);
+
+  const { isAdmin } = await verifyAdmin(supabase);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, ...fields } = body;
+
+  if (!id || typeof id !== 'string') {
+    return NextResponse.json({ error: 'ID de usuario requerido' }, { status: 400 });
+  }
+
+  // Only allow editable fields
+  const updateData: Record<string, unknown> = {};
+  for (const key of Object.keys(fields)) {
+    if (EDITABLE_FIELDS.includes(key)) {
+      updateData[key] = fields[key];
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'No hay campos validos para actualizar' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ user: data });
 }
