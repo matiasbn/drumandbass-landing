@@ -63,6 +63,11 @@ export default function AdminClient() {
       description: 'Ver y gestionar press kits de artistas',
       href: '/admin/presskits',
     },
+    {
+      title: 'Campañas',
+      description: 'Componer y enviar emails a la comunidad',
+      href: '/admin/campaigns',
+    },
   ];
 
   return (
