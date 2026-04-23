@@ -25,6 +25,15 @@ export interface ChatMessage {
   video_id?: string;
 }
 
+export interface Raver {
+  id: string;
+  name: string | null;
+  last_name: string | null;
+  email: string;
+  instagram: string | null;
+  created_at: string;
+}
+
 export interface UserProfile {
   id: string;
   user_id: string;
@@ -38,6 +47,7 @@ export interface UserProfile {
   accessory_id?: string;
   score?: number;
   high_score?: number;
+  is_admin?: boolean;
   created_at: string;
   updated_at: string;
 }
