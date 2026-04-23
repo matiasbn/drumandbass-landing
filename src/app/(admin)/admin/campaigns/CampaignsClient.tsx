@@ -85,6 +85,10 @@ export default function CampaignsClient() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [totalUnique, setTotalUnique] = useState(0);
   const [loadingCounts, setLoadingCounts] = useState(false);
+  const [emailSearch, setEmailSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [extraEmails, setExtraEmails] = useState<Set<string>>(new Set());
 
   // Campaign fields
   const [campaignName, setCampaignName] = useState('');
@@ -95,6 +99,8 @@ export default function CampaignsClient() {
   const [buttonText, setButtonText] = useState('');
   const [buttonUrl, setButtonUrl] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ success: boolean; sent: number; failed: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
@@ -140,6 +146,40 @@ export default function CampaignsClient() {
     }
   }, [selected]);
 
+  const handleSearchEmail = async (query: string) => {
+    setEmailSearch(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/admin/campaigns?search=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch {
+      // ignore
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const addExtraEmail = (email: string) => {
+    setExtraEmails(prev => new Set(prev).add(email));
+    setEmailSearch('');
+    setSearchResults([]);
+  };
+
+  const removeExtraEmail = (email: string) => {
+    setExtraEmails(prev => {
+      const next = new Set(prev);
+      next.delete(email);
+      return next;
+    });
+  };
+
+  const hasAudience = selected.size > 0 || extraEmails.size > 0;
+
   const handleNextFromAudience = async () => {
     await fetchCounts();
     setStep(2);
@@ -159,6 +199,39 @@ export default function CampaignsClient() {
   };
 
   const isStep2Valid = subject.trim() && title.trim();
+
+  const handleSend = async () => {
+    const totalRecipients = totalUnique + extraEmails.size;
+    if (!confirm(`Estas a punto de enviar esta campaña a ${totalRecipients} destinatarios. Continuar?`)) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audiences: Array.from(selected),
+          extraEmails: Array.from(extraEmails),
+          subject,
+          title,
+          bodyHtml,
+          imageBase64: imagePreview || undefined,
+          buttonText: buttonText || undefined,
+          buttonUrl: buttonUrl || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSendResult({ success: false, sent: 0, failed: 0, errors: [data.error] });
+      } else {
+        setSendResult(data);
+      }
+    } catch (err) {
+      setSendResult({ success: false, sent: 0, failed: 0, errors: [err instanceof Error ? err.message : 'Error de red'] });
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Label helper
   const fieldLabel = (label: string, hint?: string) => (
@@ -203,10 +276,62 @@ export default function CampaignsClient() {
               </label>
             ))}
           </div>
-          <div className="flex justify-end">
+          {/* Individual email search */}
+          <div className="mt-6 pt-6 border-t-4 border-black">
+            <h3 className="font-black uppercase text-sm mb-3">Agregar emails individuales</h3>
+            <div className="relative">
+              <input
+                type="text"
+                value={emailSearch}
+                onChange={e => handleSearchEmail(e.target.value)}
+                placeholder="Buscar por email..."
+                className="w-full brutalist-border px-4 py-2 mono text-sm focus:outline-none"
+              />
+              {searchLoading && (
+                <div className="absolute right-3 top-2.5">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-r-transparent" />
+                </div>
+              )}
+              {searchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 brutalist-border bg-white max-h-[200px] overflow-y-auto">
+                  {searchResults.map(email => (
+                    <button
+                      key={email}
+                      onClick={() => addExtraEmail(email)}
+                      disabled={extraEmails.has(email)}
+                      className="w-full text-left px-4 py-2 mono text-sm hover:bg-gray-100 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed border-b border-gray-200 last:border-b-0"
+                    >
+                      {email} {extraEmails.has(email) && '(agregado)'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {extraEmails.size > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {Array.from(extraEmails).map(email => (
+                  <span
+                    key={email}
+                    className="brutalist-border px-3 py-1 mono text-xs bg-gray-50 flex items-center gap-2"
+                  >
+                    {email}
+                    <button
+                      onClick={() => removeExtraEmail(email)}
+                      className="font-bold hover:text-red-600 cursor-pointer"
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end mt-6">
             <button
               onClick={handleNextFromAudience}
-              disabled={selected.size === 0}
+              disabled={!hasAudience}
               className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Siguiente →
@@ -423,28 +548,54 @@ export default function CampaignsClient() {
                     </span>
                   ))}
                 </div>
-                <p className="mt-2 font-bold">Total destinatarios unicos: {totalUnique}</p>
+                {extraEmails.size > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-300">
+                    <p className="font-bold mb-1">Emails individuales: {extraEmails.size}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {Array.from(extraEmails).map(email => (
+                        <span key={email} className="text-[10px] bg-gray-100 px-1">{email}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2 font-bold">Total destinatarios unicos: {totalUnique + extraEmails.size}</p>
               </div>
             </div>
+
+            {sendResult && (
+              <div className={`brutalist-border p-4 mt-4 ${sendResult.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                {sendResult.success ? (
+                  <p className="font-bold text-green-800">
+                    Campaña enviada exitosamente: {sendResult.sent} emails enviados
+                  </p>
+                ) : (
+                  <div>
+                    <p className="font-bold text-red-800">
+                      Error al enviar: {sendResult.sent} enviados, {sendResult.failed} fallidos
+                    </p>
+                    {sendResult.errors.map((err, i) => (
+                      <p key={i} className="mono text-xs text-red-600 mt-1">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-4 mt-6">
               <button
                 onClick={() => setStep(2)}
-                className="brutalist-border bg-white text-black px-6 py-3 font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer"
+                disabled={sending}
+                className="brutalist-border bg-white text-black px-6 py-3 font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
               >
                 ← Anterior
               </button>
-              <div className="relative group">
-                <button
-                  disabled
-                  className="brutalist-border bg-gray-300 text-gray-500 px-6 py-3 font-bold uppercase cursor-not-allowed"
-                >
-                  Enviar Campaña
-                </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block brutalist-border bg-black text-white text-xs px-3 py-1 whitespace-nowrap">
-                  Proximamente
-                </div>
-              </div>
+              <button
+                onClick={handleSend}
+                disabled={sending || sendResult?.success === true}
+                className="brutalist-border bg-[#ff0055] text-white px-6 py-3 font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sending ? 'Enviando...' : sendResult?.success ? 'Enviado' : 'Enviar Campaña'}
+              </button>
             </div>
           </div>
         </div>
