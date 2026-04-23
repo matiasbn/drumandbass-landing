@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -103,6 +103,7 @@ export default function CampaignsClient() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; sent: number; failed: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -200,6 +201,19 @@ export default function CampaignsClient() {
   };
 
   const isStep2Valid = subject.trim() && title.trim();
+
+  const resizeIframe = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (iframe?.contentDocument?.body) {
+      iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px';
+    }
+  }, []);
+
+  useEffect(() => {
+    // Resize after content updates with a small delay for render
+    const timer = setTimeout(resizeIframe, 100);
+    return () => clearTimeout(timer);
+  }, [title, bodyHtml, imagePreview, buttonText, buttonUrl, resizeIframe]);
 
   const previewHtml = useMemo(() => buildEmailHtml({
     title: title || 'Titulo del correo',
@@ -483,9 +497,15 @@ export default function CampaignsClient() {
                 </p>
               </div>
               <iframe
+                ref={iframeRef}
                 srcDoc={previewHtml}
                 className="w-full border-0"
-                style={{ height: 500 }}
+                onLoad={() => {
+                  const iframe = iframeRef.current;
+                  if (iframe?.contentDocument?.body) {
+                    iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px';
+                  }
+                }}
                 title="Email preview"
               />
             </div>
