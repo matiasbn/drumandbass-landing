@@ -38,6 +38,7 @@ export interface UserProfile {
   accessory_id?: string;
   score?: number;
   high_score?: number;
+  is_admin?: boolean;
   created_at: string;
   updated_at: string;
 }
