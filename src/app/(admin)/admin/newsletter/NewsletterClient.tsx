@@ -206,7 +206,7 @@ export default function NewsletterClient() {
         {parseError && (
           <p className="text-red-600 mono text-sm mb-4">{parseError}</p>
         )}
-        {skippedRows.length > 0 && (
+        {skippedRows.length > 0 && !parseError && (
           <p className="text-gray-600 mono text-sm mb-4">
             {skippedRows.length} email{skippedRows.length > 1 ? 's' : ''} ya existente{skippedRows.length > 1 ? 's' : ''} filtrado{skippedRows.length > 1 ? 's' : ''} automaticamente
           </p>
