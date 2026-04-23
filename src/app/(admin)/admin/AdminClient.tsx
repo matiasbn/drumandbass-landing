@@ -58,6 +58,11 @@ export default function AdminClient() {
       description: 'Importar y ver suscriptores de newsletter',
       href: '/admin/newsletter',
     },
+    {
+      title: 'Press Kits',
+      description: 'Ver y gestionar press kits de artistas',
+      href: '/admin/presskits',
+    },
   ];
 
   return (
