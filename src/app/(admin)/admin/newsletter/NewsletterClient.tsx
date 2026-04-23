@@ -399,7 +399,7 @@ export default function NewsletterClient() {
                             placeholder="Instagram"
                           />
                         </td>
-                        <td className="py-2 pr-4 text-gray-500">{new Date(sub.created_at).toLocaleDateString('es-CL')}</td>
+                        <td className="py-2 pr-4 text-gray-500 whitespace-nowrap">{new Date(sub.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                         <td className="py-2">
                           <div className="flex gap-2">
                             <button
@@ -424,7 +424,7 @@ export default function NewsletterClient() {
                         <td className="py-2 pr-4">{sub.last_name || '-'}</td>
                         <td className="py-2 pr-4">{sub.email}</td>
                         <td className="py-2 pr-4">{sub.instagram || '-'}</td>
-                        <td className="py-2 pr-4">{new Date(sub.created_at).toLocaleDateString('es-CL')}</td>
+                        <td className="py-2 pr-4 whitespace-nowrap">{new Date(sub.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                         <td className="py-2">
                           <div className="flex gap-2">
                             <button
