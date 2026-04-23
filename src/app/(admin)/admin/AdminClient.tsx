@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 
 export default function AdminClient() {
@@ -46,18 +47,45 @@ export default function AdminClient() {
     );
   }
 
+  const menuItems = [
+    {
+      title: 'Usuarios',
+      description: 'Ver y gestionar usuarios registrados',
+      href: '/admin/users',
+    },
+  ];
+
   return (
-    <div className="brutalist-border bg-white p-8 brutalist-shadow text-center max-w-md">
-      <h1 className="text-3xl font-black uppercase mb-4">Admin Panel</h1>
-      <p className="mono text-lg mb-6">
-        Bienvenido, <span className="font-bold">{profile?.name || user.email}</span>
-      </p>
-      <button
-        onClick={() => signOut()}
-        className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors w-full cursor-pointer"
-      >
-        Cerrar sesion
-      </button>
+    <div className="w-full max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-black uppercase">Admin Panel</h1>
+          <p className="mono text-sm text-gray-600">
+            Bienvenido, {profile?.name || user.email}
+          </p>
+        </div>
+        <button
+          onClick={() => signOut()}
+          className="brutalist-border bg-black text-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-900 transition-colors cursor-pointer"
+        >
+          Cerrar sesion
+        </button>
+      </div>
+
+      {/* Menu Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {menuItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="brutalist-border bg-white p-6 brutalist-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+          >
+            <h2 className="text-xl font-black uppercase mb-2">{item.title}</h2>
+            <p className="mono text-sm text-gray-600">{item.description}</p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
