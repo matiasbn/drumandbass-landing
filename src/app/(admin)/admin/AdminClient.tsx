@@ -53,6 +53,11 @@ export default function AdminClient() {
       description: 'Ver y gestionar usuarios registrados',
       href: '/admin/users',
     },
+    {
+      title: 'Newsletter',
+      description: 'Importar y ver suscriptores de newsletter',
+      href: '/admin/newsletter',
+    },
   ];
 
   return (

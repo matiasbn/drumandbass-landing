@@ -25,6 +25,15 @@ export interface ChatMessage {
   video_id?: string;
 }
 
+export interface NewsletterSubscriber {
+  id: string;
+  name: string | null;
+  last_name: string | null;
+  email: string;
+  instagram: string | null;
+  created_at: string;
+}
+
 export interface UserProfile {
   id: string;
   user_id: string;
