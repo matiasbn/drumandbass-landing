@@ -85,7 +85,7 @@ function PresskitEditor() {
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
   const [mixes, setMixes] = useState<PresskitMix[]>([]);
   const [links, setLinks] = useState<PresskitLink[]>([]);
-  const [published, setPublished] = useState(false);
+  const [published, setPublished] = useState(true);
   const [editingSlug, setEditingSlug] = useState(false);
   const [newSlug, setNewSlug] = useState('');
   const [slugError, setSlugError] = useState('');

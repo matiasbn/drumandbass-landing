@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       socials: body.socials || [],
       mixes: body.mixes || [],
       links: body.links || [],
-      published: body.published || false,
+      published: true,
     })
     .select()
     .single();

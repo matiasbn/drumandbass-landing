@@ -129,6 +129,24 @@ export default function PresskitsClient() {
     }
   };
 
+  const togglePublished = async (pk: PresskitItem) => {
+    try {
+      const res = await fetch('/api/admin/presskits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pk.id, published: !pk.published }),
+      });
+      const data = await res.json();
+      if (data.presskit) {
+        setPresskits((prev) =>
+          prev.map((p) => p.id === pk.id ? { ...p, published: data.presskit.published } : p)
+        );
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleDelete = async (pk: PresskitItem) => {
     if (!confirm(`Eliminar press kit de ${pk.artist_name}?`)) return;
     try {
@@ -251,10 +269,12 @@ export default function PresskitsClient() {
                           ) : '-'}
                         </td>
                         <td className="py-2 pr-4">
-                          {pk.published
-                            ? <span className="bg-green-200 text-green-800 px-2 py-0.5 text-xs font-bold uppercase">Publicado</span>
-                            : <span className="bg-gray-200 text-gray-600 px-2 py-0.5 text-xs font-bold uppercase">Borrador</span>
-                          }
+                          <button
+                            onClick={() => togglePublished(pk)}
+                            className={`px-2 py-0.5 text-xs font-bold uppercase cursor-pointer ${pk.published ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600'}`}
+                          >
+                            {pk.published ? 'Publicado' : 'Borrador'}
+                          </button>
                         </td>
                         <td className="py-2 pr-4 whitespace-nowrap">
                           {new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
