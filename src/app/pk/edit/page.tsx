@@ -255,6 +255,12 @@ function PresskitEditor() {
       return;
     }
 
+    if (photoUrls.length === 0) {
+      setSaveMessage('Error: Debes subir al menos una foto para tu presskit');
+      setSaving(false);
+      return;
+    }
+
     const body = {
       artist_name: artistName,
       real_name: realName,
