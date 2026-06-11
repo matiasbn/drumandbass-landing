@@ -36,6 +36,8 @@ const Leaderboard: React.FC = () => {
 };
 
 const SPECIAL_NAMES_ES = ['Onda', 'Spotlight', 'Confetti', 'Levitar', 'Terremoto'];
+const SPECIAL_EMOJIS = ['\u{1F30A}', '\u{1F4A1}', '\u{1F389}', '\u{1F9D8}', '\u{1F4A5}'];
+const SPECIAL_DESCRIPTIONS = ['Onda de choque', 'Luz cenital', 'Lluvia confetti', 'Levitaci\u00f3n', 'Terremoto'];
 
 export const ScoreHUD: React.FC = () => {
   const {
@@ -137,7 +139,7 @@ export const ScoreHUD: React.FC = () => {
 
         {/* Special move buttons - always visible when unlocked */}
         {enabled && unlockedSpecials > 0 && (
-          <div className="flex flex-col gap-1 w-[140px]">
+          <div className="flex flex-col gap-1.5 w-[180px]">
             <div className="text-[9px] font-mono text-white/40 text-center">
               MOVIMIENTOS ESPECIALES {specialCharges > 0 && <span className="text-[#ff0055]">({specialCharges})</span>}
             </div>
@@ -149,19 +151,41 @@ export const ScoreHUD: React.FC = () => {
                   key={i}
                   onClick={() => { if (canUse) useSpecial(i); }}
                   disabled={!canUse}
-                  className={`w-full px-2 py-1 text-[10px] font-mono flex items-center gap-1.5 transition-all border ${
+                  className={`w-full px-2.5 py-2 font-mono flex items-center gap-2.5 transition-all border min-h-[36px] ${
                     canUse
-                      ? 'bg-black/70 border-[#ff0055]/50 text-[#ff0055] hover:bg-[#ff0055]/20 hover:border-[#ff0055] cursor-pointer'
+                      ? 'bg-black/70 border-[#ff0055]/60 text-[#ff0055] hover:bg-[#ff0055]/20 hover:border-[#ff0055] cursor-pointer animate-pulse-glow'
                       : unlocked
                         ? 'bg-black/50 border-white/10 text-white/30 cursor-not-allowed'
                         : 'bg-black/30 border-white/5 text-white/15 cursor-not-allowed'
                   }`}
+                  style={canUse ? {
+                    boxShadow: '0 0 8px rgba(255,0,85,0.4), inset 0 0 8px rgba(255,0,85,0.1)',
+                    animation: 'pulseGlow 2s ease-in-out infinite',
+                  } : undefined}
                 >
-                  <RiFlashlightLine className="w-3 h-3 shrink-0" />
-                  <span className="flex-1 text-left">{unlocked ? name : `??? (${SPECIAL_THRESHOLDS[i]}pts)`}</span>
+                  <span className="text-lg shrink-0 leading-none">{unlocked ? SPECIAL_EMOJIS[i] : '\u{1F512}'}</span>
+                  <div className="flex-1 text-left">
+                    {unlocked ? (
+                      <>
+                        <div className="text-[11px] font-bold leading-tight">{name}</div>
+                        <div className="text-[9px] opacity-60 leading-tight">{SPECIAL_DESCRIPTIONS[i]}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-[11px] font-bold leading-tight">???</div>
+                        <div className="text-[9px] opacity-40 leading-tight">{SPECIAL_THRESHOLDS[i]} pts</div>
+                      </>
+                    )}
+                  </div>
                 </button>
               );
             })}
+            <style>{`
+              @keyframes pulseGlow {
+                0%, 100% { box-shadow: 0 0 6px rgba(255,0,85,0.3), inset 0 0 6px rgba(255,0,85,0.05); }
+                50% { box-shadow: 0 0 14px rgba(255,0,85,0.6), inset 0 0 14px rgba(255,0,85,0.15); }
+              }
+            `}</style>
           </div>
         )}
       </div>

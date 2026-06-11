@@ -1,32 +1,61 @@
 'use client';
 
 import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { RiArrowUpLine, RiHandHeartLine, RiLoopLeftLine, RiMusic2Line, RiScissorsCutLine, RiRefreshLine, RiHand2, RiFlashlightLine } from '@remixicon/react';
-import { useScore, SPECIAL_THRESHOLDS } from '../ScoreContext';
+import { RiArrowUpLine, RiCrosshair2Line, RiBattery2ChargeLine, RiMusic2Line } from '@remixicon/react';
+import { useCamera } from '../CameraContext';
 
 function dispatchKey(key: string, type: 'keydown' | 'keyup') {
   window.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true }));
+}
+
+function dispatchMouse(button: number, type: 'mousedown' | 'mouseup') {
+  window.dispatchEvent(new MouseEvent(type, { button, bubbles: true }));
 }
 
 const JOYSTICK_SIZE = 120;
 const THUMB_SIZE = 48;
 const DEADZONE = 10;
 
+// Camera look zone
+const LOOK_SENSITIVITY = 0.006;
+
 export const MobileControls: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [danceMenuOpen, setDanceMenuOpen] = useState(false);
+  const { cameraYawRef, cameraPitchRef } = useCamera();
+
+  // Joystick refs
   const joystickRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const activeKeysRef = useRef<Set<string>>(new Set());
   const touchIdRef = useRef<number | null>(null);
 
+  // Camera look refs
+  const lookTouchIdRef = useRef<number | null>(null);
+  const lookLastXRef = useRef(0);
+  const lookLastYRef = useRef(0);
+
+  // Grenade charge refs
+  const grenadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const grenadeChargingRef = useRef(false);
+
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    const checkLayout = () => {
+      const mq = window.matchMedia('(max-width: 1024px)');
+      setIsMobile(mq.matches);
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    checkLayout();
+    window.addEventListener('resize', checkLayout);
+    window.addEventListener('orientationchange', () => setTimeout(checkLayout, 100));
+    return () => {
+      window.removeEventListener('resize', checkLayout);
+      window.removeEventListener('orientationchange', () => {});
+    };
   }, []);
 
+  // --- Joystick (left side) ---
   const updateJoystick = useCallback((clientX: number, clientY: number) => {
     const el = joystickRef.current;
     const thumb = thumbRef.current;
@@ -55,11 +84,9 @@ export const MobileControls: React.FC = () => {
       if (dx > DEADZONE) newKeys.add('ArrowRight');
     }
 
-    // Release keys no longer active
     for (const k of activeKeysRef.current) {
       if (!newKeys.has(k)) dispatchKey(k, 'keyup');
     }
-    // Press newly active keys
     for (const k of newKeys) {
       if (!activeKeysRef.current.has(k)) dispatchKey(k, 'keydown');
     }
@@ -99,237 +126,183 @@ export const MobileControls: React.FC = () => {
     }
   }, [resetJoystick]);
 
-  const onActionDown = useCallback((key: string) => (e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
-    dispatchKey(key, 'keydown');
-    if (key === ' ') {
-      setTimeout(() => dispatchKey(key, 'keyup'), 50);
+  // --- Camera look (right side touch area) ---
+  const onLookTouchStart = useCallback((e: React.TouchEvent) => {
+    if (lookTouchIdRef.current !== null) return;
+    const touch = e.changedTouches[0];
+    lookTouchIdRef.current = touch.identifier;
+    lookLastXRef.current = touch.clientX;
+    lookLastYRef.current = touch.clientY;
+  }, []);
+
+  const onLookTouchMove = useCallback((e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === lookTouchIdRef.current) {
+        const dx = touch.clientX - lookLastXRef.current;
+        const dy = touch.clientY - lookLastYRef.current;
+        cameraYawRef.current -= dx * LOOK_SENSITIVITY;
+        cameraPitchRef.current = Math.max(-0.3, Math.min(1.2, cameraPitchRef.current + dy * LOOK_SENSITIVITY));
+        lookLastXRef.current = touch.clientX;
+        lookLastYRef.current = touch.clientY;
+        return;
+      }
+    }
+  }, [cameraYawRef, cameraPitchRef]);
+
+  const onLookTouchEnd = useCallback((e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === lookTouchIdRef.current) {
+        lookTouchIdRef.current = null;
+        return;
+      }
     }
   }, []);
 
-  const onActionUp = useCallback((key: string) => (e: React.TouchEvent | React.MouseEvent) => {
+  // --- Action buttons ---
+  const onShoot = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    if (key !== ' ') dispatchKey(key, 'keyup');
+    dispatchMouse(0, 'mousedown');
+    setTimeout(() => dispatchMouse(0, 'mouseup'), 50);
   }, []);
 
-  const {
-    specialCharges,
-    unlockedSpecials,
-    enabled,
-    useSpecial,
-  } = useScore();
+  const onGrenadeStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    grenadeChargingRef.current = true;
+    dispatchMouse(2, 'mousedown');
+  }, []);
 
-  const SPECIAL_NAMES_ES = ['Onda', 'Spotlight', 'Confetti', 'Levitar', 'Terremoto'];
+  const onGrenadeEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (grenadeChargingRef.current) {
+      grenadeChargingRef.current = false;
+      dispatchMouse(2, 'mouseup');
+    }
+  }, []);
+
+  const onJump = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    dispatchKey(' ', 'keydown');
+    setTimeout(() => dispatchKey(' ', 'keyup'), 50);
+  }, []);
+
+  const onDance = useCallback((key: string) => (e: React.TouchEvent) => {
+    e.preventDefault();
+    dispatchKey(key, 'keydown');
+    setTimeout(() => dispatchKey(key, 'keyup'), 50);
+    setDanceMenuOpen(false);
+  }, []);
+
+  if (!isMobile) return null;
+
+  // Portrait orientation prompt
+  if (isPortrait) {
+    return (
+      <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-4 text-white font-mono">
+        <div className="text-4xl animate-pulse">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2z" />
+            <path d="M12 18h.01" />
+          </svg>
+        </div>
+        <div className="text-lg text-[#00ccff]">GIRA TU DISPOSITIVO</div>
+        <div className="text-xs text-white/50">El club funciona mejor en horizontal</div>
+      </div>
+    );
+  }
 
   const btnClass =
-    'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border border-white/20 text-white font-mono font-bold select-none active:bg-white/20 transition-colors';
+    'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border select-none active:bg-white/20 transition-colors touch-none';
 
   return (
-    <div className="absolute inset-0 z-30 pointer-events-none touch-none">
-      {/* Left side — Joystick, mobile only */}
-      {isMobile && (
-        <div className="pointer-events-auto absolute bottom-28 left-4 flex flex-col items-center gap-3 touch-none">
-          {/* Joystick */}
+    <div className="fixed inset-0 z-30 pointer-events-none touch-none">
+      {/* Left side — Joystick */}
+      <div className="pointer-events-auto absolute bottom-6 left-4 touch-none">
+        <div
+          ref={joystickRef}
+          className="rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none relative"
+          style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
+          onTouchStart={onJoystickTouchStart}
+          onTouchMove={onJoystickTouchMove}
+          onTouchEnd={onJoystickTouchEnd}
+          onTouchCancel={resetJoystick}
+        >
           <div
-            ref={joystickRef}
-            className="rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none"
-            style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
-            onTouchStart={onJoystickTouchStart}
-            onTouchMove={onJoystickTouchMove}
-            onTouchEnd={onJoystickTouchEnd}
-            onTouchCancel={resetJoystick}
-          >
-            <div
-              ref={thumbRef}
-              className="absolute rounded-full bg-white/40 border border-white/60"
-              style={{
-                width: THUMB_SIZE,
-                height: THUMB_SIZE,
-                left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-                top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-              }}
-            />
-          </div>
+            ref={thumbRef}
+            className="absolute rounded-full bg-white/40 border border-white/60"
+            style={{
+              width: THUMB_SIZE,
+              height: THUMB_SIZE,
+              left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+              top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+            }}
+          />
         </div>
-      )}
+      </div>
 
-      {/* Right side — Jump + Dance column above chat toggle, mobile only */}
-      {isMobile && (
-        <div className="pointer-events-auto fixed right-4 flex flex-row items-end gap-2 touch-none z-[9998]" style={{ bottom: '64px' }}>
-          {/* Jump button — left of dance column */}
-          <button
-            className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
-            onTouchStart={onActionDown(' ')}
-            onTouchEnd={onActionUp(' ')}
-            onMouseDown={onActionDown(' ')}
-            onMouseUp={onActionUp(' ')}
-          >
-            <RiArrowUpLine className="w-6 h-6" />
-          </button>
+      {/* Right side — Camera look zone (invisible, covers right half) */}
+      <div
+        className="pointer-events-auto absolute touch-none"
+        style={{ top: 0, right: 0, bottom: 0, width: '50%' }}
+        onTouchStart={onLookTouchStart}
+        onTouchMove={onLookTouchMove}
+        onTouchEnd={onLookTouchEnd}
+        onTouchCancel={onLookTouchEnd}
+      />
 
-          {/* Dance moves column */}
-          <div className="flex flex-col gap-1.5">
-            <button
-              className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('1')}
-              onTouchEnd={onActionUp('1')}
-              onMouseDown={onActionDown('1')}
-              onMouseUp={onActionUp('1')}
-            >
-              <RiHandHeartLine className="w-4 h-4" />
-            </button>
-            <button
-              className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('2')}
-              onTouchEnd={onActionUp('2')}
-              onMouseDown={onActionDown('2')}
-              onMouseUp={onActionUp('2')}
-            >
-              <RiLoopLeftLine className="w-4 h-4" />
-            </button>
-            <button
-              className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('3')}
-              onTouchEnd={onActionUp('3')}
-              onMouseDown={onActionDown('3')}
-              onMouseUp={onActionUp('3')}
-            >
-              <RiMusic2Line className="w-4 h-4" />
-            </button>
-            <button
-              className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('4')}
-              onTouchEnd={onActionUp('4')}
-              onMouseDown={onActionDown('4')}
-              onMouseUp={onActionUp('4')}
-            >
-              <RiScissorsCutLine className="w-4 h-4" />
-            </button>
-            <button
-              className={`${btnClass} w-10 h-10 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('5')}
-              onTouchEnd={onActionUp('5')}
-              onMouseDown={onActionDown('5')}
-              onMouseUp={onActionUp('5')}
-            >
-              <RiRefreshLine className="w-4 h-4" />
-            </button>
-            <button
-              className={`${btnClass} w-10 h-10 border-[#00ccff]/40 text-[#00ccff]`}
-              onTouchStart={onActionDown('6')}
-              onTouchEnd={onActionUp('6')}
-              onMouseDown={onActionDown('6')}
-              onMouseUp={onActionUp('6')}
-            >
-              <RiHand2 className="w-4 h-4" />
-            </button>
+      {/* Right side — Action buttons */}
+      <div className="pointer-events-auto absolute bottom-6 right-4 flex items-end gap-3 touch-none">
+        {/* Grenade (hold) */}
+        <button
+          className={`${btnClass} w-14 h-14 border-[#ff8800]/40 text-[#ff8800]`}
+          onTouchStart={onGrenadeStart}
+          onTouchEnd={onGrenadeEnd}
+          onTouchCancel={onGrenadeEnd}
+        >
+          <RiBattery2ChargeLine className="w-6 h-6" />
+        </button>
+
+        {/* Shoot */}
+        <button
+          className={`${btnClass} w-16 h-16 border-[#ff0055]/50 text-[#ff0055]`}
+          onTouchStart={onShoot}
+        >
+          <RiCrosshair2Line className="w-7 h-7" />
+        </button>
+
+        {/* Jump */}
+        <button
+          className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
+          onTouchStart={onJump}
+        >
+          <RiArrowUpLine className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Dance menu toggle — top right */}
+      <div className="pointer-events-auto absolute top-4 right-4 touch-none">
+        <button
+          className={`${btnClass} w-10 h-10 ${danceMenuOpen ? 'border-[#ff0055]/60 text-[#ff0055] bg-[#ff0055]/10' : 'border-white/20 text-white/60'}`}
+          onTouchStart={(e) => { e.preventDefault(); setDanceMenuOpen(o => !o); }}
+        >
+          <RiMusic2Line className="w-5 h-5" />
+        </button>
+
+        {/* Dance radial menu */}
+        {danceMenuOpen && (
+          <div className="absolute top-12 right-0 flex flex-col gap-1.5 bg-black/80 backdrop-blur border border-white/10 p-2 rounded-lg">
+            {['Hands Up', 'Spin', 'Headbang', 'Split', 'Backflip'].map((name, i) => (
+              <button
+                key={i}
+                className="px-3 py-1.5 text-xs font-mono text-[#ff0055] border border-[#ff0055]/30 rounded active:bg-[#ff0055]/20"
+                onTouchStart={onDance(String(i + 1))}
+              >
+                {name}
+              </button>
+            ))}
           </div>
-
-          {/* Special moves */}
-          {enabled && unlockedSpecials > 0 && (
-            <div className="flex flex-col gap-1 w-[120px]">
-              <div className="text-[8px] font-mono text-white/40 text-center">
-                ESPECIALES {specialCharges > 0 && <span className="text-[#ff0055]">({specialCharges})</span>}
-              </div>
-              {SPECIAL_NAMES_ES.map((name, i) => {
-                const unlocked = i < unlockedSpecials;
-                const canUse = unlocked && specialCharges > 0;
-                return (
-                  <button
-                    key={i}
-                    onTouchStart={(e) => { e.preventDefault(); if (canUse) useSpecial(i); }}
-                    disabled={!canUse}
-                    className={`w-full px-2 py-1 text-[10px] font-mono flex items-center gap-1 transition-all border rounded ${
-                      canUse
-                        ? 'bg-black/70 border-[#ff0055]/50 text-[#ff0055] active:bg-[#ff0055]/20'
-                        : unlocked
-                          ? 'bg-black/50 border-white/10 text-white/30'
-                          : 'bg-black/30 border-white/5 text-white/15'
-                    }`}
-                  >
-                    <RiFlashlightLine className="w-3 h-3 shrink-0" />
-                    <span className="flex-1 text-left">{unlocked ? name : `??? (${SPECIAL_THRESHOLDS[i]}pts)`}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Desktop: action buttons left of chat panel */}
-      {!isMobile && (
-        <div className="pointer-events-auto absolute bottom-4 right-[344px] flex flex-col items-center gap-3 touch-none">
-          {/* Jump */}
-          <button
-            className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41]`}
-            onTouchStart={onActionDown(' ')}
-            onTouchEnd={onActionUp(' ')}
-            onMouseDown={onActionDown(' ')}
-            onMouseUp={onActionUp(' ')}
-          >
-            <RiArrowUpLine className="w-6 h-6" />
-          </button>
-
-          {/* Dance moves row */}
-          <div className="flex gap-2">
-            <button
-              className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('1')}
-              onTouchEnd={onActionUp('1')}
-              onMouseDown={onActionDown('1')}
-              onMouseUp={onActionUp('1')}
-            >
-              <RiHandHeartLine className="w-5 h-5" />
-            </button>
-            <button
-              className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('2')}
-              onTouchEnd={onActionUp('2')}
-              onMouseDown={onActionDown('2')}
-              onMouseUp={onActionUp('2')}
-            >
-              <RiLoopLeftLine className="w-5 h-5" />
-            </button>
-            <button
-              className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('3')}
-              onTouchEnd={onActionUp('3')}
-              onMouseDown={onActionDown('3')}
-              onMouseUp={onActionUp('3')}
-            >
-              <RiMusic2Line className="w-5 h-5" />
-            </button>
-            <button
-              className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('4')}
-              onTouchEnd={onActionUp('4')}
-              onMouseDown={onActionDown('4')}
-              onMouseUp={onActionUp('4')}
-            >
-              <RiScissorsCutLine className="w-5 h-5" />
-            </button>
-            <button
-              className={`${btnClass} w-11 h-11 border-[#ff0055]/40 text-[#ff0055]`}
-              onTouchStart={onActionDown('5')}
-              onTouchEnd={onActionUp('5')}
-              onMouseDown={onActionDown('5')}
-              onMouseUp={onActionUp('5')}
-            >
-              <RiRefreshLine className="w-5 h-5" />
-            </button>
-            <button
-              className={`${btnClass} w-11 h-11 border-[#00ccff]/40 text-[#00ccff]`}
-              onTouchStart={onActionDown('6')}
-              onTouchEnd={onActionUp('6')}
-              onMouseDown={onActionDown('6')}
-              onMouseUp={onActionUp('6')}
-            >
-              <RiHand2 className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

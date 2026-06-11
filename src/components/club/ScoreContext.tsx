@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -14,6 +14,10 @@ const POINTS: Record<string, number> = {
   bump: 8,
   crowdHype: 20,
   wave: 5,
+  shoot: 2,
+  hitTarget: 10,
+  gotHit: 5,
+  grenadeHit: 15,
 };
 
 // Cooldowns in ms
@@ -24,6 +28,10 @@ const COOLDOWNS: Record<string, number> = {
   danceSync: 5000,
   crowdHype: 10000,
   wave: 3000,
+  shoot: 500,
+  hitTarget: 1000,
+  gotHit: 2000,
+  grenadeHit: 2000,
 };
 
 // Points needed to unlock each special move
@@ -45,13 +53,13 @@ interface ScoreContextType {
   specialCharges: number;
   unlockedSpecials: number;
   activeSpecial: number | null;
-  playerPosition: { x: number; z: number };
+  playerPosition: { x: number; y: number; z: number };
   popups: ScorePopup[];
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   scoreAction: (action: string, label?: string) => void;
   useSpecial: (index: number) => boolean;
-  setPlayerPosition: (x: number, z: number) => void;
+  setPlayerPosition: (x: number, y: number, z: number) => void;
   leaderboard: LeaderboardEntry[];
   refreshLeaderboard: () => void;
 }
@@ -74,7 +82,7 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [enabled, setEnabled] = useState(true);
   const [activeSpecial, setActiveSpecial] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [playerPosition, setPlayerPositionState] = useState({ x: 0, z: 0 });
+  const [playerPosition, setPlayerPositionState] = useState({ x: 0, y: 0, z: 0 });
 
   const lastActionTimeRef = useRef<Record<string, number>>({});
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,8 +207,8 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return true;
   }, [unlockedSpecials, specialCharges]);
 
-  const setPlayerPosition = useCallback((x: number, z: number) => {
-    setPlayerPositionState({ x, z });
+  const setPlayerPosition = useCallback((x: number, y: number, z: number) => {
+    setPlayerPositionState({ x, y, z });
   }, []);
 
   const refreshLeaderboard = useCallback(async () => {
@@ -229,26 +237,28 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => clearInterval(interval);
   }, [refreshLeaderboard]);
 
+  const contextValue = useMemo(() => ({
+    score: allTimeScore,
+    sessionScore,
+    combo,
+    specialCharges,
+    unlockedSpecials,
+    activeSpecial,
+    playerPosition,
+    popups,
+    enabled,
+    setEnabled,
+    scoreAction,
+    useSpecial,
+    setPlayerPosition,
+    leaderboard,
+    refreshLeaderboard,
+  }), [allTimeScore, sessionScore, combo, specialCharges, unlockedSpecials, activeSpecial,
+       playerPosition, popups, enabled, setEnabled, scoreAction, useSpecial, setPlayerPosition,
+       leaderboard, refreshLeaderboard]);
+
   return (
-    <ScoreContext.Provider
-      value={{
-        score: allTimeScore,
-        sessionScore,
-        combo,
-        specialCharges,
-        unlockedSpecials,
-        activeSpecial,
-        playerPosition,
-        popups,
-        enabled,
-        setEnabled,
-        scoreAction,
-        useSpecial,
-        setPlayerPosition,
-        leaderboard,
-        refreshLeaderboard,
-      }}
-    >
+    <ScoreContext.Provider value={contextValue}>
       {children}
     </ScoreContext.Provider>
   );

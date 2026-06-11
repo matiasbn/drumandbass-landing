@@ -16,6 +16,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [antialias, setAntialias] = useState(true);
+  const [antialiasChanged, setAntialiasChanged] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      const stored = localStorage.getItem('dnb_antialias');
+      setAntialias(stored !== '0');
+      setAntialiasChanged(false);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && profile) {
@@ -142,6 +152,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               {loading ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
             </button>
           </form>
+
+          {/* Graphics section */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <h3 className="text-xs font-mono text-white/50 tracking-wider mb-4">GRÁFICOS</h3>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">ANTIALIASING</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Suaviza los bordes (requiere recargar)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !antialias;
+                  setAntialias(next);
+                  localStorage.setItem('dnb_antialias', next ? '1' : '0');
+                  setAntialiasChanged(true);
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  antialias ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    antialias ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {antialiasChanged && (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-4 w-full py-2 font-mono text-xs tracking-wider bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] hover:bg-[#ff0055]/30 transition-colors"
+              >
+                RECARGAR
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Footer */}

@@ -275,10 +275,10 @@ const DJBoothInner: React.FC = () => {
   metalTexture.repeat.set(4, 1);
 
   return (
-    <group position={[0, 0, -5]}>
-      {/* Booth cabinet - wider to fit all equipment */}
+    <group position={[0, 1.5, 0]}>
+      {/* Booth cabinet - centered on DJ platform */}
       <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[5, 1, 1.5]} />
+        <boxGeometry args={[4, 1, 1.5]} />
         <meshStandardMaterial
           color="#aa8866"
           map={woodTexture}
@@ -291,33 +291,33 @@ const DJBoothInner: React.FC = () => {
 
       {/* Front metal panel */}
       <mesh position={[0, 0.5, 0.76]} castShadow>
-        <boxGeometry args={[5, 0.9, 0.05]} />
+        <boxGeometry args={[4, 0.9, 0.05]} />
         <meshStandardMaterial color="#888888" map={metalTexture} emissive="#111111" emissiveIntensity={0.2} metalness={0.6} roughness={0.3} />
       </mesh>
 
       {/* Neon edge strips */}
       <mesh position={[0, 0.9, 0.79]}>
-        <boxGeometry args={[4.8, 0.06, 0.02]} />
+        <boxGeometry args={[3.8, 0.06, 0.02]} />
         <meshStandardMaterial color={COLORS.neonPink} emissive={COLORS.neonPink} emissiveIntensity={3} />
       </mesh>
       <mesh position={[0, 0.1, 0.79]}>
-        <boxGeometry args={[4.8, 0.06, 0.02]} />
+        <boxGeometry args={[3.8, 0.06, 0.02]} />
         <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={3} />
       </mesh>
 
       {/* Top surface */}
       <mesh position={[0, 1.05, 0]} receiveShadow>
-        <boxGeometry args={[5.1, 0.1, 1.7]} />
+        <boxGeometry args={[4.1, 0.1, 1.7]} />
         <meshStandardMaterial color="#1a1a1a" emissive="#111111" emissiveIntensity={0.4} metalness={0.3} roughness={0.2} />
       </mesh>
 
       {/* Front/back edge trim */}
       <mesh position={[0, 1.05, 0.85]}>
-        <boxGeometry args={[5.15, 0.12, 0.05]} />
+        <boxGeometry args={[4.15, 0.12, 0.05]} />
         <meshStandardMaterial color="#888888" emissive="#444444" emissiveIntensity={0.4} metalness={0.6} roughness={0.2} />
       </mesh>
       <mesh position={[0, 1.05, -0.85]}>
-        <boxGeometry args={[5.15, 0.12, 0.05]} />
+        <boxGeometry args={[4.15, 0.12, 0.05]} />
         <meshStandardMaterial color="#888888" emissive="#444444" emissiveIntensity={0.4} metalness={0.6} roughness={0.2} />
       </mesh>
 

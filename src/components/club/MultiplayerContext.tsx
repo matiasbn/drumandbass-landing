@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuth } from './AuthContext';
@@ -9,6 +9,7 @@ export interface PlayerState {
   id: string;
   username: string;
   x: number;
+  y: number;
   z: number;
   rotation: number;
   color: string;
@@ -26,7 +27,7 @@ interface MultiplayerContextType {
   localPlayerId: string | null;
   username: string | null;
   setUsername: (name: string) => void;
-  updatePosition: (x: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
+  updatePosition: (x: number, y: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
   sendChatBubble: (message: string) => void;
   lastMessage: string | null;
   lastMessageAt: number | null;
@@ -157,7 +158,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, [username, localPlayerId, playerColor, faceType, costumeId, accessoryId]);
 
-  const updatePosition = useCallback((x: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
+  const updatePosition = useCallback((x: number, y: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
     positionRef.current = { x, z, rotation, danceMove, jumping };
 
     if (channelRef.current && username) {
@@ -165,6 +166,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         id: localPlayerId,
         username,
         x,
+        y,
         z,
         rotation,
         color: playerColor,
@@ -203,24 +205,25 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [localPlayerId, username, playerColor, faceType, costumeId, accessoryId]);
 
+  const contextValue = useMemo(() => ({
+    players,
+    localPlayerId,
+    username,
+    setUsername,
+    updatePosition,
+    sendChatBubble,
+    lastMessage,
+    lastMessageAt,
+    isConnected,
+    playerColor,
+    faceType,
+    costumeId,
+    accessoryId,
+  }), [players, localPlayerId, username, setUsername, updatePosition, sendChatBubble,
+       lastMessage, lastMessageAt, isConnected, playerColor, faceType, costumeId, accessoryId]);
+
   return (
-    <MultiplayerContext.Provider
-      value={{
-        players,
-        localPlayerId,
-        username,
-        setUsername,
-        updatePosition,
-        sendChatBubble,
-        lastMessage,
-        lastMessageAt,
-        isConnected,
-        playerColor,
-        faceType,
-        costumeId,
-        accessoryId,
-      }}
-    >
+    <MultiplayerContext.Provider value={contextValue}>
       {children}
     </MultiplayerContext.Provider>
   );
