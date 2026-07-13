@@ -2,9 +2,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { RiWhatsappLine } from '@remixicon/react';
 import type { User } from '@supabase/supabase-js';
 
+import dayjs from '@/src/lib/date';
 import { createClient, Junglist } from '@/src/lib/supabase';
+import { WHATSAPP_LINK } from '@/src/constants';
 import BrutalistButton from '@/src/components/BigButton';
 
 type View = 'loading' | 'anon' | 'form' | 'profile' | 'dj';
@@ -134,14 +137,14 @@ export default function JunglistClient() {
     setSubmitting(true);
     setError(null);
     const res = await fetch('/api/junglist', { method: 'DELETE' });
-    setSubmitting(false);
     if (!res.ok) {
+      setSubmitting(false);
       setError('No pudimos darte de baja. Intenta de nuevo.');
       return;
     }
-    setJunglist(null);
-    setForm(EMPTY_FORM);
-    setView('form');
+    // Baja exitosa: cerrar sesión y volver al home.
+    await supabase.auth.signOut().catch(() => {});
+    window.location.href = '/';
   };
 
   const update = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -245,7 +248,7 @@ export default function JunglistClient() {
         {view === 'profile' && junglist && (
           <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
             <div className="mono text-xs font-black uppercase tracking-widest bg-[#0000ff] text-white px-3 py-1.5 inline-block mb-6">
-              Miembro oficial
+              Junglist desde el {dayjs(junglist.created_at).format('D MMM YYYY')}
             </div>
 
             <div className="flex flex-col gap-4">
@@ -296,6 +299,14 @@ export default function JunglistClient() {
               <p className="mono text-sm font-black uppercase mb-3">¿También eres DJ?</p>
               <BrutalistButton variant="club" className="w-full text-lg py-4" href="/pk">
                 Crear mi presskit
+              </BrutalistButton>
+            </div>
+
+            {/* Grupo de WhatsApp */}
+            <div className="mt-4">
+              <p className="mono text-sm font-black uppercase mb-3">¡Ven a saludarnos, junglist!</p>
+              <BrutalistButton variant="whatsapp" className="w-full text-lg py-4" href={WHATSAPP_LINK}>
+                <RiWhatsappLine /> Grupo de WhatsApp
               </BrutalistButton>
             </div>
 
