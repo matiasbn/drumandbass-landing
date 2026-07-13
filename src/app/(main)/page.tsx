@@ -83,7 +83,7 @@ const Home = async () => {
       {sotanoVideos.length > 0 && (
         <section className="p-6 lg:p-12 border-b-4 border-black">
           <h2 className="text-5xl font-black uppercase mb-2 italic">El Sótano</h2>
-          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 max-w-3xl mb-6 leading-tight">
+          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 mb-6 leading-tight">
             Nuestra serie audiovisual: le abrimos la cabina a los DJs de drum and bass de Chile
             para que muestren lo suyo.
           </p>

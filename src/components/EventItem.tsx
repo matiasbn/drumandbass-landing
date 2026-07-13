@@ -1,44 +1,11 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import isToday from 'dayjs/plugin/isToday';
-import isTomorrow from 'dayjs/plugin/isTomorrow';
-import isoWeek from 'dayjs/plugin/isoWeek';
 import Image from 'next/image';
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 
 import { ContentfulEvent } from '../types/types';
 import BigButton from './BigButton';
-
-dayjs.extend(isToday);
-dayjs.extend(isTomorrow);
-dayjs.extend(isoWeek);
-
-interface ProximityBadge {
-  label: string;
-  color: string;
-  dot?: boolean; // punto blanco parpadeante
-  endTime?: string; // hora de finalización (HH:mm), solo HOY/MAÑANA
-}
-
-function getProximityBadge(date: string, endDate?: string): ProximityBadge | null {
-  const now = dayjs();
-  const eventStart = dayjs(date);
-  const eventEnd = endDate ? dayjs(endDate) : eventStart;
-  // Hora de término para los badges de HOY/MAÑANA (solo si hay endDate).
-  const endTime = endDate ? dayjs(endDate).format('HH:mm') : undefined;
-
-  if (now.isAfter(eventStart) && now.isBefore(eventEnd))
-    return { label: 'AHORA', color: 'bg-green-600', dot: true };
-  if (eventStart.isToday()) return { label: 'HOY', color: 'bg-red-600', dot: true, endTime };
-  if (eventStart.isTomorrow()) return { label: 'MAÑANA', color: 'bg-orange-500', endTime };
-  const daysUntil = eventStart.startOf('day').diff(now.startOf('day'), 'day');
-  if (daysUntil <= 0) return null;
-  // Comparar semanas de calendario (lunes-domingo), no días corridos.
-  const weeksUntil = eventStart.startOf('isoWeek').diff(now.startOf('isoWeek'), 'week');
-  if (weeksUntil === 0) return { label: 'ESTA SEMANA', color: 'bg-yellow-500 text-black' };
-  if (weeksUntil === 1) return { label: 'PRÓXIMA SEMANA', color: 'bg-green-600' };
-  return null;
-}
+import ProximityBadge from './ProximityBadge';
 
 interface EventItemProps {
   event: ContentfulEvent;
@@ -49,7 +16,6 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
   const { title, flyer, date, endDate, tickets, description, venue, address } = event;
   const formattedDate = dayjs(date).format('dddd DD  MMMM  YYYY [@] HH:mm');
   const isEven = index % 2 === 0;
-  const badge = getProximityBadge(date, endDate);
 
   return (
     <div className="group flex flex-col lg:flex-row border-b-8 border-black hover:bg-gray-50 transition-colors overflow-hidden">
@@ -88,17 +54,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
             )}
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1 lg:mb-2">
-                {badge && (
-                  <div className="flex items-center bg-red-600 text-white text-sm lg:text-xl font-black mono px-3 py-1.5 lg:px-4 lg:py-2 border-4 border-black uppercase tracking-widest animate-pulse">
-                    {badge.dot && (
-                      <span className="mr-3 rounded-full bg-white w-2 h-2 inline-block"></span>
-                    )}
-                    <span>
-                      {badge.label}
-                      {badge.endTime && ` · HASTA ${badge.endTime}`}
-                    </span>
-                  </div>
-                )}
+                <ProximityBadge date={date} endDate={endDate} />
                 <div className="mono text-[12px] lg:text-base font-black bg-black text-white px-2 py-1 inline-block">
                   {formattedDate}
                 </div>
