@@ -94,6 +94,9 @@ export default function JunglistClient() {
 
   const signIn = async () => {
     setSubmitting(true);
+    // El callback prioriza la cookie pk_auth_redirect sobre `next`; la fijamos a
+    // /junglist para no heredar un redirect viejo (p. ej. /pk/edit de un login de DJ).
+    document.cookie = 'pk_auth_redirect=/junglist; path=/; max-age=600; SameSite=Lax';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback?next=/junglist` },
