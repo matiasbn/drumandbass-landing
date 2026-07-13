@@ -41,6 +41,8 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 
 **Contexts pattern:** each surface has an isolated React context provider — `club/AuthContext` (players), `admin/AdminAuthContext`, `pk/PkAuthContext`. They are separate on purpose; don't cross-wire them.
 
+**Date-dependent UI must be client-computed (ISR gotcha).** The home is ISR-cached (`revalidate = 3600`), so anything derived from "now" would freeze at cache-generation time and go **stale in prod** (e.g. a `PRÓXIMA SEMANA` badge that never updates). The event proximity badge lives in `src/components/ProximityBadge.tsx` (client, `useEffect` + `dayjs()`) using pure logic from `src/lib/eventBadge.ts`; `EventItem` (server) just renders `<ProximityBadge date endDate />`. It renders `null` until mount (no hydration mismatch, nothing baked into cached HTML). The static event date box stays server-rendered. Follow this pattern for any new now-relative UI.
+
 ## Conventions
 
 - **Imports use the `@/src/...` alias** (note the `src` segment — e.g. `@/src/lib/date`, `@/src/components/...`), not `@/...`. Match existing files.
@@ -82,7 +84,9 @@ The junglist join flow lives in the home **community zone** and the dedicated `/
   - **Guest** → both columns are register CTAs.
 - `src/app/(main)/junglist/JunglistClient.tsx` — the `/junglist` page, same three-state logic (`anon` / `form` / `profile` / `dj`). Determines state from `supabase.auth.getUser()` + `/api/junglist` + `/api/pk/profile`. The form pre-fills `name`/`last_name` from **Google metadata only** (`given_name`/`family_name`) — never from our DB (privacy invariant). Unsubscribe (`DELETE`) hard-deletes the row, **signs the user out, and redirects home**.
 
-Enforce **DJ ⊃ junglist** in the UI: a DJ never sees the junglist registration form; a junglist always sees the "become a DJ / create presskit" CTA.
+Enforce **DJ ⊃ junglist** in the UI: a DJ never sees the junglist registration form; a junglist always sees the "become a DJ / create presskit" CTA. The junglist profile also shows the registration date (`created_at`, "Junglist desde el …") and a WhatsApp CTA. Unsubscribe uses an **inline two-step confirmation** (BrutalistButton), NOT `window.confirm` — the native dialog is unreliable on mobile.
+
+**Admin & campaigns:** `/admin/junglists` (`api/admin/junglists`, GET list + DELETE, admin-only) — table with search, sort, CSV export, and per-row delete; linked from the admin menu. Junglists are also a selectable **email-campaign audience** (`api/admin/campaigns`, audience key `junglists`), unioned and **deduplicated by email** with ravers/registered/DJs, so an email in several lists is sent once. The campaign step-1 UI shows a live "total correos únicos" as audiences are toggled.
 
 ### Supabase browser client & auth gotchas
 
@@ -103,6 +107,10 @@ Pattern (`src/lib/mockEvents.ts` + `src/app/(main)/page.tsx`):
 
 When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that hits it (relative dates, realistic `venue`/`flyer`/`description` rich-text) rather than editing Contentful. Titles are prefixed `TEST · <state>` so they're obvious on screen. Note: on weekends `ESTA SEMANA` (now+2 days) rolls into `PRÓXIMA SEMANA` — that's correct calendar behavior, not a bug.
 
+## El Sótano videos (YouTube)
+
+`src/lib/youtube.ts` `getSotanoVideos(n)` lists the channel's latest uploads (@drumandbasschile — uploads playlist `UUa93ljufgJ4Wdryd8FUFZnQ`) and filters by title containing **"El Sótano"** (accent/case-insensitive), cached with ISR (`fetch(..., { next: { revalidate: 3600 } })`) so it costs almost no quota and **updates itself** when a new chapter is uploaded. Rendered on the **home only** (`(main)/page.tsx`) via `src/components/YoutubeVideos.tsx` — 2 videos in one row, thumbnails that link out to `youtube.com/watch?v=…` + a channel button. Uses `YOUTUBE_API_KEY`; returns `[]` (and the section hides) if the key is missing or the API fails. To change the series, edit `TITLE_MATCH`; reads one page (50 uploads) so if the channel ever exceeds that, add pagination.
+
 ## Working with this file
 
 Whenever you edit `CLAUDE.md`, commit it yourself right after (`git add CLAUDE.md && git commit -m "docs: update CLAUDE.md"`). Do it as an explicit step — do not rely on an automated hook.
@@ -116,6 +124,10 @@ The **admin panel is a route, not a subdomain**: it lives at `<domain>/admin` (`
 ## Release (git-flow)
 
 `scripts/release.sh` (run via `npm run release`) must be run **from a `feature/*` branch**. It: finishes the feature, starts a git-flow release bumping the **minor** version (`X.Y.0`), commits the bump, finishes the release, and pushes all branches + tags. Default branch is `develop`. The repo requires `git flow` to be installed.
+
+Manual release flow (when committing on `develop` directly, as during pair sessions): commit the work → `git flow release start X.Y.Z` → `npm version X.Y.Z --no-git-tag-version` → commit `version bump` → `git flow release finish X.Y.Z` (macOS `getopt` rejects `-m "…"` with spaces; pass the tag message via `GIT_MERGE_AUTOEDIT=no GIT_EDITOR='cp /tmp/tagmsg' git flow release finish X.Y.Z`) → `git push origin main develop --tags`. This repo bumps the **minor** per release (2.17 → 2.18 → …). Tags use the **`v` prefix** (`gitflow.prefix.versiontag = v`).
+
+**Release gate must be `npx tsc --noEmit`, NOT `next build`.** `next build` writes to `.next` (the same dir a running `next dev` uses) and appends paths to `tsconfig.json` — running it mid-release dirties the working tree, which makes `git flow release start` abort, and it corrupts/kills an active dev server. Never `pkill` the user's dev server and never start a background `next dev` on port 3600 (causes `EADDRINUSE` for the user). To verify runtime behavior, curl the user's already-running dev server instead of spawning one.
 
 ## Environment
 

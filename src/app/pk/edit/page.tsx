@@ -483,7 +483,10 @@ function PresskitEditor() {
             </a>
           )}
           <button
-            onClick={signOut}
+            onClick={async () => {
+              await signOut();
+              window.location.href = '/';
+            }}
             className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors"
           >
             <RiLogoutBoxLine className="w-4 h-4" />
