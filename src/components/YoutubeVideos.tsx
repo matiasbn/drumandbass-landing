@@ -49,7 +49,7 @@ export default function YoutubeVideos({ videos }: { videos: YoutubeVideo[] }) {
           external
           className="w-full lg:w-auto text-lg py-4 px-8"
         >
-          <RiYoutubeLine /> Visitar nuestro canal
+          <RiYoutubeLine /> Ver todos los capítulos en YouTube
         </BrutalistButton>
       </div>
     </div>
