@@ -3,8 +3,10 @@ import type { Metadata } from 'next';
 
 import EventItem from '@/src/components/EventItem';
 import CommunityZone from '@/src/components/CommunityZone';
+import YoutubeVideos from '@/src/components/YoutubeVideos';
 import dayjs from '@/src/lib/date';
 import { getEvents } from '@/src/lib/contentful';
+import { getSotanoVideos } from '@/src/lib/youtube';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
 export const metadata: Metadata = {
@@ -27,7 +29,10 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 const Home = async () => {
-  const contentfulEvents = await getEvents();
+  const [contentfulEvents, sotanoVideos] = await Promise.all([
+    getEvents(),
+    getSotanoVideos(2),
+  ]);
 
   // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
   // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
@@ -73,6 +78,18 @@ const Home = async () => {
         <h2 className="text-5xl font-black uppercase mb-6 italic">¡Únete a la comunidad!</h2>
         <CommunityZone />
       </section>
+
+      {/* Videos de El Sótano (YouTube) */}
+      {sotanoVideos.length > 0 && (
+        <section className="p-6 lg:p-12 border-b-4 border-black">
+          <h2 className="text-5xl font-black uppercase mb-2 italic">El Sótano</h2>
+          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 max-w-3xl mb-6 leading-tight">
+            Nuestra serie audiovisual: le abrimos la cabina a los DJs de drum and bass de Chile
+            para que muestren lo suyo.
+          </p>
+          <YoutubeVideos videos={sotanoVideos} />
+        </section>
+      )}
     </main>
   );
 };

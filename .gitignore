@@ -45,3 +45,5 @@ yarn-error.log*
 next-env.d.ts
 
 *.xlsx
+# build aislado para releases (no interrumpe el dev)
+/.next-release
