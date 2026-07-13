@@ -41,6 +41,7 @@ export default function JunglistClient() {
   const [junglist, setJunglist] = useState<Junglist | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingUnsub, setConfirmingUnsub] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -131,9 +132,6 @@ export default function JunglistClient() {
   };
 
   const unsubscribe = async () => {
-    if (!window.confirm('¿Darte de baja como junglist? Podrás volver a registrarte cuando quieras.')) {
-      return;
-    }
     setSubmitting(true);
     setError(null);
     const res = await fetch('/api/junglist', { method: 'DELETE' });
@@ -310,13 +308,40 @@ export default function JunglistClient() {
               </BrutalistButton>
             </div>
 
-            <button
-              onClick={unsubscribe}
-              disabled={submitting}
-              className="mono text-xs font-bold uppercase underline text-gray-500 hover:text-[#ff0000] mt-6 disabled:opacity-40"
-            >
-              Darme de baja
-            </button>
+            {confirmingUnsub ? (
+              <div className="border-t-4 border-black mt-6 pt-6">
+                <p className="mono text-sm font-black uppercase mb-3">
+                  ¿Seguro? Perderás tu inscripción (puedes volver cuando quieras).
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <BrutalistButton
+                    variant="red"
+                    className="flex-1 text-base py-4"
+                    onClick={unsubscribe}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Dándote de baja…' : 'Sí, darme de baja'}
+                  </BrutalistButton>
+                  <BrutalistButton
+                    variant="primary"
+                    className="text-base py-4"
+                    onClick={() => setConfirmingUnsub(false)}
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </BrutalistButton>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingUnsub(true)}
+                disabled={submitting}
+                className="mono text-sm font-bold uppercase border-2 border-gray-300 text-gray-500 hover:border-[#ff0000] hover:text-[#ff0000] px-4 py-3 mt-6 w-full sm:w-auto transition-colors disabled:opacity-40"
+              >
+                Darme de baja
+              </button>
+            )}
           </div>
         )}
       </div>
