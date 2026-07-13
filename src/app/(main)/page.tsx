@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import EventItem from '@/src/components/EventItem';
 import dayjs from '@/src/lib/date';
 import { getEvents } from '@/src/lib/contentful';
+import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
 export const metadata: Metadata = {
   title: 'Eventos Drum and Bass en Chile',
@@ -27,10 +28,23 @@ export const revalidate = 3600;
 const Home = async () => {
   const contentfulEvents = await getEvents();
 
-  // Eventos desde ayer en adelante
-  const events = contentfulEvents
+  // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
+  // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
+  const allEvents = MOCK_EVENTS_ENABLED
+    ? [...contentfulEvents, ...getMockEvents()]
+    : contentfulEvents;
+
+  // Solo eventos que aún no terminan (se ocultan los pasados)
+  const now = dayjs();
+  const events = allEvents
     .sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix())
-    .filter((event) => dayjs(event.endDate ?? event.date).isAfter(dayjs().subtract(1, 'day')));
+    .filter((event) => {
+      const start = dayjs(event.date);
+      const end = event.endDate ? dayjs(event.endDate) : start;
+      // Usa el más tardío entre inicio y fin (protege datos con endDate < date).
+      const effectiveEnd = end.isAfter(start) ? end : start;
+      return effectiveEnd.isAfter(now);
+    });
 
   return (
     <main className="grow">
