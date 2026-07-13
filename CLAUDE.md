@@ -56,7 +56,7 @@ To exercise UI states that depend on live CMS data (event proximity badges, past
 Pattern (`src/lib/mockEvents.ts` + `src/app/(main)/page.tsx`):
 - Mocks are plain `ContentfulEvent[]` — the **exact shape `getEvents()` returns after mapping Contentful**. They flow through the *same* `sort` + `filter` + `EventItem` + `getProximityBadge` pipeline, so what you see locally is what real Contentful data will produce.
 - Dates are computed **relative to `dayjs()`** (now ± offsets) so each event lands in a distinct state: `AHORA`, `HOY`, `MAÑANA`, `ESTA SEMANA`, `PRÓXIMA SEMANA`, sin-badge (>2 weeks), and one past event (to confirm it gets filtered out).
-- Gated by `MOCK_EVENTS_ENABLED = process.env.NODE_ENV === 'development' && process.env.MOCK_EVENTS !== '0'`. **Never renders in production**; disable in dev with `MOCK_EVENTS=0`.
+- **Opt-in, off by default**: gated by `MOCK_EVENTS_ENABLED = process.env.NODE_ENV === 'development' && process.env.MOCK_EVENTS === '1'`. **Never renders in production.** Enable for a session with `MOCK_EVENTS=1 npm run dev`, or add `MOCK_EVENTS=1` to `.env.local`. Leaving the code in place with the flag off keeps mocks available without deleting them.
 - In `page.tsx` mocks are **concatenated** with real events (`[...contentfulEvents, ...getMockEvents()]`), never replace them — real Contentful data still loads normally.
 
 When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that hits it (relative dates, realistic `venue`/`flyer`/`description` rich-text) rather than editing Contentful. Titles are prefixed `TEST · <state>` so they're obvious on screen. Note: on weekends `ESTA SEMANA` (now+2 days) rolls into `PRÓXIMA SEMANA` — that's correct calendar behavior, not a bug.
