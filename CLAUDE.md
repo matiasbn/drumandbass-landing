@@ -49,6 +49,18 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
 
+## Mock data for local testing (dev only)
+
+To exercise UI states that depend on live CMS data (event proximity badges, past-event filtering) without touching Contentful, the home page injects **synthetic events in development only**.
+
+Pattern (`src/lib/mockEvents.ts` + `src/app/(main)/page.tsx`):
+- Mocks are plain `ContentfulEvent[]` — the **exact shape `getEvents()` returns after mapping Contentful**. They flow through the *same* `sort` + `filter` + `EventItem` + `getProximityBadge` pipeline, so what you see locally is what real Contentful data will produce.
+- Dates are computed **relative to `dayjs()`** (now ± offsets) so each event lands in a distinct state: `AHORA`, `HOY`, `MAÑANA`, `ESTA SEMANA`, `PRÓXIMA SEMANA`, sin-badge (>2 weeks), and one past event (to confirm it gets filtered out).
+- Gated by `MOCK_EVENTS_ENABLED = process.env.NODE_ENV === 'development' && process.env.MOCK_EVENTS !== '0'`. **Never renders in production**; disable in dev with `MOCK_EVENTS=0`.
+- In `page.tsx` mocks are **concatenated** with real events (`[...contentfulEvents, ...getMockEvents()]`), never replace them — real Contentful data still loads normally.
+
+When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that hits it (relative dates, realistic `venue`/`flyer`/`description` rich-text) rather than editing Contentful. Titles are prefixed `TEST · <state>` so they're obvious on screen. Note: on weekends `ESTA SEMANA` (now+2 days) rolls into `PRÓXIMA SEMANA` — that's correct calendar behavior, not a bug.
+
 ## Working with this file
 
 Whenever you edit `CLAUDE.md`, commit it yourself right after (`git add CLAUDE.md && git commit -m "docs: update CLAUDE.md"`). Do it as an explicit step — do not rely on an automated hook.
