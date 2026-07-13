@@ -49,6 +49,29 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
 
+## Audience lists (junglists / ravers / DJs)
+
+Three **separate** audience tables, kept intentionally disjoint. Know which owns what before touching any of them:
+
+| List | Table | Source | Managed by |
+|---|---|---|---|
+| **Junglists** | `junglists` | Voluntary self-registration via Google login | The user (self-service) + admins |
+| **Ravers** | `newsletter_subscribers` | Manual import from another DB | Admins only |
+| **DJs** | `pk_profiles` | Presskit registration | The DJ |
+
+Invariants (encoded in DB + API — don't reintroduce overlaps):
+- **A DJ is always a junglist, but a junglist isn't always a DJ.** DJs are *not* duplicated into `junglists`; they're counted as junglists via **email union** when building the audience (the pattern `api/admin/ravers` already uses). `pk_profiles` keeps the heavy presskit fields junglists don't need.
+- **Ravers and junglists are disjoint, both directions.** Registering as a junglist fires a DB trigger (`junglists_dedupe_ravers`, `AFTER INSERT`, `SECURITY DEFINER`) that deletes the matching row from `newsletter_subscribers`. The admin ravers import (`api/admin/ravers` POST) skips emails already in `junglists` (`status: 'skipped'`).
+- **`junglists` is a lean, extensible table** — expect new columns over time.
+
+Junglist registration (`src/app/api/junglist/route.ts`, `Junglist` type in `src/lib/supabase.ts`):
+- Self-service `GET`/`POST`/`PUT`/`DELETE`, all scoped to `auth.uid()`. RLS: own row + admins can see/edit all; user can self-delete (unsubscribe).
+- Fields `name`, `last_name`, `instagram` are all **required** and entered by the user; `email` comes from the Google token. One row per account (`user_id` unique, `email` unique).
+
+**Privacy invariant (hard rule):** a junglist must NEVER learn their email was already in the DB (e.g. previously imported into ravers). So: the endpoint never reads `newsletter_subscribers`, never pre-fills the form with prior data, and no response mentions a prior presence; the ravers dedup is the silent DB trigger only. Preserve this when building the UI — do not pre-populate the "complete your data" form with anything the user didn't provide.
+
+**Schema is applied manually** in the Supabase SQL Editor (no CLI/service-role in the repo). Migrations live in `supabase/migrations/` and are mirrored into the consolidated `supabase-schema.sql`; add new tables to both.
+
 ## Mock data for local testing (dev only)
 
 To exercise UI states that depend on live CMS data (event proximity badges, past-event filtering) without touching Contentful, the home page injects **synthetic events in development only**.
