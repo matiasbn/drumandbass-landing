@@ -8,12 +8,13 @@ import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
 
-type AudienceKey = 'ravers' | 'registered' | 'pks';
+type AudienceKey = 'ravers' | 'registered' | 'pks' | 'junglists';
 
 const AUDIENCES: { key: AudienceKey; label: string }[] = [
   { key: 'ravers', label: 'Ravers (Newsletter)' },
   { key: 'registered', label: 'Usuarios Registrados' },
   { key: 'pks', label: 'DJs (Press Kit)' },
+  { key: 'junglists', label: 'Junglists (registro voluntario)' },
 ];
 
 const STEPS = [
@@ -147,6 +148,16 @@ export default function CampaignsClient() {
       setLoadingCounts(false);
     }
   }, [selected]);
+
+  // Recalcula el conteo cada vez que cambian las audiencias seleccionadas (paso 1).
+  useEffect(() => {
+    if (selected.size === 0) {
+      setCounts({});
+      setTotalUnique(0);
+      return;
+    }
+    fetchCounts();
+  }, [selected, fetchCounts]);
 
   const handleSearchEmail = async (query: string) => {
     setEmailSearch(query);
@@ -288,16 +299,31 @@ export default function CampaignsClient() {
           <h2 className="text-xl font-black uppercase mb-4">Seleccionar Audiencia</h2>
           <div className="space-y-3 mb-6">
             {AUDIENCES.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.has(key)}
-                  onChange={() => toggleAudience(key)}
-                  className="w-5 h-5 accent-black cursor-pointer"
-                />
-                <span className="font-bold uppercase text-sm">{label}</span>
+              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                <span className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(key)}
+                    onChange={() => toggleAudience(key)}
+                    className="w-5 h-5 accent-black cursor-pointer"
+                  />
+                  <span className="font-bold uppercase text-sm">{label}</span>
+                </span>
+                {selected.has(key) && (
+                  <span className="mono text-xs text-gray-500">
+                    {loadingCounts ? '…' : `${counts[key] ?? 0}`}
+                  </span>
+                )}
               </label>
             ))}
+          </div>
+
+          {/* Total de correos únicos (se actualiza al marcar audiencias) */}
+          <div className="brutalist-border bg-black text-white px-4 py-3 mb-6 flex items-center justify-between">
+            <span className="mono text-xs font-bold uppercase">Total correos únicos</span>
+            <span className="mono text-lg font-black">
+              {loadingCounts ? '…' : totalUnique + extraEmails.size}
+            </span>
           </div>
           {/* Individual email search */}
           <div className="mt-6 pt-6 border-t-4 border-black">

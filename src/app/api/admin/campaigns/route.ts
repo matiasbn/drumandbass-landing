@@ -80,6 +80,17 @@ async function getEmailsByAudiences(
     }
   }
 
+  if (audiences.includes('junglists')) {
+    const { data, error } = await supabase
+      .from('junglists')
+      .select('email');
+    if (!error && data) {
+      const emails = data.map(r => r.email?.toLowerCase()).filter(Boolean) as string[];
+      counts.junglists = emails.length;
+      emails.forEach(e => allEmails.add(e));
+    }
+  }
+
   return { emails: Array.from(allEmails), counts, totalUnique: allEmails.size };
 }
 
@@ -98,14 +109,15 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get('search');
   if (search && search.length >= 2) {
     const query = search.toLowerCase();
-    const [subRes, profRes, pkRes] = await Promise.all([
+    const [subRes, profRes, pkRes, jungRes] = await Promise.all([
       supabase.from('newsletter_subscribers').select('email').ilike('email', `%${query}%`).limit(20),
       supabase.from('profiles').select('email').ilike('email', `%${query}%`).limit(20),
       supabase.from('pk_profiles').select('email').ilike('email', `%${query}%`).limit(20),
+      supabase.from('junglists').select('email').ilike('email', `%${query}%`).limit(20),
     ]);
 
     const allEmails = new Set<string>();
-    for (const res of [subRes, profRes, pkRes]) {
+    for (const res of [subRes, profRes, pkRes, jungRes]) {
       if (!res.error && res.data) {
         res.data.forEach(r => {
           if (r.email) allEmails.add(r.email.toLowerCase());
