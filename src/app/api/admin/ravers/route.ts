@@ -82,7 +82,7 @@ interface ImportRow {
 
 interface RowResult {
   email: string;
-  status: 'inserted' | 'updated' | 'error';
+  status: 'inserted' | 'updated' | 'skipped' | 'error';
   error?: string;
 }
 
@@ -104,10 +104,22 @@ export async function POST(request: NextRequest) {
 
   const results: RowResult[] = [];
 
+  // Listas disjuntas: los correos que ya son junglists (registro voluntario) no se
+  // importan a la lista manual de ravers.
+  const { data: junglistRows } = await supabase.from('junglists').select('email');
+  const junglistEmails = new Set(
+    (junglistRows || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+  );
+
   for (const row of rows) {
     const email = row.email?.trim().toLowerCase();
     if (!email) {
       results.push({ email: row.email || '', status: 'error', error: 'Email vacio' });
+      continue;
+    }
+
+    if (junglistEmails.has(email)) {
+      results.push({ email, status: 'skipped', error: 'Ya es junglist' });
       continue;
     }
 
@@ -155,9 +167,10 @@ export async function POST(request: NextRequest) {
 
   const inserted = results.filter(r => r.status === 'inserted').length;
   const updated = results.filter(r => r.status === 'updated').length;
+  const skipped = results.filter(r => r.status === 'skipped').length;
   const errors = results.filter(r => r.status === 'error').length;
 
-  return NextResponse.json({ results, summary: { inserted, updated, errors } });
+  return NextResponse.json({ results, summary: { inserted, updated, skipped, errors } });
 }
 
 export async function PATCH(request: NextRequest) {

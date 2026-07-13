@@ -142,3 +142,68 @@ CREATE POLICY "Admins can delete newsletter subscribers" ON newsletter_subscribe
       SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true
     )
   );
+
+-- Junglists table (voluntary self-registration via Google; see
+-- supabase/migrations/20260712000000_create_junglists.sql for the authoritative copy).
+-- DJs (pk_profiles) are counted as junglists via email union, not duplicated here.
+CREATE TABLE IF NOT EXISTS junglists (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  instagram TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS junglists_user_id_idx ON junglists(user_id);
+CREATE INDEX IF NOT EXISTS junglists_email_idx ON junglists(email);
+
+ALTER TABLE junglists ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Junglists can view own row or admin views all" ON junglists
+  FOR SELECT USING (
+    auth.uid() = user_id
+    OR EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Users can insert own junglist row" ON junglists
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Junglists can update own row or admin any" ON junglists
+  FOR UPDATE USING (
+    auth.uid() = user_id
+    OR EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Junglists can delete own row or admin any" ON junglists
+  FOR DELETE USING (
+    auth.uid() = user_id
+    OR EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+DROP TRIGGER IF EXISTS junglists_updated_at ON junglists;
+CREATE TRIGGER junglists_updated_at
+  BEFORE UPDATE ON junglists
+  FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+
+-- Al registrarse como junglist, se elimina el correo de la lista de ravers
+-- (newsletter_subscribers) para mantener listas disjuntas. SECURITY DEFINER para
+-- poder borrar pese a la RLS admin-only de esa tabla.
+CREATE OR REPLACE FUNCTION remove_raver_on_junglist_insert()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM newsletter_subscribers WHERE lower(email) = lower(NEW.email);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS junglists_dedupe_ravers ON junglists;
+CREATE TRIGGER junglists_dedupe_ravers
+  AFTER INSERT ON junglists
+  FOR EACH ROW EXECUTE FUNCTION remove_raver_on_junglist_insert();
