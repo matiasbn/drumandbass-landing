@@ -59,6 +59,11 @@ export default function AdminClient() {
       href: '/admin/ravers',
     },
     {
+      title: 'Junglists',
+      description: 'Ver junglists inscritos voluntariamente',
+      href: '/admin/junglists',
+    },
+    {
       title: 'Press Kits',
       description: 'Ver y gestionar press kits de artistas',
       href: '/admin/presskits',

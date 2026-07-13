@@ -72,6 +72,25 @@ Junglist registration (`src/app/api/junglist/route.ts`, `Junglist` type in `src/
 
 **Schema is applied manually** in the Supabase SQL Editor (no CLI/service-role in the repo). Migrations live in `supabase/migrations/` and are mirrored into the consolidated `supabase-schema.sql`; add new tables to both.
 
+### Junglist registration UI & session states
+
+The junglist join flow lives in the home **community zone** and the dedicated `/junglist` view — both are **session-aware** and decide what to show by querying the current user's state:
+
+- `src/components/CommunityZone.tsx` — the "¡Únete a la comunidad!" three-column block (Junglist · Presskit · WhatsApp). **Home page only** (`(main)/page.tsx`), not in the layout, so it doesn't leak onto other pages. It's a client component that reads the session and, on mount, calls `/api/pk/profile` + `/api/junglist` to branch:
+  - **DJ** (has `pk_profile`) → junglist column is **hidden** (a DJ already has junglist benefits), presskit column says "Editar presskit" (→ `/pk/edit`).
+  - **Junglist** (row, not DJ) → junglist column shows "member / Ver mi perfil", presskit column invites "¿También eres DJ?".
+  - **Guest** → both columns are register CTAs.
+- `src/app/(main)/junglist/JunglistClient.tsx` — the `/junglist` page, same three-state logic (`anon` / `form` / `profile` / `dj`). Determines state from `supabase.auth.getUser()` + `/api/junglist` + `/api/pk/profile`. The form pre-fills `name`/`last_name` from **Google metadata only** (`given_name`/`family_name`) — never from our DB (privacy invariant). Unsubscribe (`DELETE`) hard-deletes the row, **signs the user out, and redirects home**.
+
+Enforce **DJ ⊃ junglist** in the UI: a DJ never sees the junglist registration form; a junglist always sees the "become a DJ / create presskit" CTA.
+
+### Supabase browser client & auth gotchas
+
+- **`createClient()` in `src/lib/supabase.ts` is a memoized singleton** — do NOT create multiple browser clients. Multiple `GoTrueClient` instances contend on the Web Locks API and make `getUser()`/`getSession()` **hang forever** (blank loading screens). Every component must reuse `createClient()`.
+- OAuth uses `signInWithOAuth({ provider: 'google', options: { redirectTo: \`${origin}/auth/callback?next=...\` } })`; `/auth/callback/route.ts` exchanges the code and honors `next`.
+- **Supabase Auth → URL Configuration → Redirect URLs** must include the dev origin **`http://localhost:3600/**`** (wildcard, to cover the `?next=` query) alongside the prod domains. Missing it makes Supabase fall back to the Site URL (prod) and drop you at `https://…/?code=…` where the code is never exchanged. Always browse dev via `http://localhost:3600` (not the LAN IP) so the origin matches the session.
+- `src/components/DevLogout.tsx` — a **dev-only** floating "force logout" button (guarded by `NODE_ENV === 'development'`, mounted in the root layout). Clears the `sb-*` localStorage/cookies even if `signOut()` hangs. Useful to escape a stuck cross-origin session. Never renders in production.
+
 ## Mock data for local testing (dev only)
 
 To exercise UI states that depend on live CMS data (event proximity badges, past-event filtering) without touching Contentful, the home page injects **synthetic events in development only**.
