@@ -49,6 +49,10 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
 
+## Working with this file
+
+Whenever you edit `CLAUDE.md`, commit it yourself right after (`git add CLAUDE.md && git commit -m "docs: update CLAUDE.md"`). Do it as an explicit step — do not rely on an automated hook.
+
 ## Deployment & domains
 
 Hosted on **Vercel**. Two domains point at the **same site**: `drumandbasschile.cl` and `dnbchile.cl` (short alias) — same deployment, same app, not separate projects. Note `src/constants.ts` `BASE_URL` uses `www.drumandbasschile.cl` as canonical.
