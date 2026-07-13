@@ -7,11 +7,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase credentials not configured. Auth and chat will not work.');
 }
 
-export function createClient() {
-  return createBrowserClient(
+// Singleton del cliente de browser. Crear varias instancias de GoTrueClient hace que
+// getUser()/getSession() se cuelguen por contención del lock (Web Locks API). Memoizar
+// garantiza una sola instancia compartida por toda la app.
+// Helper concreto (sin genéricos) para que ReturnType infiera el tipo real del cliente.
+const makeBrowserClient = () =>
+  createBrowserClient(
     supabaseUrl || 'https://placeholder.supabase.co',
     supabaseAnonKey || 'placeholder'
   );
+
+let browserClient: ReturnType<typeof makeBrowserClient> | null = null;
+
+export function createClient() {
+  if (!browserClient) browserClient = makeBrowserClient();
+  return browserClient;
 }
 
 // Legacy export for backwards compatibility
@@ -32,6 +42,19 @@ export interface Raver {
   email: string;
   instagram: string | null;
   created_at: string;
+}
+
+// Junglist: auto-registro voluntario vía Google. Todos los campos obligatorios.
+// Un DJ (pk_profiles) se considera junglist por unión de emails, no vive aquí.
+export interface Junglist {
+  id: string;
+  user_id: string;
+  name: string;
+  last_name: string;
+  email: string;
+  instagram: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UserProfile {

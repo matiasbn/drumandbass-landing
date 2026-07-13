@@ -2,6 +2,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 
 import EventItem from '@/src/components/EventItem';
+import CommunityZone from '@/src/components/CommunityZone';
 import dayjs from '@/src/lib/date';
 import { getEvents } from '@/src/lib/contentful';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
@@ -65,6 +66,12 @@ const Home = async () => {
             <EventItem key={e.id} event={e} index={index} />
           ))}
         </div>
+      </section>
+
+      {/* Únete a la comunidad — solo en la home */}
+      <section className="p-6 lg:p-12 border-b-4 border-black">
+        <h2 className="text-5xl font-black uppercase mb-6 italic">¡Únete a la comunidad!</h2>
+        <CommunityZone />
       </section>
     </main>
   );
