@@ -64,15 +64,16 @@ export const EVENT_TIPS: Record<string, string> = {
 export const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
 // Acciones que se muestran en el dashboard (siempre, con 0 si aún no hay datos).
+// Orden fijo de importancia (NO se ordena por valor en la vista).
 export const CORE_ACTIONS = [
-  'junglist_signup',
-  'junglist_unsubscribe',
-  'event_link_click',
-  'sotano_video_click',
-  'release_click',
-  'enter_club',
-  'social_click',
-  'whatsapp_click',
+  'junglist_signup', // 1. registro de junglist
+  'event_link_click', // 2. clic a tickets de evento
+  'sotano_video_click', // 3. clic a video de El Sótano
+  'whatsapp_click', // 4. clic a WhatsApp
+  'release_click', // 5. clic a un release
+  'enter_club', // 6. entradas al club
+  'social_click', // 7. clic a redes sociales
+  'junglist_unsubscribe', // 8. bajas de junglist
 ];
 
 // Acciones que se trackean pero NO se muestran en el dashboard (back-office de

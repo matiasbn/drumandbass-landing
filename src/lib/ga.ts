@@ -54,6 +54,8 @@ export interface AnalyticsOverview {
   topPages: AnalyticsNamedValue[];
   topEvents: AnalyticsNamedValue[];
   channels: AnalyticsNamedValue[];
+  // Por país: usuarios nuevos vs recurrentes.
+  countries: { label: string; newUsers: number; returningUsers: number }[];
   // Clics a tickets desglosados por evento (parámetro event_title del evento
   // event_link_click). Requiere una custom dimension "event_title" en GA4.
   ticketClicks: AnalyticsNamedValue[];
@@ -100,7 +102,10 @@ function fmtDate(yyyymmdd: string): string {
   return `${d} ${meses[Number(m) - 1] ?? m}/${y.slice(2)}`;
 }
 
-export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview> {
+export async function getAnalyticsOverview(
+  days = 30,
+  range?: { startDate: string; endDate: string }
+): Promise<AnalyticsOverview> {
   const empty: AnalyticsOverview = {
     configured: false,
     days,
@@ -109,6 +114,7 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
     topPages: [],
     topEvents: [],
     channels: [],
+    countries: [],
     ticketClicks: [],
     ticketClicksAvailable: false,
   };
@@ -116,10 +122,10 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
   const ctx = getClient();
   if (!ctx) return empty;
   const { client, property } = ctx;
-  const dateRanges = [{ startDate: `${days}daysAgo`, endDate: 'today' }];
+  const dateRanges = range ? [range] : [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
   try {
-    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes] = await Promise.all([
+    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes] = await Promise.all([
       client.runReport({
         property,
         dateRanges,
@@ -167,6 +173,14 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
         dimensions: [{ name: 'sessionDefaultChannelGroup' }],
         metrics: [{ name: 'sessions' }],
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: 8,
+      }),
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'country' }],
+        metrics: [{ name: 'activeUsers' }, { name: 'newUsers' }, { name: 'totalUsers' }],
+        orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
         limit: 8,
       }),
     ]);
@@ -243,6 +257,15 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
         label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
         value: num(r.metricValues?.[0]?.value),
       })),
+      countries: (countriesRes[0].rows ?? []).map((r) => {
+        const m = r.metricValues ?? [];
+        const newU = num(m[1]?.value);
+        return {
+          label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
+          newUsers: newU,
+          returningUsers: Math.max(0, num(m[2]?.value) - newU),
+        };
+      }),
     };
   } catch (err) {
     console.error('GA4 Data API error:', err);
