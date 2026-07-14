@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 
 import { ContentfulEvent } from '../types/types';
-import BigButton from './BigButton';
+import TicketButton from './TicketButton';
 import ProximityBadge from './ProximityBadge';
 
 interface EventItemProps {
@@ -80,13 +80,12 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
           </div>
 
           <div className="w-full lg:w-auto">
-            <BigButton
+            <TicketButton
               variant={isEven ? 'blue' : 'red'}
               className="w-full lg:w-auto text-base lg:text-xl py-3 lg:py-4 px-6 lg:px-10"
-              href={tickets}
-            >
-              TICKETS
-            </BigButton>
+              title={title}
+              url={tickets}
+            />
           </div>
         </div>
 

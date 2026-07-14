@@ -51,6 +51,14 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
 
+## Analytics — consider tracking on every change
+
+The site uses **GA4** (`NEXT_PUBLIC_GA_ID`, currently `G-E32DT19ZDQ`), a hand-rolled setup: `src/components/GoogleAnalytics.tsx` loads gtag **only in production** and sends SPA page views on route change (it skips the first effect run so the initial `gtag('config')` pageview isn't double-counted — don't reintroduce that). Custom events go through the `event(action, params)` helper in `src/lib/gtag.ts` (no-op unless `window.gtag` exists, i.e. prod).
+
+**Convention: whenever you add or change a user-facing component or a meaningful user action, consider whether it should fire an analytics event** — and add one via `event(...)` when it's a signal worth measuring (CTA clicks, conversions, logins, submits, engagement with a feature). Prefer descriptive GA4-style names and stable params. Existing events to follow as examples: `button_click` (`HomeLinks`), `event_link_click` (`TicketButton`/`EventItem`, keyed on unique `event_title`/`event_url`), `login` (`method`, `source`).
+
+Gotchas: the helper only fires in prod (dev has no `gtag`). Server components can't call `event()` directly — wrap the interactive element in a small `'use client'` component (see `src/components/TicketButton.tsx`). GA aggregates custom events by **param value**, not by any DB/Contentful entry id, so recycled Contentful event entries measure fine as long as `event_title`/`event_url` stay unique per occurrence. The **admin analytics view** lives at `/admin/analytics` (`admin/analytics/AnalyticsClient.tsx`) and embeds a Looker Studio report via `NEXT_PUBLIC_LOOKER_STUDIO_URL`.
+
 ## Audience lists (junglists / ravers / DJs)
 
 Three **separate** audience tables, kept intentionally disjoint. Know which owns what before touching any of them:

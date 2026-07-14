@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Script from "next/script";
 
@@ -11,11 +11,23 @@ interface GoogleAnalyticsProps {
 function GoogleAnalyticsInner({ gaId }: GoogleAnalyticsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // La primera vista ya la envía el `gtag('config')` inline al cargar. Saltamos
+  // la primera ejecución de este efecto para NO duplicar el pageview inicial;
+  // las navegaciones SPA posteriores sí se envían como evento `page_view`.
+  const isFirstRun = useRef(true);
 
   useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
     if (typeof window.gtag !== "function") return;
     const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "");
-    window.gtag("config", gaId, { page_path: url });
+    window.gtag("event", "page_view", {
+      page_path: url,
+      page_location: window.location.href,
+      page_title: document.title,
+    });
   }, [pathname, searchParams, gaId]);
 
   // Solo renderizar en producción para no registrar visitas de desarrollo

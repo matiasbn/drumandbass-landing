@@ -73,6 +73,11 @@ export default function AdminClient() {
       description: 'Componer y enviar emails a la comunidad',
       href: '/admin/campaigns',
     },
+    {
+      title: 'Analytics',
+      description: 'Ver la actividad del sitio (Google Analytics)',
+      href: '/admin/analytics',
+    },
   ];
 
   return (

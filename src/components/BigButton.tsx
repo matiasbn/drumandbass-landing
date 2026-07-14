@@ -43,7 +43,7 @@ const BrutalistButton: React.FC<BrutalistButtonProps> = ({
 
   if (href && !disabled) {
     return (
-      <a href={href} className={combinedStyles} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} title={title}>
+      <a href={href} onClick={onClick} className={combinedStyles} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} title={title}>
         {children}
       </a>
     );
