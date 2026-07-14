@@ -94,7 +94,7 @@ const CommunityZone: React.FC = () => {
                 compartir con productores y venues.
               </p>
               <BrutalistButton variant="club" className="w-full text-2xl py-8" href="/pk">
-                CREAR MI PRESSKIT
+                PRESSKIT ACÁ!
               </BrutalistButton>
             </>
           )}
