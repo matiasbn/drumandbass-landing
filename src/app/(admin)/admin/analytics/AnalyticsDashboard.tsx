@@ -294,17 +294,17 @@ function CountryBars({ countries }: { countries: AnalyticsOverview['countries'] 
       {countries.length === 0 ? (
         <p className="mono text-sm text-gray-500">Sin datos.</p>
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-2">
           {countries.map((c, i) => (
             <li key={`${c.label}-${i}`}>
-              <div className="flex items-end justify-between gap-3 mb-1">
+              <div className="flex items-end justify-between gap-3 mb-0.5">
                 <span className="font-bold text-sm truncate">{c.label || '(desconocido)'}</span>
                 <span className="text-sm font-black shrink-0 tabular-nums">{fmt(c.total)}</span>
               </div>
               <div className="h-2.5 bg-gray-100 border-2 border-black">
                 <div className="h-full bg-[#ff0055]" style={{ width: `${(c.total / max) * 100}%` }} />
               </div>
-              <div className="mono text-[10px] text-gray-500 mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+              <div className="mono text-[10px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
                 {c.sources.map((s, j) => (
                   <span key={`${s.label}-${j}`} className="inline-flex items-center">
                     {j > 0 && <span className="mr-1 text-gray-300">·</span>}
@@ -335,24 +335,47 @@ function Scorecards({ summary, hint }: { summary: AnalyticsOverview['summary']; 
 function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolean }) {
   return (
     <>
+      <CountryBars countries={data.countries} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         <BarList
-          title="Clics a tickets por evento"
-          titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
-          subtitle={
-            data.ticketClicksAvailable
-              ? 'Eventos vigentes hoy · clics a "Tickets"'
-              : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
-          }
-          rows={data.ticketClicks.map((t) => ({
-            label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
-            value: t.value,
-            tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
-          }))}
-          empty="No hay eventos vigentes en este momento."
+          title="De dónde llega la gente"
+          titleTip="El canal por el que llegaron los visitantes al sitio."
+          subtitle="Canales de tráfico"
+          rows={data.channels
+            .filter((c) => c.label !== 'Unassigned' && c.label !== 'AI Assistant')
+            .map((c) => ({ label: channelLabel(c.label), value: c.value, tip: channelTip(c.label) }))}
+          empty="Sin datos."
           showPercent
         />
+        <BarList
+          title="Por dispositivo"
+          titleTip="Desde qué tipo de dispositivo visitan el sitio (móvil, escritorio, tablet)."
+          subtitle="Móvil vs escritorio"
+          rows={data.devices.map((d) => ({ label: deviceLabel(d.label), value: d.value, tip: DEVICE_TIPS[d.label] }))}
+          empty="Sin datos."
+          showPercent
+        />
+      </div>
 
+      <BarList
+        title="Clics a tickets por evento"
+        titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
+        subtitle={
+          data.ticketClicksAvailable
+            ? 'Eventos vigentes hoy · clics a "Tickets"'
+            : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
+        }
+        rows={data.ticketClicks.map((t) => ({
+          label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
+          value: t.value,
+          tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
+        }))}
+        empty="No hay eventos vigentes en este momento."
+        showPercent
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         <BarList
           title="Acciones clave del sitio"
           titleTip={
@@ -369,41 +392,21 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
           }))}
           empty="—"
         />
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-        <CountryBars countries={data.countries} />
         <BarList
-          title="De dónde llega la gente"
-          titleTip="El canal por el que llegaron los visitantes al sitio."
-          subtitle="Canales de tráfico"
-          rows={data.channels.map((c) => ({ label: channelLabel(c.label), value: c.value, tip: channelTip(c.label) }))}
-          empty="Sin datos."
-          showPercent
-        />
-        <BarList
-          title="Por dispositivo"
-          titleTip="Desde qué tipo de dispositivo visitan el sitio (móvil, escritorio, tablet)."
-          subtitle="Móvil vs escritorio"
-          rows={data.devices.map((d) => ({ label: deviceLabel(d.label), value: d.value, tip: DEVICE_TIPS[d.label] }))}
+          title="Dónde visita más la gente"
+          titleTip="Las páginas más vistas del sitio. Ambos dominios (drumandbasschile.cl y dnbchile.cl) se cuentan juntos por ruta."
+          subtitle="Páginas más vistas del sitio"
+          rows={data.topPages
+            .filter((p) => {
+              const clean = p.label.split('?')[0].replace(/\/$/, '') || '/';
+              return clean !== '/productores' && clean !== '/organizaciones';
+            })
+            .map((p) => ({ label: pageLabel(p.label), sub: p.label, value: p.value, tip: pageTip(p.label) }))}
           empty="Sin datos."
           showPercent
         />
       </div>
-
-      <BarList
-        title="Dónde visita más la gente"
-        titleTip="Las páginas más vistas del sitio. Ambos dominios (drumandbasschile.cl y dnbchile.cl) se cuentan juntos por ruta."
-        subtitle="Páginas más vistas del sitio"
-        rows={data.topPages
-          .filter((p) => {
-            const clean = p.label.split('?')[0].replace(/\/$/, '') || '/';
-            return clean !== '/productores' && clean !== '/organizaciones';
-          })
-          .map((p) => ({ label: pageLabel(p.label), sub: p.label, value: p.value, tip: pageTip(p.label) }))}
-        empty="Sin datos."
-        showPercent
-      />
     </>
   );
 }
