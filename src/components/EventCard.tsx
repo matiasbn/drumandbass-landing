@@ -130,7 +130,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
           url={tickets}
           date={date}
         />
-        <ProximityBadge date={date} endDate={endDate} size={featured ? 'lg' : 'sm'} />
+        <ProximityBadge date={date} endDate={endDate} size={featured ? 'md' : 'sm'} shadow />
       </div>
     </article>
   );

@@ -11,11 +11,14 @@ export default function ProximityBadge({
   date,
   endDate,
   size = 'lg',
+  shadow = false,
 }: {
   date: string;
   endDate?: string;
-  /** 'lg' para el hero, 'sm' para tarjetas/filas compactas. */
-  size?: 'sm' | 'lg';
+  /** 'lg' = badge clásico (EventItem); 'md'/'sm' = tarjetas del rediseño (EventCard). */
+  size?: 'sm' | 'md' | 'lg';
+  /** Sombra brutalista, solo para las tarjetas del rediseño. */
+  shadow?: boolean;
 }) {
   const [badge, setBadge] = useState<Badge | null>(null);
 
@@ -27,17 +30,16 @@ export default function ProximityBadge({
   // "PRÓXIMA SEMANA" se oculta a propósito (daba problemas); el resto sí se muestra.
   if (badge.label === 'PRÓXIMA SEMANA') return null;
 
-  // Un poco más chico que el botón de tickets (que usa clamp equivalente), con la
-  // misma sombra brutalista de 8px.
-  const sizeCls =
-    size === 'sm'
-      ? 'text-[clamp(0.5rem,0.7vw,0.72rem)] px-2 py-0.5 border-2 tracking-wider'
-      : 'text-[clamp(0.6rem,0.85vw,0.9rem)] px-[clamp(0.5rem,1vw,0.85rem)] py-[clamp(0.15rem,0.35vw,0.45rem)] border-4 tracking-widest';
+  const sizeCls = {
+    sm: 'text-[clamp(0.5rem,0.7vw,0.72rem)] px-2 py-0.5 border-2 tracking-wider',
+    md: 'text-[clamp(0.6rem,0.85vw,0.9rem)] px-[clamp(0.5rem,1vw,0.85rem)] py-[clamp(0.15rem,0.35vw,0.45rem)] border-4 tracking-widest',
+    lg: 'text-sm lg:text-xl px-3 py-1.5 lg:px-4 lg:py-2 border-4 tracking-widest',
+  }[size];
   const dotCls = size === 'sm' ? 'mr-1.5 w-1.5 h-1.5' : 'mr-2 w-2 h-2';
 
   return (
     <div
-      className={`flex items-center bg-red-600 text-white font-black mono border-black uppercase animate-pulse brutalist-shadow ${sizeCls}`}
+      className={`flex items-center bg-red-600 text-white font-black mono border-black uppercase animate-pulse ${shadow ? 'brutalist-shadow' : ''} ${sizeCls}`}
     >
       {badge.dot && <span className={`rounded-full bg-white inline-block ${dotCls}`}></span>}
       <span>
