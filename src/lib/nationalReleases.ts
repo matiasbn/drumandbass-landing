@@ -25,9 +25,10 @@ function anonClient() {
 /**
  * Junta los releases de SoundCloud marcados como "Publicar en Releases
  * Nacionales" por todos los DJs con presskit publicado, ordenados por fecha de
- * publicación (display_date de SoundCloud), y devuelve los últimos `limit`.
+ * publicación (display_date de SoundCloud), del más nuevo al más antiguo.
+ * Si se pasa `limit`, devuelve solo los primeros `limit`; si no, todos.
  */
-export async function getNationalReleases(limit = 3): Promise<NationalRelease[]> {
+export async function getNationalReleases(limit?: number): Promise<NationalRelease[]> {
   const supabase = anonClient();
   if (!supabase) return [];
 
@@ -77,5 +78,5 @@ export async function getNationalReleases(limit = 3): Promise<NationalRelease[]>
     return tb - ta;
   });
 
-  return releases.slice(0, limit);
+  return typeof limit === 'number' ? releases.slice(0, limit) : releases;
 }

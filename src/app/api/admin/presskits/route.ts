@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -112,6 +113,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Desmarcar un release debe reflejarse al instante en home y /releases.
+  revalidatePath('/');
+  revalidatePath('/releases');
   return NextResponse.json({ presskit: data });
 }
 
