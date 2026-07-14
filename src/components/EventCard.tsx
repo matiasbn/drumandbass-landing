@@ -93,7 +93,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {venue}
+                  {venue} - {address}
                 </a>
               ) : (
                 venue
