@@ -28,6 +28,17 @@ export interface AnalyticsNamedValue {
   value: number;
 }
 
+// Métricas por día (para el detalle al hacer clic en una barra del gráfico).
+export interface DailyStat {
+  label: string; // "14 jul/26"
+  date: string; // "20260714"
+  activeUsers: number;
+  newUsers: number;
+  sessions: number;
+  pageViews: number;
+  avgSessionDuration: number;
+}
+
 export interface AnalyticsOverview {
   configured: boolean;
   days: number;
@@ -38,10 +49,14 @@ export interface AnalyticsOverview {
     pageViews: number;
     avgSessionDuration: number; // segundos
   };
-  daily: AnalyticsNamedValue[]; // usuarios activos por día
+  daily: DailyStat[]; // métricas por día
   topPages: AnalyticsNamedValue[];
   topEvents: AnalyticsNamedValue[];
   channels: AnalyticsNamedValue[];
+  // Clics a tickets desglosados por evento (parámetro event_title del evento
+  // event_link_click). Requiere una custom dimension "event_title" en GA4.
+  ticketClicks: AnalyticsNamedValue[];
+  ticketClicksAvailable: boolean;
 }
 
 const num = (v?: string | null) => (v ? Number(v) : 0);
@@ -64,6 +79,8 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
     topPages: [],
     topEvents: [],
     channels: [],
+    ticketClicks: [],
+    ticketClicksAvailable: false,
   };
 
   const ctx = getClient();
@@ -88,7 +105,13 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
         property,
         dateRanges,
         dimensions: [{ name: 'date' }],
-        metrics: [{ name: 'activeUsers' }],
+        metrics: [
+          { name: 'activeUsers' },
+          { name: 'newUsers' },
+          { name: 'sessions' },
+          { name: 'screenPageViews' },
+          { name: 'averageSessionDuration' },
+        ],
         orderBys: [{ dimension: { dimensionName: 'date' } }],
       }),
       client.runReport({
@@ -119,9 +142,42 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
 
     const s = summaryRes[0].rows?.[0]?.metricValues ?? [];
 
+    // Clics a tickets por evento: desglosa event_link_click por su parámetro
+    // event_title. Requiere una custom dimension "event_title" en GA4; si no
+    // existe, la API falla y devolvemos vacío sin romper el resto.
+    let ticketClicks: AnalyticsNamedValue[] = [];
+    let ticketClicksAvailable = false;
+    try {
+      const tc = await client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'customEvent:event_title' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: {
+          filter: {
+            fieldName: 'eventName',
+            stringFilter: { value: 'event_link_click' },
+          },
+        },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: 20,
+      });
+      ticketClicks = (tc[0].rows ?? [])
+        .map((r) => ({
+          label: r.dimensionValues?.[0]?.value ?? '',
+          value: num(r.metricValues?.[0]?.value),
+        }))
+        .filter((r) => r.label && r.label !== '(not set)');
+      ticketClicksAvailable = true;
+    } catch {
+      // custom dimension "event_title" no registrada aún
+    }
+
     return {
       configured: true,
       days,
+      ticketClicks,
+      ticketClicksAvailable,
       summary: {
         activeUsers: num(s[0]?.value),
         newUsers: num(s[1]?.value),
@@ -129,10 +185,19 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
         pageViews: num(s[3]?.value),
         avgSessionDuration: num(s[4]?.value),
       },
-      daily: (dailyRes[0].rows ?? []).map((r) => ({
-        label: fmtDate(r.dimensionValues?.[0]?.value ?? ''),
-        value: num(r.metricValues?.[0]?.value),
-      })),
+      daily: (dailyRes[0].rows ?? []).map((r) => {
+        const raw = r.dimensionValues?.[0]?.value ?? '';
+        const m = r.metricValues ?? [];
+        return {
+          label: fmtDate(raw),
+          date: raw,
+          activeUsers: num(m[0]?.value),
+          newUsers: num(m[1]?.value),
+          sessions: num(m[2]?.value),
+          pageViews: num(m[3]?.value),
+          avgSessionDuration: num(m[4]?.value),
+        };
+      }),
       topPages: (pagesRes[0].rows ?? []).map((r) => ({
         label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
         value: num(r.metricValues?.[0]?.value),

@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnalyticsOverview } from '@/src/lib/ga';
+import { getEvents } from '@/src/lib/contentful';
+import dayjs from '@/src/lib/date';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +49,27 @@ export async function GET(request: NextRequest) {
 
   try {
     const data = await getAnalyticsOverview(days);
+
+    // Cruza los clics de GA con los eventos ACTUALES de Contentful: así la lista
+    // muestra cada evento vigente hoy (aunque tenga 0 clics), no solo los que
+    // GA registró. Se matchea por título (mismo `event_title` que envía TicketButton).
+    try {
+      const events = await getEvents();
+      const now = dayjs();
+      const upcoming = events.filter((e) => {
+        const start = dayjs(e.date);
+        const end = e.endDate ? dayjs(e.endDate) : start;
+        const effectiveEnd = end.isAfter(start) ? end : start;
+        return effectiveEnd.isAfter(now);
+      });
+      const clickByTitle = new Map(data.ticketClicks.map((t) => [t.label, t.value]));
+      data.ticketClicks = upcoming
+        .map((e) => ({ label: e.title, value: clickByTitle.get(e.title) ?? 0 }))
+        .sort((a, b) => b.value - a.value);
+    } catch {
+      // si Contentful falla, dejamos los clics tal cual vienen de GA
+    }
+
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json(
