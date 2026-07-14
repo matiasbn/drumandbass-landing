@@ -1,7 +1,15 @@
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { PresskitMix } from '@/src/types/presskit';
 import { fetchSoundcloudDisplayDate, isSoundcloudUrl } from '@/src/lib/soundcloud';
+
+// Revalida las vistas que dependen de los releases marcados (home + /releases),
+// para que marcar/desmarcar se refleje al instante y no espere el ISR (1h).
+function revalidateReleases() {
+  revalidatePath('/');
+  revalidatePath('/releases');
+}
 
 // Captura la fecha de publicación (display_date) de SoundCloud para los releases
 // marcados como "featured" que todavía no la tengan. Solo aplica a SoundCloud.
@@ -77,6 +85,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  revalidateReleases();
   return NextResponse.json({ presskit: data });
 }
 
@@ -116,5 +125,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  revalidateReleases();
   return NextResponse.json({ presskit: data });
 }

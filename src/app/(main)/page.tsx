@@ -31,11 +31,13 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 const Home = async () => {
-  const [contentfulEvents, sotanoVideos, nationalReleases] = await Promise.all([
+  const [contentfulEvents, sotanoVideos, allReleases] = await Promise.all([
     getEvents(),
     getSotanoVideos(2),
-    getNationalReleases(5),
+    getNationalReleases(),
   ]);
+  // Mostramos hasta 4 releases + el botón "ver todos" como 5ª celda de la fila.
+  const nationalReleases = allReleases.slice(0, 4);
 
   // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
   // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
@@ -99,9 +101,9 @@ const Home = async () => {
         <section className="p-6 lg:p-12 border-b-4 border-black">
           <h2 className="text-5xl font-black uppercase mb-2 italic">Releases Nacionales</h2>
           <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 mb-6 leading-tight">
-            Los últimos releases de productores nacionales. Publica el tuyo desde tu presskit.
+            Lo más reciente de los productores de drum and bass nacionales. Publica el tuyo desde tu presskit.
           </p>
-          <NationalReleases releases={nationalReleases} />
+          <NationalReleases releases={nationalReleases} moreHref="/releases" />
         </section>
       )}
     </main>
