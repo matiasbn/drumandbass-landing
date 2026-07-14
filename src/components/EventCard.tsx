@@ -48,7 +48,15 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
     : 'text-[clamp(0.65rem,0.8vw,0.85rem)] py-[clamp(0.35rem,0.5vw,0.6rem)] px-[clamp(0.8rem,1.2vw,1.5rem)]';
 
   return (
-    <article className="group brutalist-border bg-white overflow-hidden flex items-stretch hover:bg-gray-50 transition-colors">
+    <article className="group relative brutalist-border bg-white overflow-hidden flex items-stretch hover:bg-gray-50 transition-colors">
+      {/* Etiqueta "PRÓXIMO EVENTO" arrinconada en la esquina superior derecha, solo
+          en el destacado, para dejar claro que está ahí por ser el próximo. */}
+      {featured && (
+        <div className="absolute top-0 right-0 z-10 bg-[#ff0055] text-white mono text-[clamp(0.55rem,0.8vw,0.8rem)] font-black uppercase tracking-widest px-3 py-1 border-l-4 border-b-4 border-black">
+          Próximo evento
+        </div>
+      )}
+
       {/* Flyer siempre 1:1 y a la izquierda. self-start evita que se estire si el
           contenido llegara a ser más alto que el cuadrado. */}
       <div
