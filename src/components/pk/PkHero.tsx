@@ -9,11 +9,13 @@ import {
   RiArrowRightLine,
   RiLogoutBoxLine,
   RiLoader4Line,
+  RiGoogleFill,
 } from '@remixicon/react';
 
 export default function PkHero() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
@@ -38,6 +40,21 @@ export default function PkHero() {
   const handleSignOut = async () => {
     await supabase.auth.signOut({ scope: 'global' });
     setUser(null);
+  };
+
+  // Same flow as PkAuthContext.signInWithGoogle: drop the post-login redirect
+  // cookie and go straight to Google — no intermediate /pk/edit auth screen.
+  const handleGoogleLogin = async () => {
+    setSigningIn(true);
+    document.cookie = 'pk_auth_redirect=/pk/edit; path=/; max-age=600; SameSite=Lax';
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) setSigningIn(false);
   };
 
   return (
@@ -75,13 +92,18 @@ export default function PkHero() {
           </div>
         </div>
       ) : (
-        <Link
-          href="/pk/edit"
-          className="inline-flex items-center gap-3 bg-black text-white px-8 py-4 text-xl font-black uppercase tracking-wider brutalist-border hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(255,0,85,1)] transition-all"
+        <button
+          onClick={handleGoogleLogin}
+          disabled={signingIn}
+          className="inline-flex items-center gap-3 bg-black text-white px-8 py-4 text-xl font-black uppercase tracking-wider brutalist-border hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(255,0,85,1)] transition-all disabled:opacity-50 disabled:pointer-events-none"
         >
+          {signingIn ? (
+            <RiLoader4Line className="w-6 h-6 animate-spin" />
+          ) : (
+            <RiGoogleFill className="w-6 h-6" />
+          )}
           CREA TU PRESSKIT
-          <RiArrowRightLine className="w-6 h-6" />
-        </Link>
+        </button>
       )}
     </section>
   );
