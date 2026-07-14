@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, Space_Mono } from 'next/font/google';
 import { GoogleAnalytics } from '@/src/components/GoogleAnalytics';
+import ClickTracker from '@/src/components/ClickTracker';
 import DevLogout from '@/src/components/DevLogout';
 import { BASE_URL } from '@/src/constants';
 import '../globals.css';
@@ -90,6 +91,7 @@ export default function RootLayout({
     <html lang="es">
       {gaId && <GoogleAnalytics gaId={gaId} />}
       <body className={`${spaceGrotesk.variable} ${spaceMono.variable} antialiased`}>
+        {gaId && <ClickTracker />}
         {children}
         <DevLogout />
       </body>
