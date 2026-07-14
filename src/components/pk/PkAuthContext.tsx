@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createClient } from '@/src/lib/supabase';
+import { event } from '@/src/lib/gtag';
 import { PkProfile } from '@/src/types/presskit';
 
 interface PkAuthContextType {
@@ -90,6 +91,7 @@ export function PkAuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, fetchPkProfile]);
 
   const signInWithGoogle = async () => {
+    event('login', { method: 'google', source: 'pk_modal' });
     document.cookie = 'pk_auth_redirect=/pk/edit; path=/; max-age=600; SameSite=Lax';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/src/lib/supabase';
+import { event } from '@/src/lib/gtag';
 import { User } from '@supabase/supabase-js';
 import {
   RiMicLine,
@@ -46,6 +47,7 @@ export default function PkHero() {
   // cookie and go straight to Google — no intermediate /pk/edit auth screen.
   const handleGoogleLogin = async () => {
     setSigningIn(true);
+    event('login', { method: 'google', source: 'pk_hero' });
     document.cookie = 'pk_auth_redirect=/pk/edit; path=/; max-age=600; SameSite=Lax';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
