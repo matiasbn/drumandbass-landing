@@ -1,8 +1,10 @@
-import React from 'react';
+'use client';
+
 import { RiYoutubeLine } from '@remixicon/react';
 
 import type { YoutubeVideo } from '@/src/lib/youtube';
 import { SOCIALS } from '@/src/constants';
+import { event } from '@/src/lib/gtag';
 import BrutalistButton from '@/src/components/BigButton';
 
 export default function YoutubeVideos({ videos }: { videos: YoutubeVideo[] }) {
@@ -18,6 +20,7 @@ export default function YoutubeVideos({ videos }: { videos: YoutubeVideo[] }) {
             href={`https://www.youtube.com/watch?v=${v.id}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => event('sotano_video_click', { video_title: v.title })}
             className="group brutalist-border bg-white overflow-hidden block"
           >
             <div className="relative aspect-video bg-black">

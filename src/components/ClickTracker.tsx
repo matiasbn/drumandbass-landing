@@ -3,6 +3,24 @@
 import { useEffect } from 'react';
 import { event } from '@/src/lib/gtag';
 
+// Detecta la red social a partir del host del enlace (para el evento social_click).
+function socialNetwork(href: string): string | null {
+  try {
+    const h = new URL(href).hostname.replace(/^www\./, '');
+    if (h.includes('instagram.com')) return 'instagram';
+    if (h.includes('wa.me') || h.includes('whatsapp.com')) return 'whatsapp';
+    if (h.includes('soundcloud.com')) return 'soundcloud';
+    if (h.includes('youtube.com') || h.includes('youtu.be')) return 'youtube';
+    if (h.includes('spotify.com')) return 'spotify';
+    if (h.includes('facebook.com')) return 'facebook';
+    if (h.includes('tiktok.com')) return 'tiktok';
+    if (h.includes('x.com') || h.includes('twitter.com')) return 'twitter';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Auto-tracking global: escucha todos los clics en <a> y <button> del sitio y
 // envía un evento `ui_click` a GA con el texto, el destino y la sección donde
 // ocurrió. Así CUALQUIER sección nueva queda trackeada sin agregar código:
@@ -34,11 +52,18 @@ export default function ClickTracker() {
           .slice(0, 60) ||
         undefined;
 
-      event('ui_click', {
-        label: explicit || text || (isLink ? 'link' : 'button'),
-        ...(href ? { link_url: href } : {}),
-        ...(section ? { section } : {}),
-      });
+      // Si es un enlace a una red social/WhatsApp, lo registramos como social_click;
+      // el resto como ui_click genérico.
+      const network = href ? socialNetwork(href) : null;
+      if (network) {
+        event('social_click', { network, ...(section ? { section } : {}) });
+      } else {
+        event('ui_click', {
+          label: explicit || text || (isLink ? 'link' : 'button'),
+          ...(href ? { link_url: href } : {}),
+          ...(section ? { section } : {}),
+        });
+      }
     }
 
     document.addEventListener('click', onClick, { capture: true });

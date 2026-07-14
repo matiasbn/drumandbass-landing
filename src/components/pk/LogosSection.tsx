@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import BrutalistButton from '@/src/components/BigButton';
+import { event } from '@/src/lib/gtag';
 import { RiDownloadLine, RiEyeLine, RiEyeOffLine } from '@remixicon/react';
 
 interface LogosSectionProps {
@@ -45,6 +46,7 @@ export default function LogosSection({ slug, artistName, logoUrls }: LogosSectio
             variant="red"
             href={`/api/pk/${slug}/logos`}
             className="w-fit"
+            onClick={() => event('logo_download', { artist: artistName })}
           >
             <RiDownloadLine className="w-5 h-5" />
             DESCARGAR TODOS (ZIP)

@@ -5,6 +5,7 @@ import { PkAuthProvider, usePkAuth } from '@/src/components/pk/PkAuthContext';
 import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
 import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
+import { event } from '@/src/lib/gtag';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -372,6 +373,7 @@ function PresskitEditor() {
         setSaveMessage(`Error: ${data.error}`);
       } else {
         setPresskit(data.presskit);
+        event(method === 'POST' ? 'presskit_created' : 'presskit_saved');
         setSaveMessage('Guardado correctamente');
         setTimeout(() => setSaveMessage(''), 3000);
       }
@@ -406,8 +408,10 @@ function PresskitEditor() {
   // backend desde SoundCloud al guardar; aquí solo alternamos el flag.
   const toggleMixFeatured = (i: number) => {
     const updated = [...mixes];
-    updated[i] = { ...updated[i], featured: !updated[i].featured };
+    const turningOn = !updated[i].featured;
+    updated[i] = { ...updated[i], featured: turningOn };
     setMixes(updated);
+    if (turningOn) event('release_publish', { title: updated[i].title });
   };
 
   // Link handlers
@@ -1115,7 +1119,10 @@ function PresskitEditor() {
           <div className="flex items-center gap-4 p-4 brutalist-border bg-gray-50">
             <button
               type="button"
-              onClick={() => setPublished(!published)}
+              onClick={() => {
+                event('presskit_publish', { published: !published });
+                setPublished(!published);
+              }}
               className={`inline-flex items-center gap-2 mono text-sm font-bold uppercase px-4 py-2 brutalist-border transition-colors ${
                 published
                   ? 'bg-black text-white'

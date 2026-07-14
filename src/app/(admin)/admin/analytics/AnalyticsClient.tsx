@@ -33,8 +33,40 @@ const EVENT_LABELS: Record<string, string> = {
   button_click: 'Clics en botones',
   ui_click: 'Clics en la interfaz',
   login: 'Inicios de sesión',
+  // Acciones propias del sitio
+  junglist_signup: 'Registros de junglist',
+  junglist_unsubscribe: 'Bajas de junglist',
+  presskit_created: 'Presskits creados',
+  presskit_saved: 'Presskits guardados',
+  presskit_publish: 'Presskit publicado/despublicado',
+  presskit_view: 'Vistas de presskit',
+  release_publish: 'Releases publicados (DJ)',
+  release_click: 'Clic a un release',
+  sotano_video_click: 'Clic a video de El Sótano',
+  social_click: 'Clic a redes/WhatsApp',
+  logo_download: 'Descargas de logos (ZIP)',
+  enter_club: 'Entradas al club 3D',
 };
 const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
+
+// Eventos "propios del sitio" (acciones clave) vs automáticos de GA.
+const SITE_EVENTS = new Set([
+  'event_link_click',
+  'junglist_signup',
+  'junglist_unsubscribe',
+  'presskit_created',
+  'presskit_saved',
+  'presskit_publish',
+  'presskit_view',
+  'release_publish',
+  'release_click',
+  'sotano_video_click',
+  'social_click',
+  'logo_download',
+  'enter_club',
+  'login',
+  'button_click',
+]);
 
 // Nombres legibles para las rutas del sitio.
 const PAGE_LABELS: Record<string, string> = {
@@ -90,7 +122,8 @@ const channelTip = (name: string) => CHANNEL_TIPS[name];
 
 const METRIC_TIPS = {
   activeUsers: 'Personas distintas que visitaron el sitio en el rango elegido.',
-  newUsers: 'Usuarios que visitaron el sitio por primera vez.',
+  newUsers: 'Usuarios que visitaron el sitio por primera vez, acumulados en el rango.',
+  returningUsers: 'Usuarios que ya habían visitado antes y volvieron, acumulados en el rango (totales − nuevos).',
   sessions: 'Visitas al sitio. Una sesión es una tanda de actividad; termina tras 30 min de inactividad.',
   pageViews: 'Total de páginas cargadas. Una misma persona puede ver varias.',
   avgSessionDuration: 'Tiempo promedio que dura una visita (sesión).',
@@ -110,6 +143,18 @@ const EVENT_TIPS: Record<string, string> = {
   button_click: 'Clic en un botón rastreado del home.',
   ui_click: 'Clic en cualquier botón o enlace del sitio (auto-tracking).',
   login: 'Inicio de sesión con Google (presskit).',
+  junglist_signup: 'Un usuario completó su registro como junglist.',
+  junglist_unsubscribe: 'Un junglist se dio de baja.',
+  presskit_created: 'Un DJ creó su presskit por primera vez.',
+  presskit_saved: 'Un DJ guardó cambios en su presskit.',
+  presskit_publish: 'Un DJ publicó o despublicó su presskit.',
+  presskit_view: 'Alguien vio un presskit público.',
+  release_publish: 'Un DJ marcó un release para publicarlo en Releases Nacionales.',
+  release_click: 'Un visitante hizo clic en un release (hacia SoundCloud).',
+  sotano_video_click: 'Clic a un video de El Sótano (hacia YouTube).',
+  social_click: 'Clic a una red social o WhatsApp.',
+  logo_download: 'Descarga del ZIP de logos de un DJ.',
+  enter_club: 'Alguien entró al club 3D.',
 };
 const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
@@ -452,9 +497,10 @@ export default function AnalyticsClient() {
       ) : data ? (
         <div className="space-y-6">
           {/* Scorecards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <Scorecard label="Usuarios activos" value={fmt(data.summary.activeUsers)} hint={rangeLabel} tip={METRIC_TIPS.activeUsers} />
             <Scorecard label="Usuarios nuevos" value={fmt(data.summary.newUsers)} hint="Primera visita" tip={METRIC_TIPS.newUsers} />
+            <Scorecard label="Usuarios que vuelven" value={fmt(data.summary.returningUsers)} hint="Ya habían venido" tip={METRIC_TIPS.returningUsers} />
             <Scorecard label="Sesiones" value={fmt(data.summary.sessions)} hint="Visitas totales" tip={METRIC_TIPS.sessions} />
             <Scorecard label="Vistas de página" value={fmt(data.summary.pageViews)} hint="Páginas cargadas" tip={METRIC_TIPS.pageViews} />
             <Scorecard
@@ -488,16 +534,13 @@ export default function AnalyticsClient() {
           {/* Acciones + Canales — debajo de clics a tickets */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <BarList
-              title="Acciones (eventos)"
-              titleTip="Los eventos que GA registra: automáticos (vistas, scroll, clics externos) y los personalizados del sitio (login, clic a tickets, etc.)."
-              subtitle="Qué hace la gente"
-              rows={data.topEvents.map((e) => ({
-                label: eventLabel(e.label),
-                sub: e.label,
-                value: e.value,
-                tip: eventTip(e.label),
-              }))}
-              empty="Sin datos."
+              title="Acciones clave del sitio"
+              titleTip="Eventos propios del sitio: registro de junglist, clic a El Sótano, presskit, releases, tickets, etc. Es lo accionable."
+              subtitle="Lo que hace la gente en el sitio"
+              rows={data.topEvents
+                .filter((e) => SITE_EVENTS.has(e.label))
+                .map((e) => ({ label: eventLabel(e.label), sub: e.label, value: e.value, tip: eventTip(e.label) }))}
+              empty="Aún no hay acciones registradas. Se irán llenando con el uso del sitio."
             />
             <BarList
               title="De dónde llega la gente"
@@ -512,6 +555,17 @@ export default function AnalyticsClient() {
               showPercent
             />
           </div>
+
+          {/* Actividad general — eventos automáticos de GA */}
+          <BarList
+            title="Actividad general"
+            titleTip="Eventos automáticos de Google Analytics (vistas de página, sesiones, scroll, etc.). Sirven de contexto, no de decisión."
+            subtitle="Eventos automáticos de GA"
+            rows={data.topEvents
+              .filter((e) => !SITE_EVENTS.has(e.label))
+              .map((e) => ({ label: eventLabel(e.label), sub: e.label, value: e.value, tip: eventTip(e.label) }))}
+            empty="Sin datos."
+          />
 
           {/* Dónde visita más la gente — a ancho completo */}
           <BarList

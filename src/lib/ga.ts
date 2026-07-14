@@ -45,6 +45,7 @@ export interface AnalyticsOverview {
   summary: {
     activeUsers: number;
     newUsers: number;
+    returningUsers: number;
     sessions: number;
     pageViews: number;
     avgSessionDuration: number; // segundos
@@ -74,7 +75,7 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
   const empty: AnalyticsOverview = {
     configured: false,
     days,
-    summary: { activeUsers: 0, newUsers: 0, sessions: 0, pageViews: 0, avgSessionDuration: 0 },
+    summary: { activeUsers: 0, newUsers: 0, returningUsers: 0, sessions: 0, pageViews: 0, avgSessionDuration: 0 },
     daily: [],
     topPages: [],
     topEvents: [],
@@ -99,6 +100,7 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
           { name: 'sessions' },
           { name: 'screenPageViews' },
           { name: 'averageSessionDuration' },
+          { name: 'totalUsers' },
         ],
       }),
       client.runReport({
@@ -128,7 +130,7 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }],
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-        limit: 12,
+        limit: 30,
       }),
       client.runReport({
         property,
@@ -181,6 +183,8 @@ export async function getAnalyticsOverview(days = 30): Promise<AnalyticsOverview
       summary: {
         activeUsers: num(s[0]?.value),
         newUsers: num(s[1]?.value),
+        // Recurrentes = usuarios totales − nuevos, acumulados en el rango.
+        returningUsers: Math.max(0, num(s[5]?.value) - num(s[1]?.value)),
         sessions: num(s[2]?.value),
         pageViews: num(s[3]?.value),
         avgSessionDuration: num(s[4]?.value),

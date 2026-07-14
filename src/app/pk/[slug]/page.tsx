@@ -5,6 +5,7 @@ import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
+import TrackOnMount from '@/src/components/TrackOnMount';
 import {
   RiInstagramLine,
   RiSoundcloudLine,
@@ -104,6 +105,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
 
   return (
     <main className="flex-1">
+      <TrackOnMount name="presskit_view" params={{ artist: presskit.artist_name, slug }} />
       {/* Hero */}
       <section className="border-b-4 border-black p-6 lg:p-12 flex flex-col md:flex-row gap-8 items-center">
         <PhotoCarousel

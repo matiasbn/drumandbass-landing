@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ClubClient from './ClubClient';
+import TrackOnMount from '@/src/components/TrackOnMount';
 
 export const metadata: Metadata = {
   title: 'Club',
@@ -9,5 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default function ClubPage() {
-  return <ClubClient />;
+  return (
+    <>
+      <TrackOnMount name="enter_club" />
+      <ClubClient />
+    </>
+  );
 }

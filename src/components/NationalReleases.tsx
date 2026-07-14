@@ -1,7 +1,10 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { RiSoundcloudLine, RiArrowRightLine } from '@remixicon/react';
 import dayjs from '@/src/lib/date';
+import { event } from '@/src/lib/gtag';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 
 // Clases literales para que Tailwind las incluya (no se pueden interpolar dinámicas).
@@ -50,6 +53,7 @@ export default function NationalReleases({
             rel="noopener noreferrer"
             aria-label={`Escuchar ${r.title} en SoundCloud`}
             className="absolute inset-0"
+            onClick={() => event('release_click', { release_title: r.title, artist: r.artistName })}
           />
 
           <div className="flex items-center justify-between gap-2">
