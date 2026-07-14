@@ -86,19 +86,21 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
             {title}
           </h3>
           {venue && (
-            <p className={`font-bold uppercase tracking-tight text-gray-500 truncate mt-0.5 ${venueCls}`}>
-              {address ? (
+            <div className="mt-0.5">
+              <p className={`font-bold uppercase tracking-tight text-gray-500 truncate ${venueCls}`}>
+                {venue}
+              </p>
+              {address && (
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${address}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  className={`block font-bold uppercase tracking-tight text-gray-400 truncate ${venueCls}`}
                 >
-                  {venue} - {address}
+                  {address}
                 </a>
-              ) : (
-                venue
               )}
-            </p>
+            </div>
           )}
         </div>
 
