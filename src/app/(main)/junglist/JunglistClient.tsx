@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 
 import dayjs from '@/src/lib/date';
 import { createClient, Junglist } from '@/src/lib/supabase';
+import { event } from '@/src/lib/gtag';
 import { WHATSAPP_LINK } from '@/src/constants';
 import BrutalistButton from '@/src/components/BigButton';
 
@@ -131,6 +132,7 @@ export default function JunglistClient() {
       return;
     }
     setJunglist(data.junglist);
+    if (method === 'POST') event('junglist_signup');
     setView('profile');
   };
 
@@ -144,6 +146,7 @@ export default function JunglistClient() {
       return;
     }
     // Baja exitosa: cerrar sesión y volver al home.
+    event('junglist_unsubscribe');
     await supabase.auth.signOut().catch(() => {});
     window.location.href = '/';
   };
