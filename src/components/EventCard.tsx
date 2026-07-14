@@ -112,10 +112,10 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
           )}
         </div>
 
-        {/* Lineup (si hay), recortado */}
+        {/* Lineup (si hay): se muestra completo, continúa en las líneas que necesite */}
         {description && (
           <div
-            className={`font-black uppercase italic leading-tight text-black ${featured ? 'line-clamp-3' : 'line-clamp-2'} ${lineupCls}`}
+            className={`font-black uppercase italic leading-tight text-black ${lineupCls}`}
             dangerouslySetInnerHTML={{ __html: documentToHtmlString(description) }}
           />
         )}
