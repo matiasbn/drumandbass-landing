@@ -34,7 +34,7 @@ const Home = async () => {
   const [contentfulEvents, sotanoVideos, nationalReleases] = await Promise.all([
     getEvents(),
     getSotanoVideos(2),
-    getNationalReleases(3),
+    getNationalReleases(5),
   ]);
 
   // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
