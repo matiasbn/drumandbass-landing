@@ -4,9 +4,11 @@ import type { Metadata } from 'next';
 import EventItem from '@/src/components/EventItem';
 import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
+import NationalReleases from '@/src/components/NationalReleases';
 import dayjs from '@/src/lib/date';
 import { getEvents } from '@/src/lib/contentful';
 import { getSotanoVideos } from '@/src/lib/youtube';
+import { getNationalReleases } from '@/src/lib/nationalReleases';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
 export const metadata: Metadata = {
@@ -29,9 +31,10 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 const Home = async () => {
-  const [contentfulEvents, sotanoVideos] = await Promise.all([
+  const [contentfulEvents, sotanoVideos, nationalReleases] = await Promise.all([
     getEvents(),
     getSotanoVideos(2),
+    getNationalReleases(3),
   ]);
 
   // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
@@ -88,6 +91,17 @@ const Home = async () => {
             para que muestren lo suyo.
           </p>
           <YoutubeVideos videos={sotanoVideos} />
+        </section>
+      )}
+
+      {/* Releases Nacionales — releases marcados por los DJs, tras El Sótano */}
+      {nationalReleases.length > 0 && (
+        <section className="p-6 lg:p-12 border-b-4 border-black">
+          <h2 className="text-5xl font-black uppercase mb-2 italic">Releases Nacionales</h2>
+          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 mb-6 leading-tight">
+            Los últimos releases de productores nacionales. Publica el tuyo desde tu presskit.
+          </p>
+          <NationalReleases releases={nationalReleases} />
         </section>
       )}
     </main>
