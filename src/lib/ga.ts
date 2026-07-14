@@ -54,8 +54,8 @@ export interface AnalyticsOverview {
   topPages: AnalyticsNamedValue[];
   topEvents: AnalyticsNamedValue[];
   channels: AnalyticsNamedValue[];
-  // Por país: usuarios nuevos vs recurrentes.
-  countries: { label: string; newUsers: number; returningUsers: number }[];
+  // Por país: total de usuarios + desglose por origen/canal.
+  countries: { label: string; total: number; sources: AnalyticsNamedValue[] }[];
   // Clics a tickets desglosados por evento (parámetro event_title del evento
   // event_link_click). Requiere una custom dimension "event_title" en GA4.
   ticketClicks: AnalyticsNamedValue[];
@@ -178,10 +178,10 @@ export async function getAnalyticsOverview(
       client.runReport({
         property,
         dateRanges,
-        dimensions: [{ name: 'country' }],
-        metrics: [{ name: 'activeUsers' }, { name: 'newUsers' }, { name: 'totalUsers' }],
+        dimensions: [{ name: 'country' }, { name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'activeUsers' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
-        limit: 8,
+        limit: 100,
       }),
     ]);
 
@@ -217,6 +217,25 @@ export async function getAnalyticsOverview(
     } catch {
       // custom dimension "event_title" no registrada aún
     }
+
+    // Pivot país × canal: total de usuarios por país + desglose por origen.
+    const countryMap = new Map<string, { label: string; total: number; sources: AnalyticsNamedValue[] }>();
+    for (const r of countriesRes[0].rows ?? []) {
+      const country = r.dimensionValues?.[0]?.value ?? '(desconocido)';
+      const channel = r.dimensionValues?.[1]?.value ?? '(desconocido)';
+      const v = num(r.metricValues?.[0]?.value);
+      let entry = countryMap.get(country);
+      if (!entry) {
+        entry = { label: country, total: 0, sources: [] };
+        countryMap.set(country, entry);
+      }
+      entry.total += v;
+      entry.sources.push({ label: channel, value: v });
+    }
+    const countries = Array.from(countryMap.values())
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+      .map((c) => ({ ...c, sources: c.sources.sort((a, b) => b.value - a.value) }));
 
     return {
       configured: true,
@@ -257,15 +276,7 @@ export async function getAnalyticsOverview(
         label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
         value: num(r.metricValues?.[0]?.value),
       })),
-      countries: (countriesRes[0].rows ?? []).map((r) => {
-        const m = r.metricValues ?? [];
-        const newU = num(m[1]?.value);
-        return {
-          label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
-          newUsers: newU,
-          returningUsers: Math.max(0, num(m[2]?.value) - newU),
-        };
-      }),
+      countries,
     };
   } catch (err) {
     console.error('GA4 Data API error:', err);
