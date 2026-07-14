@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
+import { PresskitMix } from '@/src/types/presskit';
 
 interface PresskitItem {
   id: string;
@@ -17,6 +18,13 @@ interface PresskitItem {
   published: boolean;
   slug: string | null;
   created_at: string;
+  mixes: PresskitMix[];
+}
+
+// Un release cuenta como "publicado en Releases Nacionales" si está marcado como
+// featured, es tipo release y de SoundCloud (misma regla que el home).
+function isFeaturedRelease(m: PresskitMix): boolean {
+  return !!m.featured && m.type === 'release' && m.platform === 'SoundCloud';
 }
 
 type SortKey = 'artist_name' | 'real_name' | 'city' | 'published' | 'created_at';
@@ -28,6 +36,7 @@ export default function PresskitsClient() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ artist_name: '', real_name: '', city: '', country: '', bio: '', published: false });
   const [saving, setSaving] = useState(false);
+  const [unfeaturingKey, setUnfeaturingKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -147,6 +156,31 @@ export default function PresskitsClient() {
     }
   };
 
+  // Desmarca un release publicado (featured=false) y persiste el array completo.
+  const unfeatureTrack = async (pk: PresskitItem, mixIndex: number) => {
+    const newMixes = pk.mixes.map((m, i) =>
+      i === mixIndex ? { ...m, featured: false } : m
+    );
+    setUnfeaturingKey(`${pk.id}:${mixIndex}`);
+    try {
+      const res = await fetch('/api/admin/presskits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pk.id, mixes: newMixes }),
+      });
+      const data = await res.json();
+      if (data.presskit) {
+        setPresskits((prev) =>
+          prev.map((p) => (p.id === pk.id ? { ...p, mixes: data.presskit.mixes } : p))
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setUnfeaturingKey(null);
+    }
+  };
+
   const handleDelete = async (pk: PresskitItem) => {
     if (!confirm(`Eliminar press kit de ${pk.artist_name}?`)) return;
     try {
@@ -198,8 +232,13 @@ export default function PresskitsClient() {
                 </tr>
               </thead>
               <tbody>
-                {sortedPresskits.map((pk) => (
-                  <tr key={pk.id} className="border-b border-gray-300">
+                {sortedPresskits.map((pk) => {
+                  const featured = (pk.mixes || [])
+                    .map((m, idx) => ({ m, idx }))
+                    .filter(({ m }) => isFeaturedRelease(m));
+                  return (
+                  <Fragment key={pk.id}>
+                  <tr className="border-b border-gray-300">
                     {editingId === pk.id ? (
                       <>
                         <td className="py-2 pr-2">
@@ -298,7 +337,62 @@ export default function PresskitsClient() {
                       </>
                     )}
                   </tr>
-                ))}
+                  {editingId === pk.id && (
+                    <tr className="border-b border-gray-300 bg-gray-50">
+                      <td colSpan={7} className="py-3 px-2">
+                        <p className="mono text-xs font-bold uppercase mb-2">
+                          Releases publicados en Releases Nacionales
+                        </p>
+                        {featured.length === 0 ? (
+                          <p className="mono text-xs text-gray-500">
+                            Este DJ no tiene releases publicados.
+                          </p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {featured.map(({ m, idx }) => {
+                              const key = `${pk.id}:${idx}`;
+                              return (
+                                <li
+                                  key={idx}
+                                  className="flex items-center justify-between gap-3 border-2 border-black bg-white px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <a
+                                      href={m.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="mono text-xs font-bold underline hover:text-gray-600 truncate block"
+                                    >
+                                      {m.title}
+                                    </a>
+                                    {m.released_at && (
+                                      <span className="mono text-[10px] text-gray-500">
+                                        {new Date(m.released_at).toLocaleDateString('es-CL', {
+                                          day: '2-digit',
+                                          month: 'short',
+                                          year: 'numeric',
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => unfeatureTrack(pk, idx)}
+                                    disabled={unfeaturingKey === key}
+                                    className="border-2 border-red-600 text-red-600 px-3 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer disabled:opacity-50 shrink-0"
+                                  >
+                                    {unfeaturingKey === key ? '...' : 'Desmarcar'}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

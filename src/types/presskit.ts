@@ -17,6 +17,10 @@ export interface PresskitMix {
   platform: string;
   url: string;
   type?: 'set' | 'release';
+  // "Publicar en Releases Nacionales" — solo aplica a releases de SoundCloud.
+  featured?: boolean;
+  // Fecha de publicación capturada desde SoundCloud (display_date) al marcar featured.
+  released_at?: string | null;
 }
 
 export interface PresskitLink {

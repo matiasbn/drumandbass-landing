@@ -1,5 +1,25 @@
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { PresskitMix } from '@/src/types/presskit';
+import { fetchSoundcloudDisplayDate, isSoundcloudUrl } from '@/src/lib/soundcloud';
+
+// Captura la fecha de publicación (display_date) de SoundCloud para los releases
+// marcados como "featured" que todavía no la tengan. Solo aplica a SoundCloud.
+async function enrichMixes(mixes: PresskitMix[]): Promise<PresskitMix[]> {
+  return Promise.all(
+    mixes.map(async (m) => {
+      const isFeaturedScRelease =
+        !!m.featured && m.type === 'release' && isSoundcloudUrl(m.url);
+      if (!isFeaturedScRelease) {
+        // No es un release de SoundCloud marcado: no debe figurar en el banner.
+        return { ...m, featured: false };
+      }
+      if (m.released_at) return m; // ya capturada
+      const released_at = await fetchSoundcloudDisplayDate(m.url);
+      return { ...m, released_at };
+    })
+  );
+}
 
 export async function GET() {
   const supabase = await createSupabaseServer();
@@ -46,7 +66,7 @@ export async function POST(request: Request) {
       photo_urls: body.photo_urls || [],
       logo_urls: body.logo_urls || [],
       socials: body.socials || [],
-      mixes: body.mixes || [],
+      mixes: await enrichMixes(body.mixes || []),
       links: body.links || [],
       published: true,
     })
@@ -83,7 +103,7 @@ export async function PUT(request: Request) {
       photo_urls: body.photo_urls || [],
       logo_urls: body.logo_urls || [],
       socials: body.socials || [],
-      mixes: body.mixes || [],
+      mixes: await enrichMixes(body.mixes || []),
       links: body.links || [],
       published: body.published ?? false,
       updated_at: new Date().toISOString(),

@@ -88,7 +88,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
   }
 
-  const allowed = ['artist_name', 'real_name', 'city', 'country', 'bio', 'published'];
+  // 'mixes' permite al admin desmarcar releases publicados en Releases Nacionales.
+  const allowed = ['artist_name', 'real_name', 'city', 'country', 'bio', 'published', 'mixes'];
   const updateData: Record<string, unknown> = {};
   for (const key of Object.keys(fields)) {
     if (allowed.includes(key)) {

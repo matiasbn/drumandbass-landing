@@ -397,6 +397,16 @@ function PresskitEditor() {
   const updateMix = (i: number, field: keyof PresskitMix, value: string | PresskitMix['type']) => {
     const updated = [...mixes];
     updated[i] = { ...updated[i], [field]: value };
+    // Si cambia la URL de un release marcado, invalida la fecha para recapturarla al guardar.
+    if (field === 'url') updated[i].released_at = null;
+    setMixes(updated);
+  };
+
+  // "Publicar en Releases Nacionales": la fecha (released_at) la captura el
+  // backend desde SoundCloud al guardar; aquí solo alternamos el flag.
+  const toggleMixFeatured = (i: number) => {
+    const updated = [...mixes];
+    updated[i] = { ...updated[i], featured: !updated[i].featured };
     setMixes(updated);
   };
 
@@ -982,49 +992,69 @@ function PresskitEditor() {
             )}
 
             <div className="space-y-3">
-              {mixes.map((mix, i) => (
-                <div key={i} className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={mix.title}
-                    onChange={(e) => updateMix(i, 'title', e.target.value)}
-                    className={`${inputClass} sm:w-48 ${!mix.title.trim() ? '!border-red-500' : ''}`}
-                    placeholder="Título"
-                  />
-                  <select
-                    value={mix.platform}
-                    onChange={(e) => updateMix(i, 'platform', e.target.value)}
-                    className={`${inputClass} sm:w-36 shrink-0`}
-                  >
-                    {MIX_PLATFORM_OPTIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={mix.type || 'set'}
-                    onChange={(e) => updateMix(i, 'type', e.target.value)}
-                    className={`${inputClass} sm:w-28 shrink-0`}
-                  >
-                    {MIX_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="url"
-                    value={mix.url}
-                    onChange={(e) => updateMix(i, 'url', e.target.value)}
-                    className={`${inputClass} ${!mix.url.trim() ? '!border-red-500' : ''}`}
-                    placeholder="https://..."
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeMix(i)}
-                    className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0 self-start"
-                  >
-                    <RiDeleteBinLine className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+              {mixes.map((mix, i) => {
+                const canFeature =
+                  mix.type === 'release' &&
+                  mix.platform === 'SoundCloud' &&
+                  mix.url.trim().length > 0;
+                return (
+                  <div key={i} className="space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={mix.title}
+                        onChange={(e) => updateMix(i, 'title', e.target.value)}
+                        className={`${inputClass} sm:w-48 ${!mix.title.trim() ? '!border-red-500' : ''}`}
+                        placeholder="Título"
+                      />
+                      <select
+                        value={mix.platform}
+                        onChange={(e) => updateMix(i, 'platform', e.target.value)}
+                        className={`${inputClass} sm:w-36 shrink-0`}
+                      >
+                        {MIX_PLATFORM_OPTIONS.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={mix.type || 'set'}
+                        onChange={(e) => updateMix(i, 'type', e.target.value)}
+                        className={`${inputClass} sm:w-28 shrink-0`}
+                      >
+                        {MIX_TYPE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="url"
+                        value={mix.url}
+                        onChange={(e) => updateMix(i, 'url', e.target.value)}
+                        className={`${inputClass} ${!mix.url.trim() ? '!border-red-500' : ''}`}
+                        placeholder="https://..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeMix(i)}
+                        className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0 self-start"
+                      >
+                        <RiDeleteBinLine className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {canFeature && (
+                      <label className="flex items-center gap-2 mono text-xs font-bold uppercase cursor-pointer select-none pl-1">
+                        <input
+                          type="checkbox"
+                          checked={!!mix.featured}
+                          onChange={() => toggleMixFeatured(i)}
+                          className="w-4 h-4 accent-[#FF5500]"
+                        />
+                        <RiSoundcloudLine className="w-4 h-4 text-[#FF5500]" />
+                        Publicar en Releases Nacionales
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
               {mixes.length === 0 && (
                 <p className="mono text-xs opacity-40">Sin mixes agregados</p>
               )}
