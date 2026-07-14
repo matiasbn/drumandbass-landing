@@ -78,10 +78,10 @@ const Home = async () => {
           </div>
 
           {/* Desktop (lg+): primer evento destacado + el resto en grilla de 2 columnas. */}
-          <div className="hidden lg:flex lg:flex-col gap-[clamp(1rem,2vw,2.5rem)] p-[clamp(1rem,2vw,2.5rem)]">
+          <div className="hidden lg:flex lg:flex-col gap-[clamp(0.5rem,1vw,1rem)] p-[clamp(0.5rem,1vw,1rem)]">
             {events[0] && <EventCard event={events[0]} index={0} featured />}
             {events.length > 1 && (
-              <div className="grid grid-cols-2 gap-[clamp(1rem,2vw,2.5rem)]">
+              <div className="grid grid-cols-2 gap-[clamp(0.5rem,1vw,1rem)]">
                 {events.slice(1).map((e, i) => (
                   <EventCard key={e.id} event={e} index={i + 1} />
                 ))}
