@@ -33,7 +33,7 @@ export default function ProximityBadge({
   const sizeCls = {
     sm: 'text-[clamp(0.5rem,0.7vw,0.72rem)] px-2 py-0.5 border-2 tracking-wider',
     md: 'text-[clamp(0.6rem,0.85vw,0.9rem)] px-[clamp(0.5rem,1vw,0.85rem)] py-[clamp(0.15rem,0.35vw,0.45rem)] border-4 tracking-widest',
-    lg: 'text-sm lg:text-xl px-3 py-1.5 lg:px-4 lg:py-2 border-4 tracking-widest',
+    lg: 'text-[11px] lg:text-sm px-2 py-0.5 border-2 tracking-wider',
   }[size];
   const dotCls = size === 'sm' ? 'mr-1.5 w-1.5 h-1.5' : 'mr-2 w-2 h-2';
 
