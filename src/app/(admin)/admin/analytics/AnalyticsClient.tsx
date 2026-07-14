@@ -73,16 +73,106 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 const channelLabel = (name: string) => CHANNEL_LABELS[name] ?? name;
 
+// Explicaciones para los tooltips (qué significa cada cosa).
+const CHANNEL_TIPS: Record<string, string> = {
+  Direct:
+    'Llegaron sin un origen rastreable: escribieron la URL, un marcador, o un link sin etiqueta (apps, algunos emails). Suele ser gente que ya conoce el sitio.',
+  'Organic Social': 'Vinieron desde redes sociales (Instagram, TikTok, etc.) sin publicidad pagada.',
+  'Organic Search': 'Llegaron desde resultados de buscadores (Google, etc.) sin anuncios.',
+  Referral: 'Un enlace en otro sitio web los trajo hasta acá.',
+  'Organic Video': 'Vinieron desde videos (YouTube, etc.) sin pago.',
+  Email: 'Llegaron desde un enlace en un correo.',
+  'Paid Search': 'Llegaron desde anuncios en buscadores.',
+  'Paid Social': 'Llegaron desde anuncios en redes sociales.',
+  Unassigned: 'GA no pudo clasificar el origen.',
+};
+const channelTip = (name: string) => CHANNEL_TIPS[name];
+
+const METRIC_TIPS = {
+  activeUsers: 'Personas distintas que visitaron el sitio en el rango elegido.',
+  newUsers: 'Usuarios que visitaron el sitio por primera vez.',
+  sessions: 'Visitas al sitio. Una sesión es una tanda de actividad; termina tras 30 min de inactividad.',
+  pageViews: 'Total de páginas cargadas. Una misma persona puede ver varias.',
+  avgSessionDuration: 'Tiempo promedio que dura una visita (sesión).',
+};
+
+// Qué significa cada evento de GA4.
+const EVENT_TIPS: Record<string, string> = {
+  page_view: 'Se registra cada vez que se carga una página.',
+  session_start: 'El comienzo de una visita (sesión).',
+  user_engagement: 'La persona estuvo activa/interactuando en la página.',
+  first_visit: 'La primera vez que un usuario visita el sitio.',
+  scroll: 'La persona hizo scroll hasta cerca del final de la página (~90%).',
+  click: 'Clic a un enlace que sale del sitio (saliente).',
+  form_start: 'La persona empezó a completar un formulario.',
+  form_submit: 'La persona envió un formulario.',
+  event_link_click: 'Clic al botón "Tickets" de un evento (evento propio del sitio).',
+  button_click: 'Clic en un botón rastreado del home.',
+  ui_click: 'Clic en cualquier botón o enlace del sitio (auto-tracking).',
+  login: 'Inicio de sesión con Google (presskit).',
+};
+const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
+
+// Qué es cada página del sitio.
+const PAGE_TIPS: Record<string, string> = {
+  '/': 'La home: eventos, comunidad, El Sótano y releases nacionales.',
+  '/artistas': 'Directorio de artistas/DJs.',
+  '/junglist': 'Registro y perfil de junglist.',
+  '/club': 'El club 3D multijugador.',
+  '/releases': 'Todos los releases nacionales.',
+  '/pk': 'Landing de presskit (crear/editar).',
+  '/pk/edit': 'Editor de presskit del DJ.',
+  '/organizaciones': 'Directorio de organizaciones (retirado).',
+  '/productores': 'Directorio de productores (retirado).',
+  '/privacy': 'Política de privacidad.',
+  '/terms': 'Términos y condiciones.',
+};
+function pageTip(path: string): string {
+  const clean = path.split('?')[0].replace(/\/$/, '') || '/';
+  if (PAGE_TIPS[clean]) return PAGE_TIPS[clean];
+  if (clean.startsWith('/pk/')) return 'Presskit público de un DJ.';
+  if (clean.startsWith('/artistas/')) return 'Perfil público de un artista.';
+  return 'Vistas de esta página del sitio.';
+}
+
+// Componente de tooltip con ícono "?".
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="group/tip relative inline-flex align-middle ml-1">
+      <span className="w-4 h-4 rounded-full border-2 border-gray-400 text-gray-400 text-[9px] font-black flex items-center justify-center cursor-help select-none group-hover/tip:border-black group-hover/tip:text-black transition-colors">
+        ?
+      </span>
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tip:block w-56 bg-black text-white mono text-[11px] font-normal normal-case leading-snug p-2 z-30 text-left">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 interface Row {
   label: string;
   sub?: string;
   value: number;
+  tip?: string;
 }
 
-function Scorecard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Scorecard({
+  label,
+  value,
+  hint,
+  tip,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tip?: string;
+}) {
   return (
     <div className="brutalist-border bg-white p-5">
-      <p className="mono text-[11px] font-bold uppercase text-gray-500 mb-2 leading-tight">{label}</p>
+      <p className="mono text-[11px] font-bold uppercase text-gray-500 mb-2 leading-tight">
+        {label}
+        {tip && <InfoTip text={tip} />}
+      </p>
       <p className="text-4xl lg:text-5xl font-black leading-none tabular-nums">{value}</p>
       {hint && <p className="mono text-[10px] text-gray-400 mt-2 uppercase">{hint}</p>}
     </div>
@@ -91,12 +181,14 @@ function Scorecard({ label, value, hint }: { label: string; value: string; hint?
 
 function BarList({
   title,
+  titleTip,
   subtitle,
   rows,
   empty,
   showPercent,
 }: {
   title: string;
+  titleTip?: string;
   subtitle?: string;
   rows: Row[];
   empty: string;
@@ -106,7 +198,10 @@ function BarList({
   const total = rows.reduce((a, r) => a + r.value, 0);
   return (
     <div className="brutalist-border bg-white p-6">
-      <h2 className="text-xl font-black uppercase leading-none">{title}</h2>
+      <h2 className="text-xl font-black uppercase leading-none">
+        {title}
+        {titleTip && <InfoTip text={titleTip} />}
+      </h2>
       {subtitle && <p className="mono text-[11px] text-gray-400 uppercase mt-1 mb-4">{subtitle}</p>}
       {!subtitle && <div className="mb-4" />}
       {rows.length === 0 ? (
@@ -117,8 +212,9 @@ function BarList({
             <li key={`${r.label}-${i}`}>
               <div className="flex items-end justify-between gap-3 mb-1">
                 <div className="min-w-0">
-                  <span className="font-bold text-sm block truncate" title={r.sub || r.label}>
-                    {r.label || '(vacío)'}
+                  <span className="font-bold text-sm truncate inline-flex items-center max-w-full" title={r.sub || r.label}>
+                    <span className="truncate">{r.label || '(vacío)'}</span>
+                    {r.tip && <InfoTip text={r.tip} />}
                   </span>
                   {r.sub && (
                     <span className="mono text-[10px] text-gray-400 block truncate">{r.sub}</span>
@@ -142,10 +238,13 @@ function BarList({
   );
 }
 
-function DayStat({ label, value }: { label: string; value: string }) {
+function DayStat({ label, value, tip }: { label: string; value: string; tip?: string }) {
   return (
     <div className="border-2 border-black bg-white p-3">
-      <p className="mono text-[9px] font-bold uppercase text-gray-500 mb-1 leading-tight">{label}</p>
+      <p className="mono text-[9px] font-bold uppercase text-gray-500 mb-1 leading-tight">
+        {label}
+        {tip && <InfoTip text={tip} />}
+      </p>
       <p className="text-2xl font-black tabular-nums leading-none">{value}</p>
     </div>
   );
@@ -164,7 +263,10 @@ function DailyChart({ items }: { items: DailyStat[] }) {
   return (
     <div className="brutalist-border bg-white p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-        <h2 className="text-xl font-black uppercase leading-none">Usuarios activos por día</h2>
+        <h2 className="text-xl font-black uppercase leading-none">
+          Usuarios activos por día
+          <InfoTip text="Personas distintas que visitaron el sitio cada día. Haz clic en una barra para ver todas las métricas de ese día." />
+        </h2>
         {items.length > 0 && (
           <span className="mono text-[11px] text-gray-500 uppercase">
             Pico: <strong className="text-black">{fmt(peak.activeUsers)}</strong> · {peak.label}
@@ -210,11 +312,11 @@ function DailyChart({ items }: { items: DailyStat[] }) {
                 Detalle del <span className="text-[#ff0055]">{sel.label}</span>
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <DayStat label="Usuarios activos" value={fmt(sel.activeUsers)} />
-                <DayStat label="Usuarios nuevos" value={fmt(sel.newUsers)} />
-                <DayStat label="Sesiones" value={fmt(sel.sessions)} />
-                <DayStat label="Vistas de página" value={fmt(sel.pageViews)} />
-                <DayStat label="Duración media" value={fmtDuration(sel.avgSessionDuration)} />
+                <DayStat label="Usuarios activos" value={fmt(sel.activeUsers)} tip={METRIC_TIPS.activeUsers} />
+                <DayStat label="Usuarios nuevos" value={fmt(sel.newUsers)} tip={METRIC_TIPS.newUsers} />
+                <DayStat label="Sesiones" value={fmt(sel.sessions)} tip={METRIC_TIPS.sessions} />
+                <DayStat label="Vistas de página" value={fmt(sel.pageViews)} tip={METRIC_TIPS.pageViews} />
+                <DayStat label="Duración media" value={fmtDuration(sel.avgSessionDuration)} tip={METRIC_TIPS.avgSessionDuration} />
               </div>
             </div>
           )}
@@ -348,14 +450,15 @@ export default function AnalyticsClient() {
         <div className="space-y-6">
           {/* Scorecards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <Scorecard label="Usuarios activos" value={fmt(data.summary.activeUsers)} hint={rangeLabel} />
-            <Scorecard label="Usuarios nuevos" value={fmt(data.summary.newUsers)} hint="Primera visita" />
-            <Scorecard label="Sesiones" value={fmt(data.summary.sessions)} hint="Visitas totales" />
-            <Scorecard label="Vistas de página" value={fmt(data.summary.pageViews)} hint="Páginas cargadas" />
+            <Scorecard label="Usuarios activos" value={fmt(data.summary.activeUsers)} hint={rangeLabel} tip={METRIC_TIPS.activeUsers} />
+            <Scorecard label="Usuarios nuevos" value={fmt(data.summary.newUsers)} hint="Primera visita" tip={METRIC_TIPS.newUsers} />
+            <Scorecard label="Sesiones" value={fmt(data.summary.sessions)} hint="Visitas totales" tip={METRIC_TIPS.sessions} />
+            <Scorecard label="Vistas de página" value={fmt(data.summary.pageViews)} hint="Páginas cargadas" tip={METRIC_TIPS.pageViews} />
             <Scorecard
               label="Duración media"
               value={fmtDuration(data.summary.avgSessionDuration)}
               hint="Por sesión"
+              tip={METRIC_TIPS.avgSessionDuration}
             />
           </div>
 
@@ -364,12 +467,17 @@ export default function AnalyticsClient() {
           {/* Clics a tickets por evento — justo debajo del gráfico */}
           <BarList
             title="Clics a tickets por evento"
+            titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
             subtitle={
               data.ticketClicksAvailable
                 ? 'Eventos vigentes hoy · clics a "Tickets" en el rango'
                 : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
             }
-            rows={data.ticketClicks.map((t) => ({ label: t.label, value: t.value }))}
+            rows={data.ticketClicks.map((t) => ({
+              label: t.label,
+              value: t.value,
+              tip: 'Clics al botón "Tickets" de este evento en el rango elegido.',
+            }))}
             empty="No hay eventos vigentes en este momento."
             showPercent
           />
@@ -378,14 +486,25 @@ export default function AnalyticsClient() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <BarList
               title="Acciones (eventos)"
+              titleTip="Los eventos que GA registra: automáticos (vistas, scroll, clics externos) y los personalizados del sitio (login, clic a tickets, etc.)."
               subtitle="Qué hace la gente"
-              rows={data.topEvents.map((e) => ({ label: eventLabel(e.label), sub: e.label, value: e.value }))}
+              rows={data.topEvents.map((e) => ({
+                label: eventLabel(e.label),
+                sub: e.label,
+                value: e.value,
+                tip: eventTip(e.label),
+              }))}
               empty="Sin datos."
             />
             <BarList
               title="De dónde llega la gente"
+              titleTip="El canal por el que llegaron los visitantes al sitio."
               subtitle="Canales de tráfico"
-              rows={data.channels.map((c) => ({ label: channelLabel(c.label), value: c.value }))}
+              rows={data.channels.map((c) => ({
+                label: channelLabel(c.label),
+                value: c.value,
+                tip: channelTip(c.label),
+              }))}
               empty="Sin datos."
               showPercent
             />
@@ -394,11 +513,13 @@ export default function AnalyticsClient() {
           {/* Dónde visita más la gente — a ancho completo */}
           <BarList
             title="Dónde visita más la gente"
+            titleTip="Las páginas más vistas del sitio. Ambos dominios (drumandbasschile.cl y dnbchile.cl) se cuentan juntos por ruta."
             subtitle="Páginas más vistas del sitio"
             rows={data.topPages.map((p) => ({
               label: pageLabel(p.label),
               sub: p.label,
               value: p.value,
+              tip: pageTip(p.label),
             }))}
             empty="Sin datos."
             showPercent
