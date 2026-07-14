@@ -337,39 +337,41 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
     <>
       <CountryBars countries={data.countries} />
 
-      <BarList
-        title="Clics a tickets por evento"
-        titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
-        subtitle={
-          data.ticketClicksAvailable
-            ? 'Eventos vigentes hoy · clics a "Tickets"'
-            : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
-        }
-        rows={data.ticketClicks.map((t) => ({
-          label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
-          value: t.value,
-          tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
-        }))}
-        empty="No hay eventos vigentes en este momento."
-        showPercent
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <BarList
+          title="Clics a tickets por evento"
+          titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
+          subtitle={
+            data.ticketClicksAvailable
+              ? 'Eventos vigentes hoy · clics a "Tickets"'
+              : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
+          }
+          rows={data.ticketClicks.map((t) => ({
+            label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
+            value: t.value,
+            tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
+          }))}
+          empty="No hay eventos vigentes en este momento."
+          showPercent
+        />
 
-      <BarList
-        title="Acciones clave del sitio"
-        titleTip={
-          zeroNote
-            ? 'Acciones propias del sitio. Un 0 puede significar que nadie la hizo, o que esa acción todavía no se trackeaba en esa fecha (el tracking se fue agregando con el tiempo).'
-            : 'Acciones propias del sitio: junglist, tickets, El Sótano, releases, club, redes, WhatsApp.'
-        }
-        subtitle={zeroNote ? '0 = sin datos o aún no se trackeaba esa fecha' : 'Lo que hace la gente en el sitio'}
-        rows={CORE_ACTIONS.map((name) => ({
-          label: eventLabel(name),
-          sub: name,
-          value: data.topEvents.find((e) => e.label === name)?.value ?? 0,
-          tip: eventTip(name),
-        }))}
-        empty="—"
-      />
+        <BarList
+          title="Acciones clave del sitio"
+          titleTip={
+            zeroNote
+              ? 'Acciones propias del sitio. Un 0 puede significar que nadie la hizo, o que esa acción todavía no se trackeaba en esa fecha (el tracking se fue agregando con el tiempo).'
+              : 'Acciones propias del sitio: junglist, tickets, El Sótano, releases, club, redes, WhatsApp.'
+          }
+          subtitle={zeroNote ? '0 = sin datos o aún no se trackeaba esa fecha' : 'Lo que hace la gente en el sitio'}
+          rows={CORE_ACTIONS.map((name) => ({
+            label: eventLabel(name),
+            sub: name,
+            value: data.topEvents.find((e) => e.label === name)?.value ?? 0,
+            tip: eventTip(name),
+          }))}
+          empty="—"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <BarList
