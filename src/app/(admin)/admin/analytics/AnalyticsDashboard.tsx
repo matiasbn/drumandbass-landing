@@ -305,9 +305,9 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
             : 'Eventos vigentes hoy · registra la custom dimension "event_title" en GA4 para contar clics'
         }
         rows={data.ticketClicks.map((t) => ({
-          label: t.label,
+          label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
           value: t.value,
-          tip: 'Clics al botón "Tickets" de este evento.',
+          tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
         }))}
         empty="No hay eventos vigentes en este momento."
         showPercent
@@ -344,7 +344,12 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
         title="Dónde visita más la gente"
         titleTip="Las páginas más vistas del sitio. Ambos dominios (drumandbasschile.cl y dnbchile.cl) se cuentan juntos por ruta."
         subtitle="Páginas más vistas del sitio"
-        rows={data.topPages.map((p) => ({ label: pageLabel(p.label), sub: p.label, value: p.value, tip: pageTip(p.label) }))}
+        rows={data.topPages
+          .filter((p) => {
+            const clean = p.label.split('?')[0].replace(/\/$/, '') || '/';
+            return clean !== '/productores' && clean !== '/organizaciones';
+          })
+          .map((p) => ({ label: pageLabel(p.label), sub: p.label, value: p.value, tip: pageTip(p.label) }))}
         empty="Sin datos."
         showPercent
       />

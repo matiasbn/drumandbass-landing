@@ -77,9 +77,13 @@ export async function GET(request: NextRequest) {
         const effectiveEnd = end.isAfter(start) ? end : start;
         return effectiveEnd.isAfter(now);
       });
-      const clickByTitle = new Map(data.ticketClicks.map((t) => [t.label, t.value]));
+      // Identificamos el evento por TÍTULO + FECHA (la URL puede cambiar).
+      const clickByKey = new Map(data.ticketClicks.map((t) => [`${t.title}||${t.date}`, t.value]));
       data.ticketClicks = upcoming
-        .map((e) => ({ label: e.title, value: clickByTitle.get(e.title) ?? 0 }))
+        .map((e) => {
+          const dateKey = dayjs(e.date).format('YYYY-MM-DD');
+          return { title: e.title, date: dateKey, value: clickByKey.get(`${e.title}||${dateKey}`) ?? 0 };
+        })
         .sort((a, b) => b.value - a.value);
     } catch {
       // si Contentful falla, dejamos los clics tal cual vienen de GA
