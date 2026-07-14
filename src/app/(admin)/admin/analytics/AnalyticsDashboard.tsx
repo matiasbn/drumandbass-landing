@@ -263,9 +263,15 @@ function CountryBars({ countries }: { countries: AnalyticsOverview['countries'] 
               <div className="h-2.5 bg-gray-100 border-2 border-black">
                 <div className="h-full bg-[#ff0055]" style={{ width: `${(c.total / max) * 100}%` }} />
               </div>
-              <p className="mono text-[10px] text-gray-500 mt-1 truncate" title={c.sources.map((s) => `${channelLabel(s.label)} ${s.value}`).join(' · ')}>
-                {c.sources.map((s) => `${channelLabel(s.label)} ${fmt(s.value)}`).join(' · ')}
-              </p>
+              <div className="mono text-[10px] text-gray-500 mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                {c.sources.map((s, j) => (
+                  <span key={`${s.label}-${j}`} className="inline-flex items-center">
+                    {j > 0 && <span className="mr-1 text-gray-300">·</span>}
+                    {channelLabel(s.label)} <strong className="text-black ml-1">{fmt(s.value)}</strong>
+                    <InfoTip text={channelTip(s.label) ?? `Canal de tráfico: ${channelLabel(s.label)}.`} />
+                  </span>
+                ))}
+              </div>
             </li>
           ))}
         </ul>
