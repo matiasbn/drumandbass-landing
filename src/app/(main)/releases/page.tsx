@@ -10,7 +10,9 @@ export const metadata: Metadata = {
   keywords: ['releases drum and bass Chile', 'productores nacionales DNB', 'drum and bass chileno'],
 };
 
-export const revalidate = 3600;
+// Siempre fresco: se renderiza por request para reflejar la DB al instante en
+// cualquier entorno (sin depender del caché ISR ni de revalidación por deployment).
+export const dynamic = 'force-dynamic';
 
 export default async function ReleasesPage() {
   const releases = await getNationalReleases();
