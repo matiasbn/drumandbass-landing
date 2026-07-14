@@ -335,8 +335,6 @@ function Scorecards({ summary, hint }: { summary: AnalyticsOverview['summary']; 
 function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolean }) {
   return (
     <>
-      <CountryBars countries={data.countries} />
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         <BarList
           title="Clics a tickets por evento"
@@ -373,7 +371,8 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+        <CountryBars countries={data.countries} />
         <BarList
           title="De dónde llega la gente"
           titleTip="El canal por el que llegaron los visitantes al sitio."
