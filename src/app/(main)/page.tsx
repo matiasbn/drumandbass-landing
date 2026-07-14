@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
 
+import EventItem from '@/src/components/EventItem';
 import EventCard from '@/src/components/EventCard';
 import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
@@ -67,17 +68,17 @@ const Home = async () => {
             </span>
           </div>
         </div>
-        <div className="p-[clamp(1rem,2vw,2.5rem)] bg-white">
-          {/* Móvil + tablet: todos los eventos iguales, sin destacado. El destacado
-              es sólo un recurso de escritorio para redistribuir el espacio. */}
-          <div className="flex flex-col gap-[clamp(1rem,2vw,2.5rem)] lg:hidden">
+        <div className="bg-white">
+          {/* Móvil + tablet: diseño clásico (EventItem), que funciona bien en pantallas
+              chicas. El rediseño con destacado + grilla es solo para desktop. */}
+          <div className="flex flex-col lg:hidden">
             {events.map((e, index) => (
-              <EventCard key={e.id} event={e} index={index} />
+              <EventItem key={e.id} event={e} index={index} />
             ))}
           </div>
 
           {/* Desktop (lg+): primer evento destacado + el resto en grilla de 2 columnas. */}
-          <div className="hidden lg:flex lg:flex-col gap-[clamp(1rem,2vw,2.5rem)]">
+          <div className="hidden lg:flex lg:flex-col gap-[clamp(1rem,2vw,2.5rem)] p-[clamp(1rem,2vw,2.5rem)]">
             {events[0] && <EventCard event={events[0]} index={0} featured />}
             {events.length > 1 && (
               <div className="grid grid-cols-2 gap-[clamp(1rem,2vw,2.5rem)]">
