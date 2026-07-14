@@ -242,42 +242,30 @@ function DailyChart({ items, onSelectDay }: { items: DailyStat[]; onSelectDay: (
 }
 
 function CountryBars({ countries }: { countries: AnalyticsOverview['countries'] }) {
-  const max = Math.max(1, ...countries.flatMap((c) => [c.newUsers, c.returningUsers]));
+  const max = Math.max(1, ...countries.map((c) => c.total));
   return (
     <div className="brutalist-border bg-white p-6">
       <h2 className="text-xl font-black uppercase leading-none">
         Por país
-        <InfoTip text="De qué país son los visitantes. Cada país muestra dos barras paralelas: usuarios nuevos (rojo) y los que vuelven (negro)." />
+        <InfoTip text="De qué país son los visitantes (total de usuarios). Debajo de cada barra, por qué canal/origen llegaron desde ese país." />
       </h2>
-      <div className="flex items-center gap-4 mono text-[10px] uppercase text-gray-500 mt-1 mb-4">
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 bg-[#ff0055] border-2 border-black inline-block" /> Nuevos
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 bg-black inline-block" /> Vuelven
-        </span>
-      </div>
+      <p className="mono text-[11px] text-gray-400 uppercase mt-1 mb-4">Total de usuarios y su origen</p>
       {countries.length === 0 ? (
         <p className="mono text-sm text-gray-500">Sin datos.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {countries.map((c, i) => (
             <li key={`${c.label}-${i}`}>
-              <div className="flex items-center justify-between gap-3 mb-1">
+              <div className="flex items-end justify-between gap-3 mb-1">
                 <span className="font-bold text-sm truncate">{c.label || '(desconocido)'}</span>
-                <span className="mono text-xs shrink-0 whitespace-nowrap">
-                  <span className="text-[#ff0055] font-black">{fmt(c.newUsers)}</span> nuevos ·{' '}
-                  <span className="font-black">{fmt(c.returningUsers)}</span> vuelven
-                </span>
+                <span className="text-sm font-black shrink-0 tabular-nums">{fmt(c.total)}</span>
               </div>
-              <div className="space-y-1">
-                <div className="h-2.5 bg-gray-100 border-2 border-black">
-                  <div className="h-full bg-[#ff0055]" style={{ width: `${(c.newUsers / max) * 100}%` }} />
-                </div>
-                <div className="h-2.5 bg-gray-100 border-2 border-black">
-                  <div className="h-full bg-black" style={{ width: `${(c.returningUsers / max) * 100}%` }} />
-                </div>
+              <div className="h-2.5 bg-gray-100 border-2 border-black">
+                <div className="h-full bg-[#ff0055]" style={{ width: `${(c.total / max) * 100}%` }} />
               </div>
+              <p className="mono text-[10px] text-gray-500 mt-1 truncate" title={c.sources.map((s) => `${channelLabel(s.label)} ${s.value}`).join(' · ')}>
+                {c.sources.map((s) => `${channelLabel(s.label)} ${fmt(s.value)}`).join(' · ')}
+              </p>
             </li>
           ))}
         </ul>
