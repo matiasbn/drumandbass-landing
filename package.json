@@ -1,6 +1,6 @@
 {
   "name": "drumandbass-landing",
-  "version": "2.32.0",
+  "version": "2.33.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3600",
