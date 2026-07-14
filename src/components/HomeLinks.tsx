@@ -56,20 +56,8 @@ export function HomeLinks() {
       >
         Spotify Playlist
       </ButtonLink>
-      <ButtonLink
-        href="/productores"
-        onClick={() => handleButtonClick("Productores de Eventos")}
-      >
-        Productores de eventos
-      </ButtonLink>
       <ButtonLink href="/dj" onClick={() => handleButtonClick("DJs")}>
         DJs
-      </ButtonLink>
-      <ButtonLink
-        href="/organizaciones"
-        onClick={() => handleButtonClick("Organizaciones")}
-      >
-        Organizaciones
       </ButtonLink>
     </div>
   );

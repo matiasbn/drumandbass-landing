@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { RiWhatsappLine, RiMenuLine, RiCloseLine, RiFolder2Line } from '@remixicon/react';
+import { RiWhatsappLine, RiMenuLine, RiCloseLine } from '@remixicon/react';
 import BrutalistButton from './BigButton';
 import { SOCIALS, WHATSAPP_LINK } from '../constants';
 
@@ -23,8 +23,6 @@ const SoundcloudIcon = SOCIALS.soundcloud.icon;
 
 const DIRECTORY_LINKS = [
   { href: '/artistas', label: 'Artistas' },
-  { href: '/productores', label: 'Productores' },
-  { href: '/organizaciones', label: 'Organizaciones' },
   { href: '/pk', label: 'Presskit' },
 ];
 
@@ -68,23 +66,6 @@ const HeaderNav = () => {
         >
           <YouTubeIcon /> YouTube
         </BrutalistButton>
-        <BrutalistButton
-          className="text-xs py-2 px-4 brutalist-border brutalist-shadow-blue h-12"
-          variant="soundcloud"
-          href="https://foro.drumandbasschile.cl/"
-          external
-        >
-          <SoundcloudIcon /> SoundCloud
-        </BrutalistButton>
-        <BrutalistButton
-          variant="club"
-          className="text-xs py-2 px-4 h-12"
-          href="/club"
-          disabled={!isLive}
-          title={!isLive ? 'Solo disponible durante transmisiones en vivo' : undefined}
-        >
-          <DiscoBallIcon size={16} /> CLUB
-        </BrutalistButton>
         <div className="relative">
           <button
             onClick={() => setDirOpen(!dirOpen)}
@@ -94,15 +75,38 @@ const HeaderNav = () => {
           </button>
           {dirOpen && (
             <div className="absolute top-full right-0 mt-2 bg-white border-4 border-black z-50 flex flex-col min-w-max">
+              <a
+                href="https://foro.drumandbasschile.cl/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-3 font-bold uppercase mono text-xs hover:bg-[#ff0000] hover:text-white transition-colors border-b-2 border-black flex items-center gap-2"
+              >
+                <SoundcloudIcon /> SoundCloud
+              </a>
               {DIRECTORY_LINKS.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
-                  className="px-4 py-3 font-bold uppercase mono text-xs hover:bg-[#ff0000] hover:text-white transition-colors border-b-2 border-black last:border-b-0"
+                  className="px-4 py-3 font-bold uppercase mono text-xs hover:bg-[#ff0000] hover:text-white transition-colors border-b-2 border-black"
                 >
                   {link.label}
                 </a>
               ))}
+              {isLive ? (
+                <a
+                  href="/club"
+                  className="px-4 py-3 font-bold uppercase mono text-xs hover:bg-[#ff0000] hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <DiscoBallIcon size={16} /> CLUB
+                </a>
+              ) : (
+                <span
+                  title="Solo disponible durante transmisiones en vivo"
+                  className="px-4 py-3 font-bold uppercase mono text-xs opacity-40 cursor-not-allowed flex items-center gap-2"
+                >
+                  <DiscoBallIcon size={16} /> CLUB
+                </span>
+              )}
             </div>
           )}
         </div>
