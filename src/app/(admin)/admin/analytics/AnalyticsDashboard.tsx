@@ -67,6 +67,20 @@ const CHANNEL_TIPS: Record<string, string> = {
 };
 const channelTip = (name: string) => CHANNEL_TIPS[name];
 
+const DEVICE_LABELS: Record<string, string> = {
+  mobile: 'Móvil',
+  desktop: 'Escritorio',
+  tablet: 'Tablet',
+  smart_tv: 'Smart TV',
+};
+const deviceLabel = (name: string) => DEVICE_LABELS[name] ?? name;
+const DEVICE_TIPS: Record<string, string> = {
+  mobile: 'Visitas desde teléfonos.',
+  desktop: 'Visitas desde computador (escritorio o notebook).',
+  tablet: 'Visitas desde tablets.',
+  smart_tv: 'Visitas desde smart TVs.',
+};
+
 const METRIC_TIPS = {
   activeUsers: 'Personas distintas que visitaron el sitio en el período elegido.',
   newUsers: 'Usuarios que visitaron el sitio por primera vez, acumulados en el período.',
@@ -340,28 +354,37 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
         showPercent
       />
 
+      <BarList
+        title="Acciones clave del sitio"
+        titleTip={
+          zeroNote
+            ? 'Acciones propias del sitio. Un 0 puede significar que nadie la hizo, o que esa acción todavía no se trackeaba en esa fecha (el tracking se fue agregando con el tiempo).'
+            : 'Acciones propias del sitio: junglist, tickets, El Sótano, releases, club, redes, WhatsApp.'
+        }
+        subtitle={zeroNote ? '0 = sin datos o aún no se trackeaba esa fecha' : 'Lo que hace la gente en el sitio'}
+        rows={CORE_ACTIONS.map((name) => ({
+          label: eventLabel(name),
+          sub: name,
+          value: data.topEvents.find((e) => e.label === name)?.value ?? 0,
+          tip: eventTip(name),
+        }))}
+        empty="—"
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <BarList
-          title="Acciones clave del sitio"
-          titleTip={
-            zeroNote
-              ? 'Acciones propias del sitio. Un 0 puede significar que nadie la hizo, o que esa acción todavía no se trackeaba en esa fecha (el tracking se fue agregando con el tiempo).'
-              : 'Acciones propias del sitio: junglist, tickets, El Sótano, releases, club, redes, WhatsApp.'
-          }
-          subtitle={zeroNote ? '0 = sin datos o aún no se trackeaba esa fecha' : 'Lo que hace la gente en el sitio'}
-          rows={CORE_ACTIONS.map((name) => ({
-            label: eventLabel(name),
-            sub: name,
-            value: data.topEvents.find((e) => e.label === name)?.value ?? 0,
-            tip: eventTip(name),
-          }))}
-          empty="—"
-        />
         <BarList
           title="De dónde llega la gente"
           titleTip="El canal por el que llegaron los visitantes al sitio."
           subtitle="Canales de tráfico"
           rows={data.channels.map((c) => ({ label: channelLabel(c.label), value: c.value, tip: channelTip(c.label) }))}
+          empty="Sin datos."
+          showPercent
+        />
+        <BarList
+          title="Por dispositivo"
+          titleTip="Desde qué tipo de dispositivo visitan el sitio (móvil, escritorio, tablet)."
+          subtitle="Móvil vs escritorio"
+          rows={data.devices.map((d) => ({ label: deviceLabel(d.label), value: d.value, tip: DEVICE_TIPS[d.label] }))}
           empty="Sin datos."
           showPercent
         />

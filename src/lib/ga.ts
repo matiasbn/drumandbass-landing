@@ -54,6 +54,8 @@ export interface AnalyticsOverview {
   topPages: AnalyticsNamedValue[];
   topEvents: AnalyticsNamedValue[];
   channels: AnalyticsNamedValue[];
+  // Dispositivo: móvil / escritorio / tablet.
+  devices: AnalyticsNamedValue[];
   // Por país: total de usuarios + desglose por origen/canal.
   countries: { label: string; total: number; sources: AnalyticsNamedValue[] }[];
   // Clics a tickets por evento, identificado por TÍTULO + FECHA (parámetros
@@ -121,6 +123,7 @@ export async function getAnalyticsOverview(
     topPages: [],
     topEvents: [],
     channels: [],
+    devices: [],
     countries: [],
     ticketClicks: [],
     ticketClicksAvailable: false,
@@ -132,7 +135,7 @@ export async function getAnalyticsOverview(
   const dateRanges = range ? [range] : [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
   try {
-    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes] = await Promise.all([
+    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes, devicesRes] = await Promise.all([
       client.runReport({
         property,
         dateRanges,
@@ -189,6 +192,13 @@ export async function getAnalyticsOverview(
         metrics: [{ name: 'activeUsers' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
         limit: 100,
+      }),
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'deviceCategory' }],
+        metrics: [{ name: 'activeUsers' }],
+        orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
       }),
     ]);
 
@@ -281,6 +291,10 @@ export async function getAnalyticsOverview(
         value: num(r.metricValues?.[0]?.value),
       })),
       channels: (channelsRes[0].rows ?? []).map((r) => ({
+        label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
+        value: num(r.metricValues?.[0]?.value),
+      })),
+      devices: (devicesRes[0].rows ?? []).map((r) => ({
         label: r.dimensionValues?.[0]?.value ?? '(desconocido)',
         value: num(r.metricValues?.[0]?.value),
       })),
