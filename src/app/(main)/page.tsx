@@ -4,11 +4,10 @@ import type { Metadata } from 'next';
 import EventItem from '@/src/components/EventItem';
 import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
-import NationalReleases from '@/src/components/NationalReleases';
+import NationalReleasesSection from '@/src/components/NationalReleasesSection';
 import dayjs from '@/src/lib/date';
 import { getEvents } from '@/src/lib/contentful';
 import { getSotanoVideos } from '@/src/lib/youtube';
-import { getNationalReleases } from '@/src/lib/nationalReleases';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
 export const metadata: Metadata = {
@@ -31,13 +30,10 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 const Home = async () => {
-  const [contentfulEvents, sotanoVideos, allReleases] = await Promise.all([
+  const [contentfulEvents, sotanoVideos] = await Promise.all([
     getEvents(),
     getSotanoVideos(2),
-    getNationalReleases(),
   ]);
-  // Mostramos hasta 4 releases + el botón "ver todos" como 5ª celda de la fila.
-  const nationalReleases = allReleases.slice(0, 4);
 
   // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
   // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
@@ -96,16 +92,8 @@ const Home = async () => {
         </section>
       )}
 
-      {/* Releases Nacionales — releases marcados por los DJs, tras El Sótano */}
-      {nationalReleases.length > 0 && (
-        <section className="p-6 lg:p-12 border-b-4 border-black">
-          <h2 className="text-5xl font-black uppercase mb-2 italic">Releases Nacionales</h2>
-          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 mb-6 leading-tight">
-            Lo más reciente de los productores de drum and bass nacionales. Publica el tuyo desde tu presskit.
-          </p>
-          <NationalReleases releases={nationalReleases} moreHref="/releases" />
-        </section>
-      )}
+      {/* Releases Nacionales — carga client-side (siempre fresco), tras El Sótano */}
+      <NationalReleasesSection />
     </main>
   );
 };
