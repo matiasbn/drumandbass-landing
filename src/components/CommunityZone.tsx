@@ -90,8 +90,8 @@ const CommunityZone: React.FC = () => {
             <>
               <p className="mono font-bold text-lg mb-8 uppercase leading-tight">
                 {isJunglist ? '¿También eres DJ? ' : '¿Tocas drum and bass? '}
-                Crea tu presskit oficial de DJ: bio, mixes, géneros y redes en un solo link para
-                compartir con productores y venues.
+                Crea tu presskit para compartirlo y publica tus releases en Drum and Bass Chile
+                para que todos los vean.
               </p>
               <BrutalistButton variant="club" className="w-full text-2xl py-8" href="/pk">
                 PRESSKIT ACÁ!
