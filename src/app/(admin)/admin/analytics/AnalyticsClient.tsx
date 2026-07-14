@@ -138,7 +138,7 @@ function pageTip(path: string): string {
 // Componente de tooltip con ícono "?".
 function InfoTip({ text }: { text: string }) {
   return (
-    <span className="group/tip relative inline-flex align-middle ml-1">
+    <span className="group/tip relative inline-flex align-middle ml-1 shrink-0">
       <span className="w-4 h-4 rounded-full border-2 border-gray-400 text-gray-400 text-[9px] font-black flex items-center justify-center cursor-help select-none group-hover/tip:border-black group-hover/tip:text-black transition-colors">
         ?
       </span>
@@ -212,8 +212,8 @@ function BarList({
             <li key={`${r.label}-${i}`}>
               <div className="flex items-end justify-between gap-3 mb-1">
                 <div className="min-w-0">
-                  <span className="font-bold text-sm truncate inline-flex items-center max-w-full" title={r.sub || r.label}>
-                    <span className="truncate">{r.label || '(vacío)'}</span>
+                  <span className="font-bold text-sm flex items-center gap-1 min-w-0" title={r.sub || r.label}>
+                    <span className="truncate min-w-0">{r.label || '(vacío)'}</span>
                     {r.tip && <InfoTip text={r.tip} />}
                   </span>
                   {r.sub && (
@@ -268,8 +268,9 @@ function DailyChart({ items }: { items: DailyStat[] }) {
           <InfoTip text="Personas distintas que visitaron el sitio cada día. Haz clic en una barra para ver todas las métricas de ese día." />
         </h2>
         {items.length > 0 && (
-          <span className="mono text-[11px] text-gray-500 uppercase">
-            Pico: <strong className="text-black">{fmt(peak.activeUsers)}</strong> · {peak.label}
+          <span className="mono text-[11px] text-gray-500 uppercase inline-flex items-center">
+            Pico: <strong className="text-black mx-1">{fmt(peak.activeUsers)}</strong> · {peak.label}
+            <InfoTip text="El día con más usuarios activos dentro del rango elegido." />
           </span>
         )}
       </div>
@@ -389,11 +390,12 @@ export default function AnalyticsClient() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex brutalist-border">
+          <div className="flex brutalist-border" title="Período de fechas a mostrar en todo el dashboard">
             {RANGES.map((r) => (
               <button
                 key={r}
                 onClick={() => setDays(r)}
+                title={`Ver los últimos ${r} días`}
                 className={`mono text-xs font-bold uppercase px-4 py-2 border-black transition-colors ${
                   r !== RANGES[0] ? 'border-l-2' : ''
                 } ${days === r ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'}`}
@@ -406,6 +408,7 @@ export default function AnalyticsClient() {
             href="https://analytics.google.com/"
             target="_blank"
             rel="noopener noreferrer"
+            title="Abrir Google Analytics (datos en tiempo real y más reportes)"
             className="brutalist-border bg-black text-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-900 transition-colors whitespace-nowrap"
           >
             GA ↗
