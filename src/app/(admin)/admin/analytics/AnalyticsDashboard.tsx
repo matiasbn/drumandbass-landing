@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AnalyticsOverview, DailyStat } from '@/src/lib/ga';
 import { fmt, eventLabel, eventTip, CORE_ACTIONS } from '@/src/lib/analyticsLabels';
 
@@ -96,10 +96,22 @@ function pageTip(path: string): string {
 }
 
 function InfoTip({ text }: { text: string }) {
-  // En desktop se muestra al hover; en móvil (sin hover) se abre/cierra al tocar.
+  // En desktop se muestra al hover; en móvil (sin hover) se abre/cierra al tocar,
+  // y se cierra al tocar fuera del tooltip.
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
   return (
-    <span className="group/tip relative inline-flex align-middle ml-1 shrink-0">
+    <span ref={ref} className="group/tip relative inline-flex align-middle ml-1 shrink-0">
       <button
         type="button"
         aria-label="Más información"
@@ -108,7 +120,6 @@ function InfoTip({ text }: { text: string }) {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        onBlur={() => setOpen(false)}
         className="w-4 h-4 rounded-full border-2 border-gray-400 text-gray-400 text-[9px] font-black flex items-center justify-center cursor-help select-none hover:border-black hover:text-black group-hover/tip:border-black group-hover/tip:text-black transition-colors"
       >
         ?
