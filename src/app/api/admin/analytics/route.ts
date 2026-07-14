@@ -47,8 +47,23 @@ export async function GET(request: NextRequest) {
   const daysParam = Number(request.nextUrl.searchParams.get('days'));
   const days = [7, 30, 90].includes(daysParam) ? daysParam : 30;
 
+  // Un día específico (?date=YYYYMMDD) o un mes (?month=YYYYMM) sobre-escriben el rango.
+  const dateStr = request.nextUrl.searchParams.get('date');
+  const monthStr = request.nextUrl.searchParams.get('month');
+  let range: { startDate: string; endDate: string } | undefined;
+  if (dateStr && /^\d{8}$/.test(dateStr)) {
+    const d = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    range = { startDate: d, endDate: d };
+  } else if (monthStr && /^\d{6}$/.test(monthStr)) {
+    const y = Number(monthStr.slice(0, 4));
+    const m = Number(monthStr.slice(4, 6));
+    const last = new Date(y, m, 0).getDate();
+    const mm = String(m).padStart(2, '0');
+    range = { startDate: `${y}-${mm}-01`, endDate: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+  }
+
   try {
-    const data = await getAnalyticsOverview(days);
+    const data = await getAnalyticsOverview(days, range);
 
     // Cruza los clics de GA con los eventos ACTUALES de Contentful: así la lista
     // muestra cada evento vigente hoy (aunque tenga 0 clics), no solo los que
