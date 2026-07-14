@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import type { AnalyticsOverview, DailyStat } from '@/src/lib/ga';
+import { fmt, eventLabel, eventTip, CORE_ACTIONS } from '@/src/lib/analyticsLabels';
 
 const RANGES = [7, 30, 90] as const;
 
@@ -11,62 +12,11 @@ const RANGES = [7, 30, 90] as const;
 // Looker Studio cuando esta variable está seteada.
 const LOOKER_URL = process.env.NEXT_PUBLIC_LOOKER_STUDIO_URL;
 
-const fmt = (n: number) => n.toLocaleString('es-CL');
-
 function fmtDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
-
-// Nombres legibles para los eventos técnicos de GA4.
-const EVENT_LABELS: Record<string, string> = {
-  page_view: 'Vistas de página',
-  session_start: 'Sesiones iniciadas',
-  user_engagement: 'Interacción',
-  first_visit: 'Primeras visitas',
-  scroll: 'Scroll de página',
-  click: 'Clics a enlaces externos',
-  form_start: 'Formularios iniciados',
-  form_submit: 'Formularios enviados',
-  event_link_click: 'Clic a tickets de evento',
-  button_click: 'Clics en botones',
-  ui_click: 'Clics en la interfaz',
-  login: 'Inicios de sesión',
-  // Acciones propias del sitio
-  junglist_signup: 'Registros de junglist',
-  junglist_unsubscribe: 'Bajas de junglist',
-  presskit_created: 'Presskits creados',
-  presskit_saved: 'Presskits guardados',
-  presskit_publish: 'Presskit publicado/despublicado',
-  presskit_view: 'Vistas de presskit',
-  release_publish: 'Releases publicados (DJ)',
-  release_click: 'Clic a un release',
-  sotano_video_click: 'Clic a video de El Sótano',
-  social_click: 'Clic a redes/WhatsApp',
-  logo_download: 'Descargas de logos (ZIP)',
-  enter_club: 'Entradas al club 3D',
-};
-const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
-
-// Eventos "propios del sitio" (acciones clave) vs automáticos de GA.
-const SITE_EVENTS = new Set([
-  'event_link_click',
-  'junglist_signup',
-  'junglist_unsubscribe',
-  'presskit_created',
-  'presskit_saved',
-  'presskit_publish',
-  'presskit_view',
-  'release_publish',
-  'release_click',
-  'sotano_video_click',
-  'social_click',
-  'logo_download',
-  'enter_club',
-  'login',
-  'button_click',
-]);
 
 // Nombres legibles para las rutas del sitio.
 const PAGE_LABELS: Record<string, string> = {
@@ -124,39 +74,10 @@ const METRIC_TIPS = {
   activeUsers: 'Personas distintas que visitaron el sitio en el rango elegido.',
   newUsers: 'Usuarios que visitaron el sitio por primera vez, acumulados en el rango.',
   returningUsers: 'Usuarios que ya habían visitado antes y volvieron, acumulados en el rango (totales − nuevos).',
-  sessions: 'Visitas al sitio. Una sesión es una tanda de actividad; termina tras 30 min de inactividad.',
+  sessions: 'Visitas al sitio. Una persona puede tener varias: si entra hoy y vuelve mañana son 2 sesiones pero 1 usuario. La sesión termina tras 30 min de inactividad.',
   pageViews: 'Total de páginas cargadas. Una misma persona puede ver varias.',
   avgSessionDuration: 'Tiempo promedio que dura una visita (sesión).',
 };
-
-// Qué significa cada evento de GA4.
-const EVENT_TIPS: Record<string, string> = {
-  page_view: 'Se registra cada vez que se carga una página.',
-  session_start: 'El comienzo de una visita (sesión).',
-  user_engagement: 'La persona estuvo activa/interactuando en la página.',
-  first_visit: 'La primera vez que un usuario visita el sitio.',
-  scroll: 'La persona hizo scroll hasta cerca del final de la página (~90%).',
-  click: 'Clic a un enlace que sale del sitio (saliente).',
-  form_start: 'La persona empezó a completar un formulario.',
-  form_submit: 'La persona envió un formulario.',
-  event_link_click: 'Clic al botón "Tickets" de un evento (evento propio del sitio).',
-  button_click: 'Clic en un botón rastreado del home.',
-  ui_click: 'Clic en cualquier botón o enlace del sitio (auto-tracking).',
-  login: 'Inicio de sesión con Google (presskit).',
-  junglist_signup: 'Un usuario completó su registro como junglist.',
-  junglist_unsubscribe: 'Un junglist se dio de baja.',
-  presskit_created: 'Un DJ creó su presskit por primera vez.',
-  presskit_saved: 'Un DJ guardó cambios en su presskit.',
-  presskit_publish: 'Un DJ publicó o despublicó su presskit.',
-  presskit_view: 'Alguien vio un presskit público.',
-  release_publish: 'Un DJ marcó un release para publicarlo en Releases Nacionales.',
-  release_click: 'Un visitante hizo clic en un release (hacia SoundCloud).',
-  sotano_video_click: 'Clic a un video de El Sótano (hacia YouTube).',
-  social_click: 'Clic a una red social o WhatsApp.',
-  logo_download: 'Descarga del ZIP de logos de un DJ.',
-  enter_club: 'Alguien entró al club 3D.',
-};
-const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
 // Qué es cada página del sitio.
 const PAGE_TIPS: Record<string, string> = {
@@ -357,11 +278,9 @@ function DailyChart({ items }: { items: DailyStat[] }) {
               <p className="mono text-xs font-bold uppercase mb-3">
                 Detalle del <span className="text-[#ff0055]">{sel.label}</span>
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <DayStat label="Usuarios activos" value={fmt(sel.activeUsers)} tip={METRIC_TIPS.activeUsers} />
                 <DayStat label="Usuarios nuevos" value={fmt(sel.newUsers)} tip={METRIC_TIPS.newUsers} />
-                <DayStat label="Sesiones" value={fmt(sel.sessions)} tip={METRIC_TIPS.sessions} />
-                <DayStat label="Vistas de página" value={fmt(sel.pageViews)} tip={METRIC_TIPS.pageViews} />
                 <DayStat label="Duración media" value={fmtDuration(sel.avgSessionDuration)} tip={METRIC_TIPS.avgSessionDuration} />
               </div>
             </div>
@@ -449,6 +368,13 @@ export default function AnalyticsClient() {
               </button>
             ))}
           </div>
+          <Link
+            href="/admin/analytics/mensual"
+            title="Ver estadísticas por mes (histórico)"
+            className="brutalist-border bg-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-100 transition-colors whitespace-nowrap"
+          >
+            Por mes
+          </Link>
           <a
             href="https://analytics.google.com/"
             target="_blank"
@@ -497,16 +423,14 @@ export default function AnalyticsClient() {
       ) : data ? (
         <div className="space-y-6">
           {/* Scorecards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Scorecard label="Usuarios activos" value={fmt(data.summary.activeUsers)} hint={rangeLabel} tip={METRIC_TIPS.activeUsers} />
             <Scorecard label="Usuarios nuevos" value={fmt(data.summary.newUsers)} hint="Primera visita" tip={METRIC_TIPS.newUsers} />
             <Scorecard label="Usuarios que vuelven" value={fmt(data.summary.returningUsers)} hint="Ya habían venido" tip={METRIC_TIPS.returningUsers} />
-            <Scorecard label="Sesiones" value={fmt(data.summary.sessions)} hint="Visitas totales" tip={METRIC_TIPS.sessions} />
-            <Scorecard label="Vistas de página" value={fmt(data.summary.pageViews)} hint="Páginas cargadas" tip={METRIC_TIPS.pageViews} />
             <Scorecard
               label="Duración media"
               value={fmtDuration(data.summary.avgSessionDuration)}
-              hint="Por sesión"
+              hint="Por visita"
               tip={METRIC_TIPS.avgSessionDuration}
             />
           </div>
@@ -535,12 +459,15 @@ export default function AnalyticsClient() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <BarList
               title="Acciones clave del sitio"
-              titleTip="Eventos propios del sitio: registro de junglist, clic a El Sótano, presskit, releases, tickets, etc. Es lo accionable."
+              titleTip="Acciones propias del sitio. Las principales (junglist, tickets, El Sótano, redes, login) se muestran siempre; presskit/releases/logos aparecen solo cuando tienen datos."
               subtitle="Lo que hace la gente en el sitio"
-              rows={data.topEvents
-                .filter((e) => SITE_EVENTS.has(e.label))
-                .map((e) => ({ label: eventLabel(e.label), sub: e.label, value: e.value, tip: eventTip(e.label) }))}
-              empty="Aún no hay acciones registradas. Se irán llenando con el uso del sitio."
+              rows={CORE_ACTIONS.map((name) => ({
+                label: eventLabel(name),
+                sub: name,
+                value: data.topEvents.find((e) => e.label === name)?.value ?? 0,
+                tip: eventTip(name),
+              })).sort((a, b) => b.value - a.value)}
+              empty="—"
             />
             <BarList
               title="De dónde llega la gente"
@@ -555,17 +482,6 @@ export default function AnalyticsClient() {
               showPercent
             />
           </div>
-
-          {/* Actividad general — eventos automáticos de GA */}
-          <BarList
-            title="Actividad general"
-            titleTip="Eventos automáticos de Google Analytics (vistas de página, sesiones, scroll, etc.). Sirven de contexto, no de decisión."
-            subtitle="Eventos automáticos de GA"
-            rows={data.topEvents
-              .filter((e) => !SITE_EVENTS.has(e.label))
-              .map((e) => ({ label: eventLabel(e.label), sub: e.label, value: e.value, tip: eventTip(e.label) }))}
-            empty="Sin datos."
-          />
 
           {/* Dónde visita más la gente — a ancho completo */}
           <BarList
