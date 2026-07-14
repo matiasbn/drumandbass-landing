@@ -96,12 +96,28 @@ function pageTip(path: string): string {
 }
 
 function InfoTip({ text }: { text: string }) {
+  // En desktop se muestra al hover; en móvil (sin hover) se abre/cierra al tocar.
+  const [open, setOpen] = useState(false);
   return (
     <span className="group/tip relative inline-flex align-middle ml-1 shrink-0">
-      <span className="w-4 h-4 rounded-full border-2 border-gray-400 text-gray-400 text-[9px] font-black flex items-center justify-center cursor-help select-none group-hover/tip:border-black group-hover/tip:text-black transition-colors">
+      <button
+        type="button"
+        aria-label="Más información"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        onBlur={() => setOpen(false)}
+        className="w-4 h-4 rounded-full border-2 border-gray-400 text-gray-400 text-[9px] font-black flex items-center justify-center cursor-help select-none hover:border-black hover:text-black group-hover/tip:border-black group-hover/tip:text-black transition-colors"
+      >
         ?
-      </span>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tip:block w-56 bg-black text-white mono text-[11px] font-normal normal-case leading-snug p-2 z-30 text-left">
+      </button>
+      <span
+        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 ${
+          open ? 'block' : 'hidden'
+        } group-hover/tip:block w-56 bg-black text-white mono text-[11px] font-normal normal-case leading-snug p-2 z-30 text-left`}
+      >
         {text}
       </span>
     </span>
