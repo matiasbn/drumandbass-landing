@@ -35,6 +35,7 @@ export interface Presskit {
   bio: string | null;
   photo_url: string | null;
   photo_urls: string[];
+  logo_urls: string[];
   socials: PresskitSocial[];
   mixes: PresskitMix[];
   links: PresskitLink[];

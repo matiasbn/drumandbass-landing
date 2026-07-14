@@ -4,6 +4,7 @@ import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
+import LogosSection from '@/src/components/pk/LogosSection';
 import {
   RiInstagramLine,
   RiSoundcloudLine,
@@ -233,6 +234,13 @@ export default async function PublicPresskitPage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      {/* Logos — al final del presskit, colapsables tras "Mostrar logos" */}
+      <LogosSection
+        slug={profile.slug}
+        artistName={presskit.artist_name}
+        logoUrls={presskit.logo_urls ?? []}
+      />
     </main>
   );
 }

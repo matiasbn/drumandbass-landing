@@ -53,6 +53,9 @@ function resolveSocialUrl(platform: string, value: string): string {
   return `${base}${clean}`;
 }
 
+const MAX_LOGOS = 3;
+const LOGO_MAX_SIZE = 3 * 1024 * 1024; // 3MB — logos are lightweight brand assets
+
 const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
 const MIX_TYPE_OPTIONS: { value: 'set' | 'release'; label: string }[] = [
   { value: 'set', label: 'Set' },
@@ -82,6 +85,9 @@ function PresskitEditor() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [logoUrls, setLogoUrls] = useState<string[]>([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [socials, setSocials] = useState<PresskitSocial[]>([]);
   const [mixes, setMixes] = useState<PresskitMix[]>([]);
   const [links, setLinks] = useState<PresskitLink[]>([]);
@@ -118,6 +124,7 @@ function PresskitEditor() {
         setPhotoUrls(
           pk.photo_urls?.length ? pk.photo_urls : pk.photo_url ? [pk.photo_url] : []
         );
+        setLogoUrls(pk.logo_urls || []);
         setSocials(pk.socials || []);
         setMixes(pk.mixes || []);
         setLinks(pk.links || []);
@@ -226,6 +233,76 @@ function PresskitEditor() {
     }
   };
 
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !user) return;
+
+    const invalidFile = files.find((f) => !f.type.startsWith('image/'));
+    if (invalidFile) {
+      setSaveMessage('Error: Solo se permiten imágenes');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+
+    // Enforce the max of 3 logos, counting what's already uploaded.
+    const remaining = MAX_LOGOS - logoUrls.length;
+    if (remaining <= 0) {
+      setSaveMessage(`Error: Máximo ${MAX_LOGOS} logos`);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+    const toUpload = files.slice(0, remaining);
+
+    // Logos are brand assets — upload originals, no compression. Enforce a
+    // sane size cap so we don't accept full-res photos as "logos".
+    const oversized = toUpload.find((f) => f.size > LOGO_MAX_SIZE);
+    if (oversized) {
+      setSaveMessage('Error: Cada logo debe pesar máximo 3MB');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+
+    setUploadingLogo(true);
+    setSaveMessage('');
+
+    const supabase = createClient();
+    const newUrls: string[] = [];
+
+    try {
+      for (const file of toUpload) {
+        const timestamp = Date.now() + Math.random();
+        const ext = file.name.split('.').pop() || 'png';
+        const filePath = `${user.id}/logo-${timestamp}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('pk-photos')
+          .upload(filePath, file, { upsert: true, contentType: file.type });
+
+        if (uploadError) {
+          setSaveMessage(`Error: ${uploadError.message}`);
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('pk-photos')
+          .getPublicUrl(filePath);
+
+        newUrls.push(`${publicUrl}?t=${Date.now()}`);
+      }
+
+      if (newUrls.length > 0) {
+        setLogoUrls((prev) => [...prev, ...newUrls]);
+        setSaveMessage(`${newUrls.length} logo(s) subido(s) correctamente`);
+        setTimeout(() => setSaveMessage(''), 3000);
+      }
+    } catch {
+      setSaveMessage('Error al subir los logos');
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMessage('');
@@ -261,6 +338,12 @@ function PresskitEditor() {
       return;
     }
 
+    if (logoUrls.length > MAX_LOGOS) {
+      setSaveMessage(`Error: Máximo ${MAX_LOGOS} logos. Elimina ${logoUrls.length - MAX_LOGOS}.`);
+      setSaving(false);
+      return;
+    }
+
     const body = {
       artist_name: artistName,
       real_name: realName,
@@ -269,6 +352,7 @@ function PresskitEditor() {
       genres,
       bio,
       photo_urls: photoUrls,
+      logo_urls: logoUrls,
       socials: resolvedSocials,
       mixes: filteredMixes,
       links: filteredLinks,
@@ -674,6 +758,77 @@ function PresskitEditor() {
             </div>
           </div>
 
+          {/* Logos */}
+          <div>
+            <label className={labelClass}>Logos</label>
+            <p className="mono text-[10px] opacity-40 mb-3">
+              Sube hasta {MAX_LOGOS} logos (PNG con transparencia, JPG o WebP). Quienes visiten tu
+              perfil podrán descargarlos todos en un ZIP. ({logoUrls.length}/{MAX_LOGOS})
+            </p>
+            <div className="flex flex-wrap gap-3 mb-3">
+              {logoUrls.map((url, i) => (
+                <div key={url} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Logo ${i + 1}`}
+                    className="w-28 h-28 object-contain bg-[repeating-conic-gradient(#e5e5e5_0_25%,#ffffff_0_50%)] bg-[length:16px_16px] brutalist-border shrink-0"
+                  />
+                  <div className="absolute top-1 right-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const urlObj = new URL(url.split('?')[0]);
+                          const pathMatch = urlObj.pathname.match(/pk-photos\/(.+)$/);
+                          if (pathMatch) {
+                            const supabase = createClient();
+                            await supabase.storage.from('pk-photos').remove([pathMatch[1]]);
+                          }
+                        } catch { /* ignore storage errors */ }
+                        setLogoUrls((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                      className="p-1 bg-white brutalist-border hover:bg-red-500 hover:text-white transition-colors"
+                      title="Eliminar"
+                    >
+                      <RiDeleteBinLine className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {logoUrls.length === 0 && (
+                <div className="w-28 h-28 bg-gray-200 brutalist-border flex items-center justify-center shrink-0">
+                  <RiImageLine className="w-8 h-8 opacity-30" />
+                </div>
+              )}
+            </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleUploadLogo}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadingLogo || logoUrls.length >= MAX_LOGOS}
+              className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-3 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-50 w-fit"
+            >
+              {uploadingLogo ? (
+                <RiLoader4Line className="w-4 h-4 animate-spin" />
+              ) : (
+                <RiUploadCloud2Line className="w-4 h-4" />
+              )}
+              {uploadingLogo ? 'SUBIENDO...' : 'SUBIR LOGO'}
+            </button>
+            {logoUrls.length >= MAX_LOGOS && (
+              <p className="mono text-[10px] opacity-40 mt-2">
+                Alcanzaste el máximo de {MAX_LOGOS} logos. Elimina uno para subir otro.
+              </p>
+            )}
+          </div>
+
           {/* Socials */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -960,7 +1115,7 @@ function PresskitEditor() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleSave}
-              disabled={saving || !artistName || photoUrls.length > 5}
+              disabled={saving || !artistName || photoUrls.length > 5 || logoUrls.length > MAX_LOGOS}
               className="inline-flex items-center gap-2 bg-[#ff0055] text-white px-8 py-3 font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
             >
               {saving ? (
