@@ -76,6 +76,7 @@ export const SITE_EVENT_NAMES = [
   'release_click',
   'sotano_video_click',
   'social_click',
+  'whatsapp_click',
   'logo_download',
   'enter_club',
   'login',

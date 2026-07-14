@@ -52,10 +52,11 @@ export default function ClickTracker() {
           .slice(0, 60) ||
         undefined;
 
-      // Si es un enlace a una red social/WhatsApp, lo registramos como social_click;
-      // el resto como ui_click genérico.
+      // WhatsApp y redes sociales van como eventos separados; el resto como ui_click.
       const network = href ? socialNetwork(href) : null;
-      if (network) {
+      if (network === 'whatsapp') {
+        event('whatsapp_click', { ...(section ? { section } : {}) });
+      } else if (network) {
         event('social_click', { network, ...(section ? { section } : {}) });
       } else {
         event('ui_click', {

@@ -27,7 +27,8 @@ export const EVENT_LABELS: Record<string, string> = {
   release_publish: 'Releases publicados (DJ)',
   release_click: 'Clic a un release',
   sotano_video_click: 'Clic a video de El Sótano',
-  social_click: 'Clic a redes/WhatsApp',
+  social_click: 'Clic a redes sociales',
+  whatsapp_click: 'Clic a WhatsApp',
   logo_download: 'Descargas de logos (ZIP)',
   enter_club: 'Entradas al club 3D',
 };
@@ -55,7 +56,8 @@ export const EVENT_TIPS: Record<string, string> = {
   release_publish: 'Un DJ marcó un release para publicarlo en Releases Nacionales.',
   release_click: 'Un visitante hizo clic en un release (hacia SoundCloud).',
   sotano_video_click: 'Clic a un video de El Sótano (hacia YouTube).',
-  social_click: 'Clic a una red social o WhatsApp.',
+  social_click: 'Clic a una red social (Instagram, SoundCloud, YouTube, Spotify, etc.).',
+  whatsapp_click: 'Clic a un enlace de WhatsApp (grupo o contacto).',
   logo_download: 'Descarga del ZIP de logos de un DJ.',
   enter_club: 'Alguien entró al club 3D.',
 };
@@ -70,13 +72,14 @@ export const CORE_ACTIONS = [
   'release_click',
   'enter_club',
   'social_click',
-  'login',
+  'whatsapp_click',
 ];
 
 // Acciones que se trackean pero NO se muestran en el dashboard (back-office de
 // DJs: crear/guardar/publicar presskit, marcar release, descargar logos). Se
 // siguen registrando en GA por si algún día se quieren mirar allá.
 export const HIDDEN_ACTIONS = [
+  'login',
   'release_publish',
   'presskit_view',
   'presskit_created',
