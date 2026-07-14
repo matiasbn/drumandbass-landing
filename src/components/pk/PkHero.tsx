@@ -102,7 +102,7 @@ export default function PkHero() {
           ) : (
             <RiGoogleFill className="w-6 h-6" />
           )}
-          CREA TU PRESSKIT
+          CREA O EDITA TU PRESSKIT
         </button>
       )}
     </section>
