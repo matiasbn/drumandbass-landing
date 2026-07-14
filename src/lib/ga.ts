@@ -56,10 +56,17 @@ export interface AnalyticsOverview {
   channels: AnalyticsNamedValue[];
   // Por país: total de usuarios + desglose por origen/canal.
   countries: { label: string; total: number; sources: AnalyticsNamedValue[] }[];
-  // Clics a tickets desglosados por evento (parámetro event_title del evento
-  // event_link_click). Requiere una custom dimension "event_title" en GA4.
-  ticketClicks: AnalyticsNamedValue[];
+  // Clics a tickets por evento, identificado por TÍTULO + FECHA (parámetros
+  // event_title/event_date del evento event_link_click). Requiere las custom
+  // dimensions "event_title" y "event_date" en GA4.
+  ticketClicks: TicketClick[];
   ticketClicksAvailable: boolean;
+}
+
+export interface TicketClick {
+  title: string;
+  date: string; // YYYY-MM-DD
+  value: number;
 }
 
 const num = (v?: string | null) => (v ? Number(v) : 0);
@@ -187,16 +194,16 @@ export async function getAnalyticsOverview(
 
     const s = summaryRes[0].rows?.[0]?.metricValues ?? [];
 
-    // Clics a tickets por evento: desglosa event_link_click por su parámetro
-    // event_title. Requiere una custom dimension "event_title" en GA4; si no
-    // existe, la API falla y devolvemos vacío sin romper el resto.
-    let ticketClicks: AnalyticsNamedValue[] = [];
+    // Clics a tickets por evento, identificado por TÍTULO + FECHA (event_title y
+    // event_date). Requiere las custom dimensions "event_title" y "event_date" en
+    // GA4; si faltan, la API falla y devolvemos vacío sin romper el resto.
+    let ticketClicks: TicketClick[] = [];
     let ticketClicksAvailable = false;
     try {
       const tc = await client.runReport({
         property,
         dateRanges,
-        dimensions: [{ name: 'customEvent:event_title' }],
+        dimensions: [{ name: 'customEvent:event_title' }, { name: 'customEvent:event_date' }],
         metrics: [{ name: 'eventCount' }],
         dimensionFilter: {
           filter: {
@@ -205,17 +212,18 @@ export async function getAnalyticsOverview(
           },
         },
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-        limit: 20,
+        limit: 50,
       });
       ticketClicks = (tc[0].rows ?? [])
         .map((r) => ({
-          label: r.dimensionValues?.[0]?.value ?? '',
+          title: r.dimensionValues?.[0]?.value ?? '',
+          date: r.dimensionValues?.[1]?.value ?? '',
           value: num(r.metricValues?.[0]?.value),
         }))
-        .filter((r) => r.label && r.label !== '(not set)');
+        .filter((r) => r.title && r.title !== '(not set)');
       ticketClicksAvailable = true;
     } catch {
-      // custom dimension "event_title" no registrada aún
+      // custom dimensions "event_title"/"event_date" no registradas aún
     }
 
     // Pivot país × canal: total de usuarios por país + desglose por origen.

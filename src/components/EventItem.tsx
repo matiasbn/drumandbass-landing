@@ -85,6 +85,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
               className="w-full lg:w-auto text-base lg:text-xl py-3 lg:py-4 px-6 lg:px-10"
               title={title}
               url={tickets}
+              date={date}
             />
           </div>
         </div>
