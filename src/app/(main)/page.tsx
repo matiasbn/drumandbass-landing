@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
 
-import EventItem from '@/src/components/EventItem';
+import EventCard from '@/src/components/EventCard';
 import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
 import NationalReleasesSection from '@/src/components/NationalReleasesSection';
@@ -57,7 +57,7 @@ const Home = async () => {
     <main className="grow">
       {/* Events Section */}
       <section id="events" className="border-b-4 border-black">
-        <div className="bg-black text-white py-4 uppercase mono text-4xl lg:text-6xl tracking-[0.2em] font-black marquee-container italic sticky top-0 z-40 border-b-4 border-black">
+        <div className="bg-black text-white py-4 lg:py-1.5 uppercase mono text-4xl lg:text-2xl tracking-[0.2em] font-black marquee-container italic sticky top-0 z-40 border-b-4 border-black">
           <div className="marquee-content">
             <span>
               EVENTOS ★ EVENTOS ★ EVENTOS ★ EVENTOS ★ EVENTOS ★ EVENTOS ★ EVENTOS ★ EVENTOS ★{' '}
@@ -67,10 +67,26 @@ const Home = async () => {
             </span>
           </div>
         </div>
-        <div className="flex flex-col">
-          {events.map((e, index) => (
-            <EventItem key={e.id} event={e} index={index} />
-          ))}
+        <div className="p-[clamp(1rem,2vw,2.5rem)] bg-white">
+          {/* Móvil + tablet: todos los eventos iguales, sin destacado. El destacado
+              es sólo un recurso de escritorio para redistribuir el espacio. */}
+          <div className="flex flex-col gap-[clamp(1rem,2vw,2.5rem)] lg:hidden">
+            {events.map((e, index) => (
+              <EventCard key={e.id} event={e} index={index} />
+            ))}
+          </div>
+
+          {/* Desktop (lg+): primer evento destacado + el resto en grilla de 2 columnas. */}
+          <div className="hidden lg:flex lg:flex-col gap-[clamp(1rem,2vw,2.5rem)]">
+            {events[0] && <EventCard event={events[0]} index={0} featured />}
+            {events.length > 1 && (
+              <div className="grid grid-cols-2 gap-[clamp(1rem,2vw,2.5rem)]">
+                {events.slice(1).map((e, i) => (
+                  <EventCard key={e.id} event={e} index={i + 1} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
