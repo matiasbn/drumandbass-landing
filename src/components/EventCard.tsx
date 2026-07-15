@@ -25,10 +25,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
     : dayjs(date).format('ddd DD MMM [·] HH:mm');
   const isEven = index % 2 === 0;
 
-  // Tamaños fluidos (min, ideal-vw, max) por rol. El flyer cuadrado fija la altura.
-  const flyerW = featured
-    ? 'w-[clamp(150px,19vw,240px)]'
-    : 'w-[clamp(128px,15vw,170px)]';
+  // Tamaños fluidos (min, ideal-vw, max) por rol.
+  // Destacado (carrusel): altura FIJA de la card y flyer cuadrado que la llena
+  // (h-full aspect-square) → todos los flyers quedan cuadrados y parejos.
+  // No destacado (ruta antigua): ancho fijo, se estira a lo alto.
+  const cardH = featured ? 'h-[clamp(210px,18vw,270px)]' : '';
+  const flyerBox = featured
+    ? 'h-full aspect-square'
+    : 'w-[clamp(128px,15vw,170px)] self-stretch';
   const pad = featured ? 'p-[clamp(0.9rem,2vw,2rem)]' : 'p-[clamp(0.7rem,1.2vw,1.1rem)]';
   const gap = featured ? 'gap-[clamp(0.4rem,1vw,1rem)]' : 'gap-[clamp(0.3rem,0.6vw,0.6rem)]';
   const titleCls = featured
@@ -48,7 +52,9 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
     : 'text-[clamp(0.65rem,0.8vw,0.85rem)] py-[clamp(0.35rem,0.5vw,0.6rem)] px-[clamp(0.8rem,1.2vw,1.5rem)]';
 
   return (
-    <article className="group relative brutalist-border bg-white overflow-hidden flex items-stretch hover:bg-gray-50 transition-colors">
+    <article
+      className={`group relative brutalist-border bg-white overflow-hidden flex items-stretch hover:bg-gray-50 transition-colors ${cardH}`}
+    >
       {/* "Próximo evento" arrinconado en la esquina superior izquierda del flyer,
           solo en el primer evento (el próximo), aunque todos usen la tarjeta grande. */}
       {featured && index === 0 && (
@@ -57,11 +63,8 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
         </span>
       )}
 
-      {/* Flyer a la izquierda: llena toda la altura de la card (sin franja blanca).
-          Queda ~1:1 salvo cuando el contenido es algo más alto que su ancho. */}
-      <div
-        className={`${flyerW} shrink-0 self-stretch border-r-4 border-black overflow-hidden`}
-      >
+      {/* Flyer cuadrado a la izquierda que llena la altura fija de la card. */}
+      <div className={`${flyerBox} shrink-0 border-r-4 border-black overflow-hidden`}>
         {flyer ? (
           <Image
             src={flyer.url}
