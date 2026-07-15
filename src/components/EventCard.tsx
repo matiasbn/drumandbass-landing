@@ -50,8 +50,8 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
   return (
     <article className="group relative brutalist-border bg-white overflow-hidden flex items-stretch hover:bg-gray-50 transition-colors">
       {/* "Próximo evento" arrinconado en la esquina superior izquierda del flyer,
-          solo en el destacado. */}
-      {featured && (
+          solo en el primer evento (el próximo), aunque todos usen la tarjeta grande. */}
+      {featured && index === 0 && (
         <span className="absolute top-0 left-0 z-10 bg-[#ff0055] text-white mono text-[clamp(0.55rem,0.8vw,0.8rem)] font-black uppercase tracking-widest px-2 py-0.5 border-r-4 border-b-4 border-black">
           Próximo evento
         </span>
