@@ -57,10 +57,10 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
         </span>
       )}
 
-      {/* Flyer siempre 1:1 y a la izquierda. self-start evita que se estire si el
-          contenido llegara a ser más alto que el cuadrado. */}
+      {/* Flyer a la izquierda: llena toda la altura de la card (sin franja blanca).
+          Queda ~1:1 salvo cuando el contenido es algo más alto que su ancho. */}
       <div
-        className={`${flyerW} aspect-square shrink-0 self-start border-r-4 border-black overflow-hidden`}
+        className={`${flyerW} shrink-0 self-stretch border-r-4 border-black overflow-hidden`}
       >
         {flyer ? (
           <Image
