@@ -167,7 +167,8 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
     }
 
     setIsLoading(false);
-    inputRef.current?.focus();
+    // Delay focus to ensure it fires after any click/blur events
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -291,6 +292,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
           <button
             type="submit"
             disabled={!newMessage.trim() || isLoading}
+            onMouseDown={(e) => e.preventDefault()}
             className="px-3 py-2 bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ff0055]/30 transition-colors shrink-0"
           >
             <RiSendPlaneFill className="w-4 h-4" />

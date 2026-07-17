@@ -1,14 +1,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import Image from 'next/image';
-import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
-
-import { ContentfulEvent } from '../types/types';
+import { CmsEvent } from '../types/types';
 import TicketButton from './TicketButton';
 import ProximityBadge from './ProximityBadge';
 
 interface EventItemProps {
-  event: ContentfulEvent;
+  event: CmsEvent;
   index: number;
 }
 
@@ -95,7 +93,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
           <div
             className="text-xl lg:text-3xl font-black uppercase italic leading-none cursor-default transition-colors event-description"
             dangerouslySetInnerHTML={{
-              __html: description ? documentToHtmlString(description) : '',
+              __html: description ?? '',
             }}
           ></div>
         </div>

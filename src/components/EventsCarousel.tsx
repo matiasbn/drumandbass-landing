@@ -3,7 +3,7 @@
 import React, { useRef } from 'react';
 import { RiArrowLeftSLine, RiArrowRightSLine } from '@remixicon/react';
 
-import { ContentfulEvent } from '../types/types';
+import { CmsEvent } from '../types/types';
 import EventCard from './EventCard';
 
 // Carrusel de eventos para DESKTOP: cada slide es una tarjeta destacada (grande) a
@@ -11,7 +11,7 @@ import EventCard from './EventCard';
 // note que hay más y se puedan recorrer con las flechas. Solo el primero lleva el
 // rótulo "PRÓXIMO EVENTO" (ver EventCard). Las flechas se auto-trackean por
 // ClickTracker vía data-track.
-export default function EventsCarousel({ events }: { events: ContentfulEvent[] }) {
+export default function EventsCarousel({ events }: { events: CmsEvent[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const multiple = events.length > 1;
 

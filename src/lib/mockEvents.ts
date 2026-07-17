@@ -1,16 +1,15 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import type { Document } from '@contentful/rich-text-types';
 
-import { ContentfulEvent } from '../types/types';
+import { CmsEvent } from '../types/types';
 
 dayjs.extend(isoWeek);
 
 /**
  * Eventos sintéticos SOLO para desarrollo. Tienen exactamente la misma forma
- * que los objetos que devuelve `getEvents()` tras mapear Contentful, así que
- * pasan por el mismo pipeline (sort + filter + EventItem + getProximityBadge)
- * y renderizan idéntico a como lo haría data real de Contentful.
+ * que los objetos que devuelve `getEvents()` tras mapear las filas de Supabase,
+ * así que pasan por el mismo pipeline (sort + filter + EventItem +
+ * getProximityBadge) y renderizan idéntico a como lo haría data real del CMS.
  *
  * Apagados por defecto (opt-in): se activan con MOCK_EVENTS=1 en dev.
  * Nunca se renderizan en producción.
@@ -18,31 +17,20 @@ dayjs.extend(isoWeek);
 export const MOCK_EVENTS_ENABLED =
   process.env.NODE_ENV === 'development' && process.env.MOCK_EVENTS === '1';
 
-// Mismo formato que entrega Contentful, ej. "2026-07-25T18:00".
+// Mismo formato que guarda el CMS, ej. "2026-07-25T18:00".
 const fmt = (d: dayjs.Dayjs) => d.format('YYYY-MM-DDTHH:mm');
 
-// Rich-text mínimo con la misma estructura que Contentful entrega en `description`.
-const lineup = (text: string): Document =>
-  ({
-    nodeType: 'document',
-    data: {},
-    content: [
-      {
-        nodeType: 'paragraph',
-        data: {},
-        content: [{ nodeType: 'text', value: text, marks: [], data: {} }],
-      },
-    ],
-  }) as Document;
+// description es HTML plano, igual que lo guarda el editor del admin.
+const lineup = (text: string): string => `<p>${text}</p>`;
 
-// Flyer real de Contentful (host ya permitido en next.config) para que la imagen cargue.
+// Flyer de ejemplo: asset local para no depender de ningún host remoto.
 const FLYER = {
-  url: 'https://images.ctfassets.net/oifkeit63u1g/2tusAnEr8P6JHODqLVpnim/9e127210a1b4c14ace19c439ad4eaee7/flyer_bassterds.png',
-  width: 1080,
-  height: 1350,
+  url: '/logo.png',
+  width: 890,
+  height: 395,
 };
 
-export function getMockEvents(): ContentfulEvent[] {
+export function getMockEvents(): CmsEvent[] {
   const now = dayjs();
   const at = (h: number) => now.startOf('day').hour(h); // hora fija del día
 

@@ -88,10 +88,11 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // How many specials are unlocked based on session score
   const unlockedSpecials = SPECIAL_THRESHOLDS.filter(t => sessionScore >= t).length;
 
-  // How many charges available (1 per threshold crossed, minus used)
-  const totalChargesEarned = unlockedSpecials;
+  // Charges: earn 1 per 100 points (first 5 also unlock moves), minus used
+  const chargeInterval = SPECIAL_THRESHOLDS[0]; // 100 points per charge
+  const totalChargesEarned = Math.floor(sessionScore / chargeInterval);
   const [chargesUsed, setChargesUsed] = useState(0);
-  const specialCharges = totalChargesEarned - chargesUsed;
+  const specialCharges = Math.max(0, totalChargesEarned - chargesUsed);
 
   // Save score to DB periodically (batch writes)
   const flushScore = useCallback(async () => {

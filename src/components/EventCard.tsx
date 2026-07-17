@@ -1,14 +1,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import Image from 'next/image';
-import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
-
-import { ContentfulEvent } from '../types/types';
+import { CmsEvent } from '../types/types';
 import TicketButton from './TicketButton';
 import ProximityBadge from './ProximityBadge';
 
 interface EventCardProps {
-  event: ContentfulEvent;
+  event: CmsEvent;
   index: number;
   /** El destacado (próximo evento): misma tarjeta pero más grande y a ancho completo. */
   featured?: boolean;
@@ -119,7 +117,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
         {description && (
           <div
             className={`font-black uppercase italic leading-tight text-black ${lineupCls}`}
-            dangerouslySetInnerHTML={{ __html: documentToHtmlString(description) }}
+            dangerouslySetInnerHTML={{ __html: description }}
           />
         )}
       </div>

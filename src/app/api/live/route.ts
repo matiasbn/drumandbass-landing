@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStreamings } from '@/src/lib/contentful';
+import { getStreamings } from '@/src/lib/cms';
 
 function extractYouTubeVideoId(url: string): string | null {
   try {
