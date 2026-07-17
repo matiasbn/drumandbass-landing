@@ -49,6 +49,16 @@ export default function AdminClient() {
 
   const menuItems = [
     {
+      title: 'Eventos',
+      description: 'Crear y editar los eventos de la home',
+      href: '/admin/eventos',
+    },
+    {
+      title: 'Streamings',
+      description: 'Programar streamings (banner EN VIVO)',
+      href: '/admin/streamings',
+    },
+    {
       title: 'Usuarios',
       description: 'Ver y gestionar usuarios registrados',
       href: '/admin/users',

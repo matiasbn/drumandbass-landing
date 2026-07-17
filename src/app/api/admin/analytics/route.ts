@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAnalyticsOverview } from '@/src/lib/ga';
-import { getEvents } from '@/src/lib/contentful';
+import { getEvents } from '@/src/lib/cms';
 import dayjs from '@/src/lib/date';
 
 export const runtime = 'nodejs';

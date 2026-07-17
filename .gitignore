@@ -45,3 +45,6 @@ yarn-error.log*
 next-env.d.ts
 
 *.xlsx
+
+# Backups locales de la DB (scripts/backup-db.mjs) — nunca commitear datos
+/backups/

@@ -207,3 +207,88 @@ DROP TRIGGER IF EXISTS junglists_dedupe_ravers ON junglists;
 CREATE TRIGGER junglists_dedupe_ravers
   AFTER INSERT ON junglists
   FOR EACH ROW EXECUTE FUNCTION remove_raver_on_junglist_insert();
+
+-- CMS propio (reemplazo de Contentful): eventos y streamings (see
+-- supabase/migrations/20260715000000_create_cms_events_streamings.sql for the
+-- authoritative copy, incl. the public 'flyers' storage bucket + policies).
+-- Fechas como TEXT 'YYYY-MM-DDTHH:mm' (hora local, mismo formato que Contentful).
+CREATE TABLE IF NOT EXISTS cms_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  venue TEXT,
+  address TEXT,
+  date TEXT NOT NULL,
+  end_date TEXT,
+  description_html TEXT,
+  tickets TEXT,
+  info TEXT,
+  flyer_url TEXT,
+  flyer_width INTEGER,
+  flyer_height INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS cms_events_date_idx ON cms_events(date);
+
+ALTER TABLE cms_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view cms events" ON cms_events
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admins can insert cms events" ON cms_events
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Admins can update cms events" ON cms_events
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Admins can delete cms events" ON cms_events
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+DROP TRIGGER IF EXISTS cms_events_updated_at ON cms_events;
+CREATE TRIGGER cms_events_updated_at
+  BEFORE UPDATE ON cms_events
+  FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+
+CREATE TABLE IF NOT EXISTS cms_streamings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  youtube_url TEXT NOT NULL,
+  date TEXT NOT NULL,
+  end_date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS cms_streamings_date_idx ON cms_streamings(date);
+
+ALTER TABLE cms_streamings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view cms streamings" ON cms_streamings
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admins can insert cms streamings" ON cms_streamings
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Admins can update cms streamings" ON cms_streamings
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+CREATE POLICY "Admins can delete cms streamings" ON cms_streamings
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true)
+  );
+
+DROP TRIGGER IF EXISTS cms_streamings_updated_at ON cms_streamings;
+CREATE TRIGGER cms_streamings_updated_at
+  BEFORE UPDATE ON cms_streamings
+  FOR EACH ROW EXECUTE FUNCTION handle_updated_at();

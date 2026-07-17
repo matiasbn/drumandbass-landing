@@ -1,14 +1,16 @@
 import { RemixiconComponentType } from "@remixicon/react";
-import type { Document } from "@contentful/rich-text-types";
 
-export interface ContentfulEvent {
+// Evento del CMS propio (Supabase, tablas cms_events/cms_streamings).
+// Fechas en formato 'YYYY-MM-DDTHH:mm' (hora local). description es HTML
+// (editado con tiptap en /admin/eventos).
+export interface CmsEvent {
   id: string;
   title: string;
   venue?: string;
   address?: string;
   date: string;
   endDate?: string;
-  description?: Document;
+  description?: string;
   tickets?: string;
   info?: string;
   flyer?: {
@@ -18,7 +20,7 @@ export interface ContentfulEvent {
   };
 }
 
-export interface ContentfulStreaming {
+export interface CmsStreaming {
   id: string;
   name: string;
   youtubeUrl: string;

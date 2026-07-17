@@ -7,7 +7,7 @@ import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
 import NationalReleasesSection from '@/src/components/NationalReleasesSection';
 import dayjs from '@/src/lib/date';
-import { getEvents } from '@/src/lib/contentful';
+import { getEvents } from '@/src/lib/cms';
 import { getSotanoVideos } from '@/src/lib/youtube';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
@@ -31,16 +31,16 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 const Home = async () => {
-  const [contentfulEvents, sotanoVideos] = await Promise.all([
+  const [cmsEvents, sotanoVideos] = await Promise.all([
     getEvents(),
     getSotanoVideos(2),
   ]);
 
-  // En dev, se añaden eventos sintéticos (misma forma que Contentful) para ver
+  // En dev, se añaden eventos sintéticos (misma forma que el CMS) para ver
   // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
   const allEvents = MOCK_EVENTS_ENABLED
-    ? [...contentfulEvents, ...getMockEvents()]
-    : contentfulEvents;
+    ? [...cmsEvents, ...getMockEvents()]
+    : cmsEvents;
 
   // Solo eventos que aún no terminan (se ocultan los pasados)
   const now = dayjs();
