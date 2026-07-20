@@ -49,6 +49,18 @@ export default async function EventoLandingPage({ params }: PageProps) {
       <TrackOnMount name="landing_evento_view" params={{ event_id: ev.id, event_title: ev.title }} />
       <CampaignVisitBeacon />
 
+      {/* Descuento Junglist arriba de todo: al llegar, lo primero que ven es qué
+          tienen que hacer para obtenerlo. El código se resuelve en el cliente
+          contra sesión — nunca viaja en este HTML. */}
+      {(ev.couponForNew || ev.couponForExisting) && (
+        <EventCouponBlock
+          eventId={ev.id}
+          eventTitle={ev.title}
+          couponForNew={!!ev.couponForNew}
+          couponForExisting={!!ev.couponForExisting}
+        />
+      )}
+
       {/* Evento */}
       <section className="border-b-4 border-black">
         <div className="grid grid-cols-1 lg:grid-cols-2">
@@ -115,10 +127,6 @@ export default async function EventoLandingPage({ params }: PageProps) {
           </div>
         </div>
       </section>
-
-      {/* Descuento Junglist (si el evento tiene cupón). El código se resuelve en
-          el cliente contra sesión — nunca viaja en este HTML. */}
-      {ev.hasCoupon && <EventCouponBlock eventId={ev.id} eventTitle={ev.title} />}
 
       {/* Cross-sell: comunidad */}
       <section className="p-6 lg:p-12 border-b-4 border-black">

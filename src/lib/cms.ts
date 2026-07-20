@@ -67,8 +67,9 @@ export function mapEventRow(row: CmsEventRow): CmsEvent {
           height: row.flyer_height ?? 0,
         }
       : undefined,
-    // Solo el booleano — el código se sirve aparte, contra sesión.
-    hasCoupon: Boolean(row.coupon_junglist_new || row.coupon_junglist),
+    // Solo booleanos — el código se sirve aparte, contra sesión.
+    couponForNew: Boolean(row.coupon_junglist_new),
+    couponForExisting: Boolean(row.coupon_junglist),
   };
 }
 

@@ -22,11 +22,13 @@ export interface CmsEvent {
     height: number;
   };
   /**
-   * Si el evento tiene un descuento Junglist activo. Solo el booleano: el código
-   * jamás se expone acá porque este tipo viaja al HTML público (ISR). El código
-   * se pide a /api/evento/[id]/coupon, contra sesión.
+   * A qué perfil le sirve el descuento Junglist del evento. Solo booleanos: el
+   * código jamás se expone acá porque este tipo viaja al HTML público (ISR); se
+   * pide a /api/evento/[id]/coupon, contra sesión. Sirven para no ofrecerle un
+   * descuento a quien no podría canjearlo.
    */
-  hasCoupon?: boolean;
+  couponForNew?: boolean;
+  couponForExisting?: boolean;
 }
 
 export interface CmsStreaming {

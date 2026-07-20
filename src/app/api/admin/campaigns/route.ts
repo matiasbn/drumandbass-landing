@@ -289,12 +289,22 @@ export async function POST(request: NextRequest) {
   // Los cupones viven en el EVENTO (la landing los sirve contra sesión).
   // coupon_set_at es el corte: quien se inscriba después cuenta como nuevo.
   if (couponEnabled && eventId) {
+    // Puede haber varias campañas para el mismo evento. El corte nuevo/antiguo se
+    // fija en la PRIMERA con cupón y no se mueve: si lo pisáramos, quien se
+    // inscribió por una campaña anterior de este mismo evento pasaría a contar
+    // como "ya registrado" y perdería su código de bienvenida.
+    const { data: current } = await supabase
+      .from('cms_events')
+      .select('coupon_set_at')
+      .eq('id', eventId)
+      .maybeSingle();
+
     await supabase
       .from('cms_events')
       .update({
         coupon_junglist_new: newCode || null,
         coupon_junglist: existingCode || null,
-        coupon_set_at: new Date().toISOString(),
+        coupon_set_at: current?.coupon_set_at ?? new Date().toISOString(),
       })
       .eq('id', eventId);
     revalidatePath(`/evento/${eventId}`);

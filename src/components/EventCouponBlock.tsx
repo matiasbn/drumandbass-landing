@@ -10,7 +10,10 @@ import BigButton from '@/src/components/BigButton';
 type State =
   | { kind: 'loading' }
   | { kind: 'anon' }
+  /** Con sesión pero sin cuenta de junglist: inscribirse podría darle el cupón. */
   | { kind: 'not_junglist' }
+  /** Ya es junglist y a su perfil no le corresponde descuento: no hay nada que ofrecer. */
+  | { kind: 'no_coupon' }
   | { kind: 'ok'; code: string; isNew: boolean };
 
 /**
@@ -22,12 +25,49 @@ type State =
 export default function EventCouponBlock({
   eventId,
   eventTitle,
+  couponForNew,
+  couponForExisting,
 }: {
   eventId: string;
   eventTitle: string;
+  /** Hay código para quien se inscriba a partir de ahora. */
+  couponForNew: boolean;
+  /** Hay código para quien ya era junglist. */
+  couponForExisting: boolean;
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [copied, setCopied] = useState(false);
+  // Si eligió seguir sin inscribirse, el banner se colapsa a una franja.
+  const [dismissed, setDismissed] = useState(false);
+
+  const dismissKey = `dnb:coupon-dismissed:${eventId}`;
+
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(dismissKey) === '1');
+    } catch {
+      // sin localStorage el banner simplemente se muestra siempre
+    }
+  }, [dismissKey]);
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(dismissKey, '1');
+    } catch {
+      // la elección igual vale durante esta visita
+    }
+    event('junglist_coupon_dismiss', { event_id: eventId, event_title: eventTitle });
+  };
+
+  const restore = () => {
+    setDismissed(false);
+    try {
+      localStorage.removeItem(dismissKey);
+    } catch {
+      // no pasa nada: el estado en memoria ya se restauró
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -51,16 +91,38 @@ export default function EventCouponBlock({
             coupon_kind: data.kind,
           });
         } else {
-          setState({ kind: 'not_junglist' });
+          setState({ kind: data.isJunglist ? 'no_coupon' : 'not_junglist' });
         }
       } catch {
-        if (alive) setState({ kind: 'not_junglist' });
+        if (alive) setState({ kind: 'no_coupon' });
       }
     })();
     return () => {
       alive = false;
     };
   }, [eventId, eventTitle]);
+
+  // ¿Este visitante podría canjear algo? Si no, no se le ofrece nada y ve la
+  // landing normal. Un anónimo puede ser cualquiera de los dos perfiles, así que
+  // basta con que exista algún cupón; alguien con sesión y sin cuenta de junglist
+  // solo puede aspirar al de "nuevo"; y si ya es junglist sin cupón, no hay nada.
+  const canGetCoupon =
+    state.kind === 'anon'
+      ? couponForNew || couponForExisting
+      : state.kind === 'not_junglist'
+        ? couponForNew
+        : false;
+
+  // Mientras la puerta está abierta, el evento de atrás no debe poder scrollearse.
+  const gateOpen = state.kind !== 'loading' && state.kind !== 'ok' && !dismissed && canGetCoupon;
+  useEffect(() => {
+    if (!gateOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [gateOpen]);
 
   const login = async () => {
     const supabase = createClient();
@@ -86,66 +148,111 @@ export default function EventCouponBlock({
 
   if (state.kind === 'loading') return null;
 
-  return (
-    <section
-      data-section="Descuento Junglist"
-      className="p-6 lg:p-12 border-b-4 border-black bg-[#ff0055] text-white"
-    >
-      <div className="flex items-center gap-3 mb-2">
-        <RiCoupon3Line size={32} />
-        <h2 className="text-3xl lg:text-5xl font-black uppercase italic">Descuento Junglist</h2>
-      </div>
+  // No hay descuento que ofrecerle: solo la landing del evento.
+  if (state.kind === 'no_coupon' || (state.kind !== 'ok' && !canGetCoupon)) return null;
 
-      {state.kind === 'ok' ? (
-        <>
-          <p className="mono text-sm lg:text-base font-bold uppercase mb-6 leading-tight">
-            {state.isNew
-              ? '¡Bienvenido a la comunidad! Este es tu código de descuento para este evento.'
-              : 'Por ser Junglist, este es tu código de descuento para este evento.'}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-            <span className="brutalist-border bg-white text-black px-8 py-5 text-2xl lg:text-4xl font-black tracking-widest text-center break-all">
-              {state.code}
-            </span>
-            <button
-              type="button"
-              onClick={copy}
-              className="brutalist-border bg-black text-white px-6 py-4 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer"
-            >
-              {copied ? '¡Copiado!' : 'Copiar código'}
-            </button>
-          </div>
-          <p className="mono text-xs uppercase mt-4 opacity-80">
-            Úsalo al comprar tu ticket.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="mono text-sm lg:text-base font-bold uppercase mb-6 leading-tight">
-            {state.kind === 'anon'
-              ? 'Este evento tiene descuento para Junglists. Inscríbete gratis y accede al tuyo, o inicia sesión si ya eres Junglist.'
-              : 'Este evento tiene descuento para Junglists. Completa tu registro gratis y accede al tuyo.'}
-          </p>
-          <div className="flex flex-col lg:flex-row gap-4">
+  // Ya es junglist y tiene código: se muestra en la página, sin bloquearla.
+  if (state.kind === 'ok') {
+    return (
+      <section
+        data-section="Descuento Junglist"
+        className="p-6 lg:p-12 border-b-4 border-black bg-[#ff0055] text-white"
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <RiCoupon3Line size={32} />
+          <h2 className="text-3xl lg:text-5xl font-black uppercase italic">Tu descuento Junglist</h2>
+        </div>
+        <p className="mono text-sm lg:text-base font-bold uppercase mb-6 leading-tight">
+          {state.isNew
+            ? '¡Bienvenido a la comunidad! Este es tu código de descuento para este evento.'
+            : 'Por ser Junglist, este es tu código de descuento para este evento.'}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+          <span className="brutalist-border bg-white text-black px-8 py-5 text-2xl lg:text-4xl font-black tracking-widest text-center break-all">
+            {state.code}
+          </span>
+          <button
+            type="button"
+            onClick={copy}
+            className="brutalist-border bg-black text-white px-6 py-4 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer"
+          >
+            {copied ? '¡Copiado!' : 'Copiar código'}
+          </button>
+        </div>
+        <p className="mono text-xs uppercase mt-4 opacity-80">Úsalo al comprar tu ticket.</p>
+      </section>
+    );
+  }
+
+  // Eligió seguir sin inscribirse: queda una franja discreta por si se arrepiente.
+  if (dismissed) {
+    return (
+      <button
+        type="button"
+        onClick={restore}
+        data-section="Descuento Junglist"
+        className="w-full border-b-4 border-black bg-black text-white px-6 py-3 mono text-xs font-bold uppercase text-left hover:bg-gray-900 transition-colors cursor-pointer"
+      >
+        <RiCoupon3Line size={16} className="inline mr-2 align-text-bottom" />
+        Este evento tiene descuento para Junglists — ver cómo obtenerlo
+      </button>
+    );
+  }
+
+  // Puerta a pantalla completa: al llegar desde el correo, lo único que se ve es
+  // la decisión —inscribirse/entrar, o seguir al evento sin descuento.
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Descuento Junglist"
+      data-section="Descuento Junglist"
+      className="fixed inset-0 z-50 bg-[#ff0055] text-white overflow-y-auto flex items-center justify-center p-6"
+    >
+      <div className="w-full max-w-2xl">
+        <RiCoupon3Line size={56} className="mb-4" />
+        <h2 className="text-4xl lg:text-6xl font-black uppercase italic leading-none mb-4">
+          {eventTitle} tiene descuento para Junglists
+        </h2>
+        <p className="mono text-sm lg:text-base font-bold uppercase mb-8 leading-tight">
+          {!couponForNew
+            ? 'El descuento es para Junglists ya registrados. Inicia sesión para ver el tuyo.'
+            : state.kind === 'anon'
+              ? 'Ser Junglist es gratis y te toma un minuto. Inscríbete o inicia sesión para ver si tienes descuento.'
+              : 'Completa tu registro gratis para ver si tienes descuento.'}
+        </p>
+
+        <div className="flex flex-col gap-4">
+          {couponForNew && (
             <BigButton
               variant="blue"
-              className="flex-1 text-lg py-6"
+              className="w-full text-lg py-6"
               href={`/junglist?next=/evento/${eventId}`}
             >
               {state.kind === 'anon' ? 'Inscríbete y obtén tu descuento' : 'Completa tu registro'}
             </BigButton>
-            {state.kind === 'anon' && (
-              <button
-                type="button"
-                onClick={login}
-                className="flex-1 brutalist-border bg-white text-black text-lg py-6 px-6 font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer"
-              >
-                Ya soy Junglist, iniciar sesión
-              </button>
-            )}
-          </div>
-        </>
-      )}
-    </section>
+          )}
+          {state.kind === 'anon' && (
+            <button
+              type="button"
+              onClick={login}
+              className="w-full brutalist-border bg-white text-black text-lg py-6 px-6 font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              Ya soy Junglist, iniciar sesión
+            </button>
+          )}
+        </div>
+
+        {/* Salida deliberadamente poco atractiva: es una opción real, pero no
+            compite con la principal. */}
+        <button
+          type="button"
+          onClick={dismiss}
+          className="block mx-auto mt-10 mono text-xs uppercase underline opacity-70 hover:opacity-100 cursor-pointer"
+        >
+          No quiero ser Junglist, llévame al evento
+        </button>
+      </div>
+    </div>
   );
 }

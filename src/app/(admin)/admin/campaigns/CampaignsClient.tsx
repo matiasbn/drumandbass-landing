@@ -12,6 +12,7 @@ import {
   segmentBody,
   segmentSubject,
   segmentHasCoupon,
+  buildEventBody,
   SEGMENT_LABELS,
   type Segment,
 } from '@/src/lib/campaignCopy';
@@ -49,6 +50,9 @@ interface EventLite {
   tickets: string | null;
   description_html: string | null;
 }
+
+// Borradores editados de los correos segmentados (sobreviven a recargas).
+const DRAFT_PREFIX = 'dnb:campaign-draft:';
 
 const STEPS = [
   { num: 1, label: 'Plantilla', desc: 'Elige una plantilla' },
@@ -298,7 +302,10 @@ export default function CampaignsClient() {
       const res = await fetch('/api/admin/events');
       const data = await res.json();
       const now = dayjs();
-      const upcoming = (data.events || []).filter((e: EventLite) => dayjs(e.date).isAfter(now));
+      // Vigentes, con el más próximo primero: es el que normalmente se difunde.
+      const upcoming = (data.events || [])
+        .filter((e: EventLite) => dayjs(e.date).isAfter(now))
+        .sort((a: EventLite, b: EventLite) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
       setEvents(upcoming);
     } catch {
       // ignore
@@ -350,13 +357,13 @@ export default function CampaignsClient() {
   // Rellena los campos del correo desde un evento publicado. El cuerpo va redactado
   // como invitación (sin lineup — ese ya va en el flyer) y sin lenguaje de urgencia.
   const applyEventTemplate = (ev: EventLite) => {
-    const fecha = dayjs(ev.date).format('dddd D [de] MMMM [desde las] HH:mm');
-    const lugar = ev.venue ? `${ev.venue}${ev.address ? ` · ${ev.address}` : ''}` : '';
-    const body = [
-      `<p><strong>Llegó la fecha: ${ev.title} ya es oficial y te queremos en la pista.</strong></p>`,
-      `<p>Nos juntamos el <strong>${fecha}</strong>${lugar ? ` en <strong>${lugar}</strong>` : ''}. Junta a tu crew y prepárate para una noche de puro Drum and Bass.</p>`,
-      `<p>Abajo encuentras el link del evento. Nos vemos en la pista.</p>`,
-    ].join('');
+    const body = buildEventBody({
+      title: ev.title,
+      dateLabel: dayjs(ev.date).format('dddd D [de] MMMM [desde las] HH:mm'),
+      venueLabel: ev.venue ? `${ev.venue}${ev.address ? ` · ${ev.address}` : ''}` : undefined,
+      segment: 'no_junglist',
+      hasCoupon: false,
+    });
     setCampaignName(ev.title);
     setSubject(`Nos vemos en ${ev.title}`);
     setTitle(ev.title);
@@ -367,7 +374,16 @@ export default function CampaignsClient() {
     setButtonText('Ver evento');
     setButtonUrl(`${BASE_URL}/evento/${ev.id}`);
     setBodyHtml(body);
-    editor?.commands.setContent(body);
+    editor?.commands.setContent(body, { emitUpdate: false });
+    // Aplicar la plantilla descarta los borradores editados de ese evento.
+    try {
+      const prefix = `${DRAFT_PREFIX}${ev.id}:`;
+      Object.keys(localStorage)
+        .filter(k => k.startsWith(prefix))
+        .forEach(k => localStorage.removeItem(k));
+    } catch {
+      // sin localStorage no hay nada que limpiar
+    }
     setDraftSeed(n => n + 1);
   };
 
@@ -439,16 +455,45 @@ export default function CampaignsClient() {
     editModeRef.current = { segmented, seg: activeSegment };
   }, [segmented, activeSegment]);
 
+  const chosenEvent = events.find(e => e.id === chosenEventId);
+  const draftKey = `${DRAFT_PREFIX}${chosenEventId ?? 'custom'}:${segHasCoupon.junglist}|${segHasCoupon.no_junglist}`;
+
   // Al cambiar la forma de la segmentación (o al aplicar una plantilla) se
-  // regeneran ambos borradores desde el cuerpo/asunto base. Editar el texto de
-  // un segmento NO dispara esto, así que los cambios manuales se conservan.
-  const shapeKey = `${segmented}|${segHasCoupon.junglist}|${segHasCoupon.no_junglist}|${draftSeed}`;
+  // regeneran ambos borradores: cada caso tiene su propio texto de plantilla.
+  // Editar el contenido NO dispara esto, así que los cambios se conservan.
+  const shapeKey = `${segmented}|${draftKey}|${draftSeed}`;
   useEffect(() => {
     if (!segmented) return;
-    setSegBodies({
-      junglist: segmentBody(bodyHtml, 'junglist', segHasCoupon.junglist),
-      no_junglist: segmentBody(bodyHtml, 'no_junglist', segHasCoupon.no_junglist),
-    });
+
+    // Si ya editaste esta misma combinación antes, se restaura lo tuyo.
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.bodies?.junglist !== undefined && parsed?.subjects) {
+          setSegBodies(parsed.bodies);
+          setSegSubjects(parsed.subjects);
+          return;
+        }
+      }
+    } catch {
+      // localStorage no disponible o JSON inválido: se usan los textos por defecto.
+    }
+
+    const make = (segment: Segment) =>
+      chosenEvent
+        ? buildEventBody({
+            title: chosenEvent.title,
+            dateLabel: dayjs(chosenEvent.date).format('dddd D [de] MMMM [desde las] HH:mm'),
+            venueLabel: chosenEvent.venue
+              ? `${chosenEvent.venue}${chosenEvent.address ? ` · ${chosenEvent.address}` : ''}`
+              : undefined,
+            segment,
+            hasCoupon: segHasCoupon[segment],
+          })
+        : segmentBody(bodyHtml, segment, segHasCoupon[segment]);
+
+    setSegBodies({ junglist: make('junglist'), no_junglist: make('no_junglist') });
     setSegSubjects({
       junglist: segmentSubject(subject, title, segHasCoupon.junglist),
       no_junglist: segmentSubject(subject, title, segHasCoupon.no_junglist),
@@ -457,12 +502,24 @@ export default function CampaignsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shapeKey]);
 
-  // Cargar en el editor el cuerpo del correo que se está editando.
+  // Guardar lo editado, para que no se pierda al recargar o cambiar de vista.
+  useEffect(() => {
+    if (!segmented) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ bodies: segBodies, subjects: segSubjects }));
+    } catch {
+      // sin localStorage el borrador igual vive en memoria durante la sesión
+    }
+  }, [segmented, draftKey, segBodies, segSubjects]);
+
+  // Cargar en el editor el cuerpo del correo que se está editando. emitUpdate:false
+  // es imprescindible: en tiptap v3 setContent dispara onUpdate por defecto, y eso
+  // reescribiría el borrador con el contenido que estamos reemplazando.
   useEffect(() => {
     if (!editor) return;
     const target = segmented ? segBodies[activeSegment] : bodyHtml;
     if (target !== undefined && editor.getHTML() !== target) {
-      editor.commands.setContent(target);
+      editor.commands.setContent(target, { emitUpdate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSegment, segmented, segBodies, editor]);
@@ -972,14 +1029,37 @@ export default function CampaignsClient() {
 
               {/* Button URL */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                {fieldLabel('Enlace del boton')}
-                <input
-                  type="text"
-                  value={buttonUrl}
-                  onChange={e => setButtonUrl(e.target.value)}
-                  placeholder="https://ejemplo.com/evento"
-                  className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
-                />
+                {fieldLabel(
+                  'Enlace del boton',
+                  template === 'evento' ? 'fijo: landing del evento' : undefined
+                )}
+                {template === 'evento' ? (
+                  // Bloqueado a propósito: de esta URL cuelgan el ?ct de cada
+                  // destinatario (quién visitó) y el cupón. Cambiarla rompe el
+                  // tracking y deja al descuento sin dónde canjearse.
+                  <div className="flex-1">
+                    <p className="brutalist-border px-4 py-2 mono text-sm bg-gray-100 break-all">
+                      <span className="text-gray-600">{buttonUrl}</span>
+                      <span className="text-[#ff0055] font-bold">
+                        ?ct=&lt;destinatario&gt;&amp;utm_campaign=&lt;campaña&gt;
+                      </span>
+                    </p>
+                    <p className="mono text-[10px] text-gray-500 mt-1">
+                      En <span className="text-gray-600">gris</span> la landing del evento, que ya
+                      existe. En <span className="text-[#ff0055] font-bold">rojo</span> lo que se
+                      agrega al enviar: un código distinto por destinatario y por campaña, para
+                      saber quién visitó. No es editable.
+                    </p>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={buttonUrl}
+                    onChange={e => setButtonUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/evento"
+                    className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
+                  />
+                )}
               </div>
             </div>
           </div>

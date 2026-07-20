@@ -56,9 +56,12 @@ const COUPON_PARAGRAPH: Record<Segment, string> = {
     '<p><strong>Inscríbete gratis como Junglist y accede a tu descuento para este evento.</strong> Entra al link de abajo, te toma un minuto.</p>',
 };
 
-/** Cuerpo del correo para el segmento: el base, más el párrafo del descuento si aplica. */
+/**
+ * Cuerpo del correo para el segmento. El párrafo del descuento va al principio:
+ * es el gancho y lo único que distingue este correo del de recordatorio.
+ */
 export function segmentBody(baseBody: string, segment: Segment, hasCoupon: boolean): string {
-  return hasCoupon ? `${baseBody}${COUPON_PARAGRAPH[segment]}` : baseBody;
+  return hasCoupon ? `${COUPON_PARAGRAPH[segment]}${baseBody}` : baseBody;
 }
 
 /**
@@ -73,3 +76,42 @@ export const SEGMENT_LABELS: Record<Segment, string> = {
   junglist: 'Junglists y DJs',
   no_junglist: 'Aún no son Junglists',
 };
+
+/**
+ * Cuerpo completo de la plantilla Evento. Hay un texto propio por caso (sin
+ * descuento / junglist con descuento / aún no junglist con descuento), no un
+ * párrafo pegado al final: lo que se ofrece es distinto en cada uno.
+ *
+ * Sin lineup a propósito (ya va en el flyer) y sin lenguaje de urgencia.
+ */
+export function buildEventBody({
+  title,
+  dateLabel,
+  venueLabel,
+  segment,
+  hasCoupon,
+}: {
+  title: string;
+  dateLabel: string;
+  venueLabel?: string;
+  segment: Segment;
+  hasCoupon: boolean;
+}): string {
+  const intro = `<p><strong>Llegó la fecha: ${title} ya es oficial y te queremos en la pista.</strong></p>`;
+  const donde = `<p>Nos juntamos el <strong>${dateLabel}</strong>${
+    venueLabel ? ` en <strong>${venueLabel}</strong>` : ''
+  }. Junta a tu crew y prepárate para una noche de puro Drum and Bass.</p>`;
+
+  if (!hasCoupon) {
+    return [intro, donde, '<p>Abajo encuentras el link del evento. Nos vemos en la pista.</p>'].join('');
+  }
+
+  // El descuento va PRIMERO: es lo que engancha, y es lo único que distingue a
+  // este correo del de recordatorio. Reemplaza al intro para no repetir gancho.
+  const oferta =
+    segment === 'junglist'
+      ? `<p><strong>Por ser Junglist tienes un descuento para ${title}.</strong> Entra al link de abajo e inicia sesión para ver tu código.</p>`
+      : `<p><strong>Los Junglists tienen descuento para ${title}, y hacerte Junglist es gratis.</strong> Entra al link de abajo, te inscribes en un minuto y ahí mismo aparece tu código.</p>`;
+
+  return [oferta, donde, '<p>Nos vemos en la pista.</p>'].join('');
+}
