@@ -11,6 +11,7 @@ import ProximityBadge from '@/src/components/ProximityBadge';
 import BigButton from '@/src/components/BigButton';
 import TrackOnMount from '@/src/components/TrackOnMount';
 import CampaignVisitBeacon from '@/src/components/CampaignVisitBeacon';
+import EventCouponBlock from '@/src/components/EventCouponBlock';
 
 // Landing pública de un evento (por id). Es el destino de los correos de campaña
 // (para medir la visita en GA de forma confiable) y también sirve para compartir
@@ -114,6 +115,10 @@ export default async function EventoLandingPage({ params }: PageProps) {
           </div>
         </div>
       </section>
+
+      {/* Descuento Junglist (si el evento tiene cupón). El código se resuelve en
+          el cliente contra sesión — nunca viaja en este HTML. */}
+      {ev.hasCoupon && <EventCouponBlock eventId={ev.id} eventTitle={ev.title} />}
 
       {/* Cross-sell: comunidad */}
       <section className="p-6 lg:p-12 border-b-4 border-black">

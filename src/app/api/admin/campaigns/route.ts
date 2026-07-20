@@ -2,7 +2,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { revalidatePath } from 'next/cache';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
+import { resolveCoupon, segmentBody, segmentSubject } from '@/src/lib/campaignCopy';
 import { BASE_URL } from '@/src/constants';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -95,6 +97,23 @@ async function getEmailsByAudiences(
   return { emails: Array.from(allEmails), counts, totalUnique: allEmails.size };
 }
 
+// Quiénes YA son junglists, sin importar qué audiencias se hayan seleccionado:
+// junglists ∪ DJs (un DJ es siempre junglist). Sirve para decidir, al enviar,
+// qué copy le toca a cada correo.
+async function getJunglistEmails(supabase: ReturnType<typeof createSupabaseServer>) {
+  const [jungRes, pkRes] = await Promise.all([
+    supabase.from('junglists').select('email'),
+    supabase.from('pk_profiles').select('email'),
+  ]);
+  const set = new Set<string>();
+  for (const res of [jungRes, pkRes]) {
+    res.data?.forEach(r => {
+      if (r.email) set.add(r.email.toLowerCase());
+    });
+  }
+  return set;
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);
@@ -133,7 +152,7 @@ export async function GET(request: NextRequest) {
   if (searchParams.get('list') === '1') {
     const { data, error } = await supabase
       .from('campaigns')
-      .select('id, name, template, event_id, subject, coupon_code, audiences, recipients, sent_count, failed_count, status, sent_at, created_at')
+      .select('id, name, template, event_id, subject, coupon_mode, coupon_new_code, coupon_existing_code, audiences, recipients, sent_count, failed_count, status, sent_at, created_at')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) return NextResponse.json({ campaigns: [], error: error.message }, { status: 500 });
@@ -147,7 +166,7 @@ export async function GET(request: NextRequest) {
       supabase.from('campaigns').select('*').eq('id', campaignId).maybeSingle(),
       supabase
         .from('campaign_recipients')
-        .select('email, status, opened_at, visited_at, visit_count')
+        .select('email, status, segment, opened_at, visited_at, visit_count')
         .eq('campaign_id', campaignId)
         .order('email'),
     ]);
@@ -190,8 +209,7 @@ export async function POST(request: NextRequest) {
     imageBase64,
     buttonText,
     buttonUrl,
-    couponCode,
-    couponDescription,
+    coupon,
   } = body as {
     audiences: string[];
     extraEmails?: string[];
@@ -204,8 +222,15 @@ export async function POST(request: NextRequest) {
     imageBase64?: string;
     buttonText?: string;
     buttonUrl?: string;
-    couponCode?: string;
-    couponDescription?: string;
+    coupon?: {
+      enabled: boolean;
+      /** A quién le corresponde el descuento. */
+      target?: 'both' | 'new_only' | 'existing_only';
+      /** Solo aplica con target 'both': un mismo código o uno por segmento. */
+      sameForAll?: boolean;
+      newCode?: string;
+      existingCode?: string;
+    };
   };
 
   if (!subject || !title) {
@@ -228,6 +253,48 @@ export async function POST(request: NextRequest) {
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
   const resend = new Resend(apiKey);
 
+  // ── Cupones ──────────────────────────────────────────────────────────────
+  // El admin elige explícitamente a quién va el descuento. Sin fallback entre
+  // segmentos: una columna vacía significa "a este segmento no le corresponde",
+  // y por eso su correo no menciona descuento alguno.
+  const couponEnabled = Boolean(coupon?.enabled) && Boolean(eventId);
+  const target = coupon?.target ?? 'both';
+  const sameForAll = coupon?.sameForAll ?? true;
+  const rawNew = coupon?.newCode?.trim() || '';
+  const rawExisting = coupon?.existingCode?.trim() || '';
+
+  const { newCode, existingCode } = resolveCoupon({
+    enabled: couponEnabled,
+    target,
+    sameForAll,
+    newCode: rawNew,
+    existingCode: rawExisting,
+  });
+
+  const couponMode = !couponEnabled
+    ? 'none'
+    : target === 'both'
+      ? sameForAll ? 'both_same' : 'both_split'
+      : target;
+
+  // Quién recibe la promesa de descuento en su correo: solo quien tiene código.
+  const junglistGetsCoupon = Boolean(existingCode);
+  const nonJunglistGetsCoupon = Boolean(newCode);
+
+  // Los cupones viven en el EVENTO (la landing los sirve contra sesión).
+  // coupon_set_at es el corte: quien se inscriba después cuenta como nuevo.
+  if (couponEnabled && eventId) {
+    await supabase
+      .from('cms_events')
+      .update({
+        coupon_junglist_new: newCode || null,
+        coupon_junglist: existingCode || null,
+        coupon_set_at: new Date().toISOString(),
+      })
+      .eq('id', eventId);
+    revalidatePath(`/evento/${eventId}`);
+  }
+
   // 1) Persistimos la campaña (obtenemos su id, que sirve como campaign_id).
   const { data: campaign, error: campaignError } = await supabase
     .from('campaigns')
@@ -241,8 +308,9 @@ export async function POST(request: NextRequest) {
       image_url: imageBase64 || null,
       button_text: buttonText || null,
       button_url: buttonUrl || null,
-      coupon_code: couponCode || null,
-      coupon_description: couponDescription || null,
+      coupon_mode: couponMode,
+      coupon_new_code: newCode || null,
+      coupon_existing_code: existingCode || null,
       audiences: audiences || [],
       recipients: emails.length,
       status: 'sent',
@@ -275,50 +343,84 @@ export async function POST(request: NextRequest) {
   };
   const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
 
-  // 2) Enviamos por lotes (Resend: máx 100 por llamada), un html por destinatario
+  // 2) Segmentamos: el correo depende del estado de registro de cada destinatario.
+  //    Quien ya es junglist y tiene cupón, recibe "tu descuento te espera"; quien
+  //    no lo es, "inscríbete y accede al descuento". Si a un segmento no le
+  //    corresponde descuento (p. ej. el cupón es solo para junglists nuevos),
+  //    recibe el correo normal, sin prometer nada que no pueda canjear.
+  const junglistSet = couponEnabled ? await getJunglistEmails(supabase) : new Set<string>();
+  const segments = [
+    {
+      key: 'junglist' as const,
+      emails: couponEnabled ? emails.filter(e => junglistSet.has(e)) : [],
+      withCoupon: junglistGetsCoupon,
+    },
+    {
+      key: 'no_junglist' as const,
+      // Sin cupón no hay nada que segmentar: todos reciben el mismo correo.
+      emails: couponEnabled ? emails.filter(e => !junglistSet.has(e)) : emails,
+      withCoupon: nonJunglistGetsCoupon,
+    },
+  ];
+
+  // 3) Enviamos por lotes (Resend: máx 100 por llamada), un html por destinatario
   //    (link + pixel con su id), y registramos el resend_id para los webhooks (Fase B).
   const BATCH_SIZE = 100;
   const results: { sent: number; failed: number; errors: string[] } = { sent: 0, failed: 0, errors: [] };
-  const recipientRows: { id: string; campaign_id: string; email: string; resend_id: string | null; status: string }[] = [];
+  const recipientRows: { id: string; campaign_id: string; email: string; resend_id: string | null; status: string; segment: string }[] = [];
 
-  for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-    const batch = emails.slice(i, i + BATCH_SIZE);
-    const recIds = batch.map(() => crypto.randomUUID());
-    const batchPayload = batch.map((to, j) => ({
-      from: fromEmail,
-      to,
-      subject,
-      html: buildEmailHtml({
-        title,
-        body: bodyHtml,
-        imageBase64,
-        buttonText,
-        buttonUrl: withCt(localButtonUrl, recIds[j]) || undefined,
-        trackingPixelUrl: pixelUrl(recIds[j]),
-      }),
-    }));
+  for (const segment of segments) {
+    if (segment.emails.length === 0) continue;
 
-    try {
-      const { data, error } = await resend.batch.send(batchPayload);
-      if (error) {
+    const useCoupon = couponEnabled && segment.withCoupon;
+    const bodyForSegment = segmentBody(bodyHtml, segment.key, useCoupon);
+    const subjectForSegment = segmentSubject(subject, title, useCoupon);
+
+    for (let i = 0; i < segment.emails.length; i += BATCH_SIZE) {
+      const batch = segment.emails.slice(i, i + BATCH_SIZE);
+      const recIds = batch.map(() => crypto.randomUUID());
+      const batchPayload = batch.map((to, j) => ({
+        from: fromEmail,
+        to,
+        subject: subjectForSegment,
+        html: buildEmailHtml({
+          title,
+          body: bodyForSegment,
+          imageBase64,
+          buttonText,
+          buttonUrl: withCt(localButtonUrl, recIds[j]) || undefined,
+          trackingPixelUrl: pixelUrl(recIds[j]),
+        }),
+      }));
+
+      const push = (resendIds: { id: string }[] | null, status: string) =>
+        batch.forEach((email, j) =>
+          recipientRows.push({
+            id: recIds[j],
+            campaign_id: campaignId,
+            email,
+            resend_id: resendIds?.[j]?.id ?? null,
+            status,
+            segment: segment.key,
+          })
+        );
+
+      try {
+        const { data, error } = await resend.batch.send(batchPayload);
+        if (error) {
+          results.failed += batch.length;
+          results.errors.push(error.message);
+          push(null, 'failed');
+        } else {
+          const ids = data?.data ?? [];
+          results.sent += ids.length || batch.length;
+          push(ids, 'sent');
+        }
+      } catch (err) {
         results.failed += batch.length;
-        results.errors.push(error.message);
-        batch.forEach((email, j) =>
-          recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: null, status: 'failed' })
-        );
-      } else {
-        const ids = data?.data ?? [];
-        results.sent += ids.length || batch.length;
-        batch.forEach((email, j) =>
-          recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: ids[j]?.id ?? null, status: 'sent' })
-        );
+        results.errors.push(err instanceof Error ? err.message : 'Error desconocido');
+        push(null, 'failed');
       }
-    } catch (err) {
-      results.failed += batch.length;
-      results.errors.push(err instanceof Error ? err.message : 'Error desconocido');
-      batch.forEach((email, j) =>
-        recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: null, status: 'failed' })
-      );
     }
   }
 

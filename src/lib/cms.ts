@@ -31,6 +31,9 @@ export interface CmsEventRow {
   flyer_url: string | null;
   flyer_width: number | null;
   flyer_height: number | null;
+  coupon_junglist_new: string | null;
+  coupon_junglist: string | null;
+  coupon_set_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +67,8 @@ export function mapEventRow(row: CmsEventRow): CmsEvent {
           height: row.flyer_height ?? 0,
         }
       : undefined,
+    // Solo el booleano — el código se sirve aparte, contra sesión.
+    hasCoupon: Boolean(row.coupon_junglist_new || row.coupon_junglist),
   };
 }
 

@@ -7,6 +7,14 @@ import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
+import {
+  resolveCoupon,
+  segmentBody,
+  segmentSubject,
+  segmentHasCoupon,
+  SEGMENT_LABELS,
+  type Segment,
+} from '@/src/lib/campaignCopy';
 import dayjs from '@/src/lib/date';
 import { BASE_URL } from '@/src/constants';
 
@@ -26,7 +34,7 @@ const TEMPLATES: { key: TemplateKey; name: string; desc: string }[] = [
   {
     key: 'evento',
     name: 'Evento',
-    desc: 'Anuncia un evento publicado: rellena flyer, fecha, lugar, lineup y link de tickets.',
+    desc: 'Invita a un evento publicado: rellena flyer, fecha y lugar. Opcionalmente con descuento Junglist.',
   },
 ];
 
@@ -54,6 +62,9 @@ interface CampaignSummary {
   name: string | null;
   template: string | null;
   subject: string;
+  coupon_mode: string | null;
+  coupon_new_code: string | null;
+  coupon_existing_code: string | null;
   audiences: string[];
   recipients: number;
   sent_count: number;
@@ -66,6 +77,7 @@ interface CampaignSummary {
 interface CampaignRecipient {
   email: string;
   status: string;
+  segment: string | null;
   opened_at: string | null;
   visited_at: string | null;
   visit_count: number;
@@ -157,6 +169,16 @@ export default function CampaignsClient() {
   const [events, setEvents] = useState<EventLite[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [chosenEventId, setChosenEventId] = useState<string | null>(null);
+
+  // Descuento Junglist (solo plantilla Evento): los cupones se guardan en el
+  // evento y la landing los revela contra sesión. Si no hay código para junglist
+  // ya registrado, a ese segmento le llega el correo normal (sin descuento).
+  const [couponEnabled, setCouponEnabled] = useState(false);
+  const [couponTarget, setCouponTarget] = useState<'both' | 'new_only' | 'existing_only'>('both');
+  const [couponSameForAll, setCouponSameForAll] = useState(true);
+  const [couponNewCode, setCouponNewCode] = useState('');
+  const [couponExistingCode, setCouponExistingCode] = useState('');
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   // Vista: componer una campaña nueva o revisar el historial.
   const [view, setView] = useState<'nueva' | 'historial'>('nueva');
@@ -323,7 +345,7 @@ export default function CampaignsClient() {
       `<p>Abajo encuentras el link del evento. Nos vemos en la pista.</p>`,
     ].join('');
     setCampaignName(ev.title);
-    setSubject(`${ev.title} · ${dayjs(ev.date).format('D MMM')}`);
+    setSubject(`Nos vemos en ${ev.title}`);
     setTitle(ev.title);
     setImageFile(null);
     setImagePreview(ev.flyer_url || null);
@@ -368,19 +390,55 @@ export default function CampaignsClient() {
     }
   }, []);
 
+  // Vistas previas por segmento. Si el descuento no aplica a todos, el correo
+  // difiere y hay que poder revisar ambos: se muestran como carrusel.
+  const previews = useMemo(() => {
+    const codes = resolveCoupon({
+      enabled: couponEnabled,
+      target: couponTarget,
+      sameForAll: couponSameForAll,
+      newCode: couponNewCode,
+      existingCode: couponExistingCode,
+    });
+    const base = bodyHtml || '<p style="color:#666;">Contenido del correo...</p>';
+    const safeTitle = title || 'Titulo del correo';
+
+    const build = (segment: Segment) => {
+      const hasCoupon = segmentHasCoupon(segment, codes);
+      return {
+        segment,
+        label: SEGMENT_LABELS[segment],
+        hasCoupon,
+        subject: segmentSubject(subject || '(sin asunto)', safeTitle, hasCoupon),
+        html: buildEmailHtml({
+          title: safeTitle,
+          body: segmentBody(base, segment, hasCoupon),
+          imageBase64: imagePreview || undefined,
+          buttonText: buttonText || undefined,
+          buttonUrl: buttonUrl || undefined,
+        }),
+      };
+    };
+
+    const junglist = build('junglist');
+    const noJunglist = build('no_junglist');
+    // Si ambos correos son idénticos, no tiene sentido el carrusel.
+    return junglist.html === noJunglist.html && junglist.subject === noJunglist.subject
+      ? [noJunglist]
+      : [junglist, noJunglist];
+  }, [
+    title, bodyHtml, imagePreview, buttonText, buttonUrl, subject,
+    couponEnabled, couponTarget, couponSameForAll, couponNewCode, couponExistingCode,
+  ]);
+
+  const activePreview = previews[Math.min(previewIndex, previews.length - 1)];
+  const previewHtml = activePreview.html;
+
   useEffect(() => {
     // Resize after content updates with a small delay for render
     const timer = setTimeout(resizeIframe, 100);
     return () => clearTimeout(timer);
-  }, [title, bodyHtml, imagePreview, buttonText, buttonUrl, resizeIframe]);
-
-  const previewHtml = useMemo(() => buildEmailHtml({
-    title: title || 'Titulo del correo',
-    body: bodyHtml || '<p style="color:#666;">Contenido del correo...</p>',
-    imageBase64: imagePreview || undefined,
-    buttonText: buttonText || undefined,
-    buttonUrl: buttonUrl || undefined,
-  }), [title, bodyHtml, imagePreview, buttonText, buttonUrl]);
+  }, [previewHtml, resizeIframe]);
 
   const handleSend = async () => {
     const totalRecipients = totalUnique + extraEmails.size;
@@ -403,6 +461,12 @@ export default function CampaignsClient() {
           imageBase64: imagePreview || undefined,
           buttonText: buttonText || undefined,
           buttonUrl: buttonUrl || undefined,
+          coupon: {
+            enabled: couponEnabled,
+            sameForAll: couponSameForAll,
+            newCode: couponNewCode,
+            existingCode: couponExistingCode,
+          },
         }),
       });
       const data = await res.json();
@@ -601,6 +665,129 @@ export default function CampaignsClient() {
                 />
               </div>
 
+              {/* Descuento Junglist — solo tiene sentido con un evento asociado */}
+              {template === 'evento' && (
+                <div className="brutalist-border p-4 bg-gray-50">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={couponEnabled}
+                      onChange={e => setCouponEnabled(e.target.checked)}
+                      className="w-5 h-5 accent-[#ff0055] cursor-pointer"
+                    />
+                    <span className="font-bold text-sm uppercase">Incluir descuento Junglist</span>
+                  </label>
+                  <p className="mono text-[10px] text-gray-500 mt-1 ml-8">
+                    El código no viaja en el correo: se revela en la landing del evento, con sesión
+                    iniciada y solo a junglists.
+                  </p>
+
+                  {couponEnabled && (
+                    <div className="mt-4 ml-8 space-y-3">
+                      {/* A quién le corresponde el descuento */}
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          ['both', 'Ambos'],
+                          ['new_only', 'Solo junglists nuevos'],
+                          ['existing_only', 'Solo junglists ya registrados'],
+                        ] as const).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setCouponTarget(key)}
+                            className={`brutalist-border px-3 py-2 mono text-xs font-bold uppercase transition-colors cursor-pointer ${
+                              couponTarget === key ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {couponTarget === 'both' && (
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={couponSameForAll}
+                            onChange={e => setCouponSameForAll(e.target.checked)}
+                            className="w-5 h-5 accent-[#ff0055] cursor-pointer"
+                          />
+                          <span className="font-bold text-sm">Mismo descuento para todos</span>
+                        </label>
+                      )}
+
+                      {couponTarget === 'new_only' ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código junglist nuevo')}
+                          <input
+                            type="text"
+                            value={couponNewCode}
+                            onChange={e => setCouponNewCode(e.target.value)}
+                            placeholder="BIENVENIDA30"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : couponTarget === 'existing_only' ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código junglist registrado')}
+                          <input
+                            type="text"
+                            value={couponExistingCode}
+                            onChange={e => setCouponExistingCode(e.target.value)}
+                            placeholder="JUNGLIST20"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : couponSameForAll ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código')}
+                          <input
+                            type="text"
+                            value={couponNewCode}
+                            onChange={e => setCouponNewCode(e.target.value)}
+                            placeholder="DNB2026"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            {fieldLabel('Junglist nuevo', 'se inscribe con esta campaña')}
+                            <input
+                              type="text"
+                              value={couponNewCode}
+                              onChange={e => setCouponNewCode(e.target.value)}
+                              placeholder="BIENVENIDA30"
+                              className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                            />
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            {fieldLabel('Junglist ya registrado', 'vacío = no recibe descuento')}
+                            <input
+                              type="text"
+                              value={couponExistingCode}
+                              onChange={e => setCouponExistingCode(e.target.value)}
+                              placeholder="JUNGLIST20"
+                              className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      <p className="mono text-[10px] text-gray-600 leading-relaxed">
+                        {couponTarget === 'new_only'
+                          ? 'A quienes YA son junglists les llega el correo normal, sin mencionar descuento.'
+                          : couponTarget === 'existing_only'
+                            ? 'A quienes aún no son junglists les llega el correo normal, sin mencionar descuento.'
+                            : couponSameForAll
+                              ? 'Todos reciben el mismo código y un correo que anuncia el descuento.'
+                              : 'Dos códigos distintos; ambos segmentos reciben un correo que anuncia su descuento.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Image */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-start">
                 {fieldLabel('Imagen del correo', '180x180 px')}
@@ -679,10 +866,38 @@ export default function CampaignsClient() {
           {/* Preview */}
           <div className="lg:col-span-2 brutalist-border bg-white p-6 brutalist-shadow h-fit lg:sticky lg:top-6">
             <h3 className="font-black uppercase text-sm mb-4">Vista previa</h3>
+
+            {/* Con descuento parcial salen DOS correos distintos: se navegan acá
+                para revisar qué le llega exactamente a cada segmento. */}
+            {previews.length > 1 && (
+              <div className="mb-3">
+                <div className="flex gap-2">
+                  {previews.map((p, i) => (
+                    <button
+                      key={p.segment}
+                      type="button"
+                      onClick={() => setPreviewIndex(i)}
+                      className={`flex-1 brutalist-border px-3 py-2 mono text-[11px] font-bold uppercase transition-colors cursor-pointer ${
+                        i === previewIndex ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+                      }`}
+                    >
+                      {p.label}
+                      <span className="block text-[9px] font-normal opacity-70">
+                        {p.hasCoupon ? 'con descuento' : 'sin descuento'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mono text-[10px] text-gray-500 mt-2">
+                  Se enviarán {previews.length} correos distintos según el estado de registro.
+                </p>
+              </div>
+            )}
+
             <div className="brutalist-border overflow-hidden">
               <div className="bg-black px-3 py-2">
                 <p className="text-white font-bold text-xs mono">
-                  Asunto: {subject || '(sin asunto)'}
+                  Asunto: {activePreview.subject}
                 </p>
               </div>
               <iframe
@@ -809,6 +1024,29 @@ export default function CampaignsClient() {
                 <span className="font-bold">Boton:</span>
                 <span>{buttonText || 'Sin boton'} {buttonUrl ? `→ ${buttonUrl}` : ''}</span>
               </div>
+              <div className="brutalist-border p-3">
+                <p className="font-bold mb-1">Descuento Junglist:</p>
+                {!couponEnabled ? (
+                  <p className="text-xs text-gray-600">Sin descuento — a todos les llega el mismo correo.</p>
+                ) : (
+                  <div className="text-xs space-y-1">
+                    {previews.map(p => (
+                      <p key={p.segment}>
+                        {p.label}:{' '}
+                        <strong>
+                          {p.hasCoupon
+                            ? p.segment === 'junglist'
+                              ? couponSameForAll && couponTarget === 'both'
+                                ? couponNewCode
+                                : couponExistingCode
+                              : couponNewCode
+                            : 'sin descuento (correo normal)'}
+                        </strong>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="brutalist-border p-3">
                 <p className="font-bold mb-2">Audiencia:</p>
@@ -919,12 +1157,34 @@ export default function CampaignsClient() {
                                 Destinatarios: {recipients.length}
                               </span>
                               <span className="brutalist-border px-2 py-1 bg-white">
+                                Junglists: {recipients.filter((r) => r.segment === 'junglist').length}
+                              </span>
+                              <span className="brutalist-border px-2 py-1 bg-white">
+                                No junglists: {recipients.filter((r) => r.segment === 'no_junglist').length}
+                              </span>
+                              <span className="brutalist-border px-2 py-1 bg-white">
                                 Abrieron: {recipients.filter((r) => r.opened_at).length}
                               </span>
                               <span className="brutalist-border px-2 py-1 bg-white">
                                 Visitaron: {recipients.filter((r) => r.visited_at).length}
                               </span>
                             </div>
+
+                            {c.coupon_mode && c.coupon_mode !== 'none' && (
+                              <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
+                                <span className="brutalist-border px-2 py-1 bg-[#ff0055] text-white font-bold">
+                                  {c.coupon_mode === 'single' ? 'Mismo código' : 'Códigos separados'}
+                                </span>
+                                {c.coupon_new_code && (
+                                  <span className="brutalist-border px-2 py-1 bg-white">
+                                    Nuevo: {c.coupon_new_code}
+                                  </span>
+                                )}
+                                <span className="brutalist-border px-2 py-1 bg-white">
+                                  Ya junglist: {c.coupon_existing_code || 'sin descuento'}
+                                </span>
+                              </div>
+                            )}
                             <p className="mono text-[10px] text-gray-500 mb-2">
                               Aperturas poco fiables (los clientes de correo precargan imágenes); la
                               visita a la landing es la señal firme.
@@ -934,6 +1194,7 @@ export default function CampaignsClient() {
                                 <thead className="bg-black text-white sticky top-0">
                                   <tr>
                                     <th className="text-left p-2">Email</th>
+                                    <th className="text-left p-2">Segmento</th>
                                     <th className="text-left p-2">Estado</th>
                                     <th className="text-center p-2">Abrió</th>
                                     <th className="text-center p-2">Visitó</th>
@@ -943,6 +1204,9 @@ export default function CampaignsClient() {
                                   {recipients.map((r) => (
                                     <tr key={r.email} className="border-b border-gray-200">
                                       <td className="p-2 truncate max-w-[220px]">{r.email}</td>
+                                      <td className="p-2">
+                                        {r.segment === 'junglist' ? 'Junglist' : r.segment === 'no_junglist' ? 'No junglist' : '—'}
+                                      </td>
                                       <td className="p-2">{r.status}</td>
                                       <td className="p-2 text-center">{r.opened_at ? '✓' : '—'}</td>
                                       <td className="p-2 text-center">
