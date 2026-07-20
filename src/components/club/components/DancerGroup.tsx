@@ -18,8 +18,6 @@ const NPC_NAMES = [
 // DJ booth is now at center [0, 1.5, 0]
 const faceDJ = (x: number, z: number) => Math.atan2(-x, -z);
 
-const COLOR_LIST = [COLORS.neonPink, COLORS.cyberBlue, COLORS.matrixGreen, COLORS.warningOrange];
-
 const dancerConfigs = [
   // Original 8 — spread evenly
   { position: [-10, 0, -8] as [number, number, number], color: COLORS.neonPink, offset: 0, speed: 1.1 },

@@ -12,6 +12,9 @@ import { TUNING } from './tuning';
 import { useLive } from './LiveContext';
 import { useScore } from './ScoreContext';
 import { useMultiplayer, ClubFxPayload } from './MultiplayerContext';
+import { addTrauma } from './juice';
+import { playChord, playBoom, playGloriaPad, playZumbido, playRiser } from './sounds';
+import { event as gaEvent } from '@/src/lib/gtag';
 
 /** Etapas visibles del club: full (≥60), media (30–60), bajon (<30 = EL BAJÓN) */
 export type EnergyStage = 'full' | 'media' | 'bajon';
@@ -21,13 +24,16 @@ export type EnergySource = 'hypeDrop' | 'vip' | 'especial' | 'remoto';
 
 export type EnergyEvent =
   | { type: 'stage'; stage: EnergyStage; energy: number }
-  | { type: 'clubDrop'; energy: number }
+  /** by: username remoto que lo encendió (undefined = drop local) — para "¡X encendió el club!" */
+  | { type: 'clubDrop'; energy: number; by?: string }
   | { type: 'gloriaStart' }
   | { type: 'gloriaEnd' }
   | { type: 'ventanaStart'; mult: number; live: boolean }
   | { type: 'ventanaEnd' }
   | { type: 'chillStart' }
-  | { type: 'chillEnd' };
+  | { type: 'chillEnd' }
+  /** HYPE DROP de otro jugador (§5) — WS-4 lo anuncia en popup/chat */
+  | { type: 'remoteHypeDrop'; from: string };
 
 export type EnergyListener = (event: EnergyEvent) => void;
 
@@ -102,6 +108,7 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const sessionStartRef = useRef(0);
   const lastTickRef = useRef(0);
   const lastBroadcastValueRef = useRef<number>(TUNING.energia.start);
+  const shotSampleRef = useRef(0); // contador para el muestreo 1/50 de club_shot_fired
 
   const emit = useCallback((event: EnergyEvent) => {
     listenersRef.current.forEach((fn) => fn(event));
@@ -121,12 +128,13 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const stage = stageFor(next);
     if (stage !== stageRef.current) {
       stageRef.current = stage;
+      if (stage === 'bajon') playZumbido(); // zumbido grave al cruzar al BAJÓN (§4)
       emit({ type: 'stage', stage, energy: next });
     }
   }, [emit]);
 
-  /** CLUB DROP (M4→M5): celebración 5s → GLORIA 25s. remote = disparado por otro jugador. */
-  const triggerClubDrop = useCallback((remote: boolean) => {
+  /** CLUB DROP (M4→M5): celebración 5s → GLORIA 25s. by = username remoto que lo encendió. */
+  const triggerClubDrop = useCallback((by?: string) => {
     if (dropActiveRef.current) return; // ya celebrando/GLORIA
     dropActiveRef.current = true;
     const now = Date.now();
@@ -144,11 +152,19 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       hypeMultRef.current = 1;
       emit({ type: 'ventanaEnd' });
     }
-    emit({ type: 'clubDrop', energy: energyRef.current });
-    // +100 pts para todos los presentes: el logro de uno es el ambiente de todos (§5)
-    scoreActionRef.current('clubDrop', 'CLUB DROP');
-    if (!remote && usernameRef.current) {
-      sendClubFxRef.current({ kind: 'club_drop', from: usernameRef.current });
+    emit({ type: 'clubDrop', energy: energyRef.current, by });
+    addTrauma(TUNING.juice.traumaClubDrop);
+    playChord(); // acorde + sub-bass del CLUB DROP (§4)
+    playBoom('sub');
+    // La GLORIA y la celebración son globales (§5: el logro de uno es el ambiente
+    // de todos), PERO los +100 pts solo los recibe quien lo gatilló localmente:
+    // un drop remoto (by definido) da fiesta, no puntos. Así un espectador AFK
+    // no farmea puntaje/récords con drops ajenos (regla de oro §6, métrica §8).
+    if (!by) {
+      scoreActionRef.current('clubDrop', 'CLUB DROP');
+      if (usernameRef.current) {
+        sendClubFxRef.current({ kind: 'club_drop', from: usernameRef.current });
+      }
     }
   }, [emit]);
 
@@ -156,7 +172,7 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (dropActiveRef.current) return; // durante celebración/GLORIA la barra está llena
     setEnergy(energyRef.current + amount);
     if (energyRef.current >= umbralRef.current) {
-      triggerClubDrop(false);
+      triggerClubDrop();
       return;
     }
     // Energía compartida (§5): broadcast al cambiar ≥2 puntos (solo en subidas locales)
@@ -173,6 +189,9 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [setEnergy, triggerClubDrop]);
 
   const notifyShot = useCallback(() => {
+    // Tracking GA muestreado 1/50 (WS-4): el 1º de la sesión también cuenta
+    // para que las sesiones cortas aparezcan en la métrica.
+    if (shotSampleRef.current++ % 50 === 0) gaEvent('club_shot_fired', { sample_rate: 50 });
     lastShotAtRef.current = Date.now();
     if (chillRef.current) {
       chillRef.current = false;
@@ -196,6 +215,8 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Fin de celebración → GLORIA
       if (dropActiveRef.current && !gloriaActiveRef.current && t >= gloriaStartAtRef.current) {
         gloriaActiveRef.current = true;
+        playGloriaPad(); // colchón armónico suave (§4)
+        gaEvent('club_gloria'); // tracking WS-4
         emit({ type: 'gloriaStart' });
       }
       // Fin de GLORIA → energía 55, decay del ciclo siguiente +10% (cap 2.0)
@@ -234,6 +255,7 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         ventanaActiveRef.current = true;
         ventanaEndAtRef.current = t + TUNING.ventanas.dropEventDuraS * 1000;
         hypeMultRef.current = live ? TUNING.ventanas.liveMult : TUNING.ventanas.dropEventMult;
+        playRiser(2); // riser de 2s de la ventana / DROP INMINENTE (§4)
         emit({ type: 'ventanaStart', mult: hypeMultRef.current, live });
         // Próxima ventana: con live cada 5 min exactos; sin live 90–120s
         // (acortando a 75s pasado el minuto 8 de sesión)
@@ -257,16 +279,17 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (!dropActiveRef.current && fx.value > energyRef.current + 0.5) {
           setEnergy(fx.value);
           lastBroadcastValueRef.current = energyRef.current;
-          if (energyRef.current >= umbralRef.current) triggerClubDrop(true);
+          if (energyRef.current >= umbralRef.current) triggerClubDrop(fx.from);
         }
       } else if (fx.kind === 'hype_drop') {
         addEnergy(TUNING.energia.porHypeDrop, 'remoto');
+        emit({ type: 'remoteHypeDrop', from: fx.from }); // anuncio para WS-4
       } else if (fx.kind === 'club_drop') {
-        triggerClubDrop(true);
+        triggerClubDrop(fx.from);
       }
     });
     return unsub;
-  }, [subscribeClubFx, setEnergy, addEnergy, triggerClubDrop]);
+  }, [subscribeClubFx, setEnergy, addEnergy, triggerClubDrop, emit]);
 
   // Valor estable — todos los campos son refs o callbacks estables
   const contextValue = useRef<EnergyContextType>({

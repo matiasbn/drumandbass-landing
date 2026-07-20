@@ -9,6 +9,7 @@ import { useCamera } from '../CameraContext';
 import { TUNING } from '../tuning';
 import { isOnBeat } from '../beatClock';
 import { playerState } from '../playerState';
+import { qualityRef } from '../quality';
 import { hud, notifyShotFired, addTrauma } from '../juice';
 import { playPew, playBoom, playSparkTap, playKickDrum } from '../sounds';
 
@@ -190,6 +191,9 @@ export const Projectiles: React.FC = () => {
   const explosionVelocities = useRef<(Float32Array | null)[]>([]);
   // Track which explosion id is bound to which pool slot
   const explosionSlotMap = useRef<Map<number, number>>(new Map());
+  // Scratch persistentes del bookkeeping de explosiones — cero allocs por frame
+  const activeSlotsScratch = useRef<Set<number>>(new Set());
+  const expiredIdsScratch = useRef<number[]>([]);
 
   // Muzzle flash pool
   const muzzleSpriteRefs = useRef<(THREE.Sprite | null)[]>([]);
@@ -241,7 +245,10 @@ export const Projectiles: React.FC = () => {
     for (const p of projectiles) {
       if (p.id <= lastProjIdRef.current) continue;
       if (p.id > maxProjId) maxProjId = p.id;
-      if (p.type === 'shot') {
+      // Los disparos cosméticos de NPCs (shooterId `npc-…`) no gatillan juice:
+      // evitan el churn de audio constante, no roban slots de muzzle al jugador
+      // y no diluyen el tracer dorado del BEAT-SHOT (M2, señal del jugador).
+      if (p.type === 'shot' && !p.shooterId.startsWith('npc-')) {
         const isLocal = p.shooterId === usernameRef.current;
         const beat = isOnBeat();
         if (beat) beatShotIds.current.add(p.id);
@@ -480,8 +487,9 @@ export const Projectiles: React.FC = () => {
     }
 
     // --- Update explosions ---
-    // Track which slots are still in use
-    const activeSlots = new Set<number>();
+    // Track which slots are still in use (scratch persistente, sin allocs)
+    const activeSlots = activeSlotsScratch.current;
+    activeSlots.clear();
 
     for (const e of explosions) {
       const age = (now - e.birth) / 1000;
@@ -514,6 +522,8 @@ export const Projectiles: React.FC = () => {
       // Initialize velocities if needed
       let vels = explosionVelocities.current[slot];
       if (!vels) {
+        // Partículas ÷2 en calidad BAJA (WS-3): se dibuja solo media nube
+        points.geometry.setDrawRange(0, qualityRef.current === 'baja' ? PARTICLE_COUNT / 2 : PARTICLE_COUNT);
         vels = new Float32Array(PARTICLE_COUNT * 3);
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           const theta = Math.random() * Math.PI * 2;
@@ -540,7 +550,8 @@ export const Projectiles: React.FC = () => {
     }
 
     // Hide unused explosion slots & clean up expired entries
-    const expiredIds: number[] = [];
+    const expiredIds = expiredIdsScratch.current;
+    expiredIds.length = 0;
     explosionSlotMap.current.forEach((slot, id) => {
       if (!activeSlots.has(slot)) {
         const pts = explosionPointsRefs.current[slot];

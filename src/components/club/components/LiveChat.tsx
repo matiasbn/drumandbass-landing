@@ -9,7 +9,7 @@ import { Facehash } from 'facehash';
 import { useAuth } from '../AuthContext';
 import { useMultiplayer } from '../MultiplayerContext';
 import { useScore } from '../ScoreContext';
-import { isGifMessage, decodeGifUrl, encodeGifMessage, getBubbleText } from '../../../lib/chatMessage';
+import { isGifMessage, decodeGifUrl, encodeGifMessage } from '../../../lib/chatMessage';
 
 const EmojiPicker = dynamic(() => import('./EmojiPicker').then(m => ({ default: m.EmojiPicker })), { ssr: false });
 const GifPicker = dynamic(() => import('./GifPicker').then(m => ({ default: m.GifPicker })), { ssr: false });

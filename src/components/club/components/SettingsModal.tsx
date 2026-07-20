@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { RiCloseLine, RiUserLine, RiAtLine } from '@remixicon/react';
 import { useAuth } from '../AuthContext';
 import { Quality, setQuality, useQuality } from '../quality';
+import { setSoundEnabled, isSoundEnabled } from '../sounds';
+import { setShakeEnabled, isShakeEnabled } from '../juice';
 import { event } from '@/src/lib/gtag';
 
 const QUALITY_OPTIONS: { value: Quality; label: string }[] = [
@@ -26,6 +28,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [antialias, setAntialias] = useState(true);
   const [antialiasChanged, setAntialiasChanged] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [shakeOn, setShakeOn] = useState(true);
   const quality = useQuality();
 
   useEffect(() => {
@@ -33,6 +37,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       const stored = localStorage.getItem('dnb_antialias');
       setAntialias(stored !== '0');
       setAntialiasChanged(false);
+      setSoundOn(isSoundEnabled());
+      setShakeOn(isShakeEnabled());
     }
   }, [isOpen]);
 
@@ -229,6 +235,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 RECARGAR
               </button>
             )}
+          </div>
+
+          {/* Sonido y cámara (WS-2/§4): mute del audio sintetizado + trauma-shake */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <h3 className="text-xs font-mono text-white/50 tracking-wider mb-4">SONIDO Y CÁMARA</h3>
+
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">SONIDO DEL JUEGO</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Disparos, hits y drops (no afecta al stream)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !soundOn;
+                  setSoundOn(next);
+                  setSoundEnabled(next);
+                  event('club_sound_toggle', { enabled: next ? 1 : 0 });
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  soundOn ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    soundOn ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">VIBRACIÓN DE CÁMARA</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Shake en hits y drops (la calidad BAJA lo apaga)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !shakeOn;
+                  setShakeOn(next);
+                  setShakeEnabled(next);
+                  event('club_shake_toggle', { enabled: next ? 1 : 0 });
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  shakeOn ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    shakeOn ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </div>
 

@@ -230,6 +230,16 @@ export function playDenied(): void {
   blip(c, 'square', 140, 140, c.currentTime, 0.045, 0.1);
 }
 
+/** Sting propio de cada especial (M12, §4): dos notas, pitch según el índice */
+export function playSting(index = 0): void {
+  const c = ready();
+  if (!c) return;
+  const t = c.currentTime;
+  const base = [392.0, 440.0, 493.88, 523.25, 587.33][Math.max(0, Math.min(4, index))];
+  blip(c, 'square', base, base, t, 0.12, 0.11);
+  blip(c, 'square', base * 1.5, base * 1.5, t + 0.1, 0.24, 0.11);
+}
+
 /** Zumbido grave breve (cruce de etapa hacia EL BAJÓN) */
 export function playZumbido(): void {
   const c = ready();

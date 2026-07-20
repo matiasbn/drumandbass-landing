@@ -15,6 +15,8 @@ import { HealthBar3D } from './HealthBar3D';
 import { MAP } from '../constants';
 import { TUNING } from '../tuning';
 import { setPlayerPose, setPlayerDance } from '../playerState';
+import { notifyGrenadeCharge } from '../juice';
+import { playDenied, playRiser } from '../sounds';
 import { levitateActiveUntil } from './SpecialEffects';
 
 // Lightweight 3D text billboard using canvas texture
@@ -171,13 +173,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const { shoot, throwGrenade, checkHits } = useProjectiles();
   const { positions: npcPositions } = useNpcPositions();
   const { playerPosRef: camPlayerPosRef, cameraYawRef, cameraPitchRef, pointerLockedRef } = useCamera();
-  const { localHypeRef, addHype, addNpcHype, getHypeAmount, isHyped, decayHype } = useHealth();
+  const { localHypeRef, addHype, addNpcHype, getHypeAmount, decayHype, notifyPlayerHit } = useHealth();
   const addHypeRef = useRef(addHype);
   addHypeRef.current = addHype;
   const addNpcHypeRef = useRef(addNpcHype);
   addNpcHypeRef.current = addNpcHype;
   const getHypeAmountRef = useRef(getHypeAmount);
   getHypeAmountRef.current = getHypeAmount;
+  const notifyPlayerHitRef = useRef(notifyPlayerHit);
+  notifyPlayerHitRef.current = notifyPlayerHit;
   const usernameRef = useRef(username);
   usernameRef.current = username;
   const playersRef = useRef(players);
@@ -397,7 +401,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       if (e.button === 0) {
         // Left click — shoot
         const now7 = Date.now();
-        if (now7 - shootCooldownRef.current < TUNING.arma.shotCooldownMs) return;
+        if (now7 - shootCooldownRef.current < TUNING.arma.shotCooldownMs) {
+          playDenied(); // click en cooldown: nunca silencio (§4)
+          return;
+        }
         shootCooldownRef.current = now7;
         const dir = aimDirection();
         // Spawn projectile in front of the character (0.8 units forward) so it visually exits from the front
@@ -412,9 +419,13 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         // Right click — start charging grenade
         e.preventDefault();
         const now8 = Date.now();
-        if (now8 - grenadeCooldownRef.current < TUNING.granada.cooldownS * 1000) return;
+        if (now8 - grenadeCooldownRef.current < TUNING.granada.cooldownS * 1000) {
+          playDenied(); // granada en cooldown: nunca silencio (§4)
+          return;
+        }
         if (grenadeChargeStartRef.current !== null) return;
         grenadeChargeStartRef.current = now8;
+        playRiser(TUNING.granada.cargaMaxS); // tono ascendente de la carga (M9)
       }
     };
 
@@ -426,6 +437,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         const charge = Math.min(Math.max((elapsed - cargaMinS) / (cargaMaxS - cargaMinS), 0), 1);
         grenadeChargeStartRef.current = null;
         grenadeChargeRef.current = 0;
+        notifyGrenadeCharge(-1); // el anillo del crosshair se descarga (§4)
         grenadeCooldownRef.current = Date.now();
         const speed = velMin + charge * (velMax - velMin);
         const dir2 = aimDirection();
@@ -461,10 +473,14 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     // Física delta-time (M14): unidades /s del TUNING, clamp del dt a 50ms
     const dt = Math.min(delta, TUNING.fisica.dtClampMs / 1000);
 
-    // Update grenade charge value (3D bar reads from ref each frame)
+    // Update grenade charge value (3D bar reads from ref each frame).
+    // Misma fórmula que el lanzamiento (0 hasta cargaMinS → 1 en cargaMaxS) para
+    // que el anillo/arco del crosshair predigan la velocidad real (M9).
     if (grenadeChargeStartRef.current !== null) {
       const elapsed = (Date.now() - grenadeChargeStartRef.current) / 1000;
-      grenadeChargeRef.current = Math.min(elapsed / TUNING.granada.cargaMaxS, 1);
+      const { cargaMinS, cargaMaxS } = TUNING.granada;
+      grenadeChargeRef.current = Math.min(Math.max((elapsed - cargaMinS) / (cargaMaxS - cargaMinS), 0), 1);
+      notifyGrenadeCharge(grenadeChargeRef.current); // anillo del crosshair + arco punteado
     }
 
     // Hype: decay over time
@@ -751,7 +767,9 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           const hypeDrop = addNpcHypeRef.current(hitId, getHypeAmountRef.current('shot'));
           scoreActionRef.current('hitTarget', hypeDrop ? 'HYPE DROP!' : 'Hype!');
         } else {
-          scoreActionRef.current('hitTarget', 'Hype!');
+          // Hype-bump (§5): impactar a otro jugador nunca daña — +8 ambos,
+          // cooldown 5s por pareja y broadcast del flash dorado al receptor.
+          notifyPlayerHitRef.current(hitId);
         }
       }
       for (const hitId of grenadeHits) {

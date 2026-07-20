@@ -11,13 +11,17 @@
 // tickNpcs(dt) una vez por frame (decay, VIP, timers — sin setTimeouts sueltos).
 
 import React, { createContext, useContext, useRef, useCallback, useEffect, ReactNode } from 'react';
+import * as THREE from 'three';
 import { TUNING } from './tuning';
 import { isOnBeatEpoch } from './beatClock';
 import { playerState } from './playerState';
 import { useScore } from './ScoreContext';
 import { useEnergy } from './EnergyContext';
 import { useNpcPositions } from './NpcPositionsContext';
+import { useProjectiles } from './ProjectileContext';
 import { useMultiplayer, ClubFxPayload } from './MultiplayerContext';
+import { hud, notifyHit, notifyHypeBump, addTrauma } from './juice';
+import { playBoom, playFanfare, playRiser, playChord } from './sounds';
 
 const MAX_HYPE = 100;
 const HYPE_DECAY = 3; // decay del hype del JUGADOR local (per second, sin cambio)
@@ -51,6 +55,9 @@ export interface HypeState {
   hitFlashUntil: number;
   /** epoch ms — hit-stop del reloj de animación de esa instancia (40ms) */
   animFreezeUntil: number;
+  /** Intensidad restante del squash del hit ∈ [0,1] (1 al impactar → 0 en squashMs).
+   *  La escribe tickNpcs; WS-2 la consume para el squash 1.25x/0.75y. */
+  squashT: number;
   /** epoch ms de inicio de la celebración del HYPE DROP */
   celebrationStart: number;
 }
@@ -114,16 +121,34 @@ const makeHype = (spawnHype: number): HypeState => ({
   lastHitAt: 0,
   hitFlashUntil: 0,
   animFreezeUntil: 0,
+  squashT: 0,
   celebrationStart: 0,
 });
+
+const _arcUp = new THREE.Vector3(0, 0.5, 0);
+// Temporales de los FX remotos (shoot/throwGrenade clonan internamente)
+const _fxPos = new THREE.Vector3();
+const _fxDir = new THREE.Vector3();
+
+/**
+ * Invierte el arco que throwGrenade aplica al dir (dir.y += 0.5; normalize),
+ * para re-lanzar granadas REMOTAS por el mismo path sin aplicar el arco dos veces.
+ * Si d' = normalize(d + u) con u = (0, 0.5, 0) y |d| = 1, entonces d = m·d' − u
+ * donde m resuelve m² − m·d'y − 0.75 = 0 (raíz positiva). Muta y devuelve `dir`.
+ */
+const undoGrenadeArc = (dir: THREE.Vector3): THREE.Vector3 => {
+  const m = (dir.y + Math.sqrt(dir.y * dir.y + 3)) / 2;
+  return dir.multiplyScalar(m).sub(_arcUp).normalize();
+};
 
 const spawnHype = () =>
   TUNING.npc.spawnHypeMin + Math.random() * (TUNING.npc.spawnHypeMax - TUNING.npc.spawnHypeMin);
 
 export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { scoreAction } = useScore();
-  const { addEnergy, hypeMultRef, gloriaActiveRef, chillRef, subscribe } = useEnergy();
+  const { addEnergy, notifyShot, hypeMultRef, gloriaActiveRef, chillRef, subscribe } = useEnergy();
   const { positions: npcPositions } = useNpcPositions();
+  const { projectilesRef, shoot, throwGrenade } = useProjectiles();
   const { username, sendClubFx, subscribeClubFx } = useMultiplayer();
 
   const localHypeRef = useRef<HypeState>(makeHype(0));
@@ -158,6 +183,15 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Scheduler del VIP (M7)
   const nextVipAtRef = useRef(0);
+
+  // Espejo local del cooldown del airshot (solo para elegir el hitmarker estrella;
+  // los PUNTOS los limita el COOLDOWNS de ScoreContext con la misma ventana)
+  const airshotMarkAtRef = useRef(0);
+
+  // Escáner de proyectiles nuevos (id monotónico de ProjectileContext): detecta los
+  // disparos LOCALES sin tocar PlayerDancer — atribución de beat-shot, timer del
+  // modo chill y broadcast §5 salen de aquí (tickNpcs corre una vez por frame).
+  const lastScannedProjIdRef = useRef(-1);
 
   // ── Hype local del jugador (sin cambios de comportamiento) ──
   const triggerHypeDrop = useCallback(() => {
@@ -242,9 +276,11 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Consumir la granada atribuida a este blast
     grenadeFifoRef.current.shift();
     scoreActionRef.current('grenadeNpc', 'Granada', n);
+    notifyHit('normal'); // un hitmarker por blast (la explosión ya trae boom+trauma)
     if (n >= TUNING.granada.multiHypeDesde) {
       const extras = n - (TUNING.granada.multiHypeDesde - 1);
       scoreActionRef.current('multiHype', `MULTI-HYPE x${n}`, extras);
+      playChord(); // tabla §4: MULTI-HYPE suena a acorde corto
     }
   }, []);
 
@@ -278,11 +314,15 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (now < h.vipUntil) {
       h.vipHits++;
       scoreActionRef.current(beat ? 'beatShot' : 'hitNpc', beat ? '¡RITMO!' : 'VIP');
+      notifyHit(beat ? 'beat' : 'normal');
       if (h.vipHits >= TUNING.vip.hitsNecesarios) {
         h.vipUntil = 0;
         h.vipHits = 0;
+        hud.vipUntilEpoch = 0; // banner del HUD fuera (§4)
         scoreActionRef.current('vip', 'VIP');
         addEnergy(TUNING.energia.porVip, 'vip');
+        addTrauma(0.3); // tabla de juice §4: VIP capturado
+        playFanfare();
         onVipCapturedRef.current?.(npcId);
       }
       return false;
@@ -311,9 +351,16 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (kind === 'shot') {
       scoreActionRef.current(beat ? 'beatShot' : 'hitNpc', beat ? '¡RITMO!' : 'Hype');
       // Airshot (M8): en el aire o a >8u del objetivo → bonus flat (cooldown 2s)
+      let air = false;
       if (playerState.airborne || distToNpc(npcId) > TUNING.airshot.distanciaMin) {
         scoreActionRef.current('airshot', 'AIRSHOT');
+        // Hitmarker estrella solo cuando el bonus realmente está disponible
+        if (now - airshotMarkAtRef.current >= TUNING.airshot.cooldownS * 1000) {
+          airshotMarkAtRef.current = now;
+          air = true;
+        }
       }
+      notifyHit(air ? 'air' : beat ? 'beat' : 'normal');
     } else {
       // Granada: lote por microtask → un popup +8×N y MULTI-HYPE xN
       const batch = grenadeBatchRef.current;
@@ -332,6 +379,8 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       h.celebrationStart = now;
       scoreActionRef.current('hypeDropNpc', 'HYPE DROP');
       addEnergy(TUNING.energia.porHypeDrop, 'hypeDrop');
+      addTrauma(TUNING.juice.traumaHypeDrop);
+      playBoom('sub'); // boom de bajo del HYPE DROP (§4)
       if (usernameRef.current) {
         sendClubFxRef.current({ kind: 'hype_drop', from: usernameRef.current });
       }
@@ -358,7 +407,50 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const chill = chillRef.current;
     const map = npcHypeRef.current;
 
+    // ── Escáner de disparos locales nuevos (id monotónico) — sin tocar PlayerDancer:
+    //    atribución del BEAT-SHOT (M2), timer del modo chill (M13) y broadcast §5 ──
+    const projs = projectilesRef.current;
+    let maxProjId = lastScannedProjIdRef.current;
+    for (let i = 0; i < projs.length; i++) {
+      const p = projs[i];
+      if (p.id <= lastScannedProjIdRef.current) continue;
+      if (p.id > maxProjId) maxProjId = p.id;
+      const me = usernameRef.current;
+      if (!me || p.shooterId !== me) continue; // NPC o remoto: no es nuestro
+      if (p.type === 'shot') {
+        registerPlayerShot('shot', p.birth, 0);
+        sendClubFxRef.current({
+          kind: 'shot',
+          from: me,
+          pos: [p.position.x, p.position.y, p.position.z],
+          dir: [p.direction.x, p.direction.y, p.direction.z],
+          color: p.color,
+        });
+      } else {
+        // Carga reconstruida desde la velocidad (velMin→velMax ↔ carga 0→1)
+        const { velMin, velMax } = TUNING.granada;
+        const charge = Math.max(0, Math.min(1, (p.speed - velMin) / (velMax - velMin)));
+        registerPlayerShot('grenade', p.birth, charge);
+        sendClubFxRef.current({
+          kind: 'grenade',
+          from: me,
+          pos: [p.position.x, p.position.y, p.position.z],
+          // dir POST-arco (throwGrenade ya lo modificó); el receptor lo invierte
+          dir: [p.direction.x, p.direction.y, p.direction.z],
+          color: p.color,
+          speed: p.speed,
+          charge,
+        });
+      }
+      notifyShot(); // resetea el timer del modo chill (M13)
+    }
+    lastScannedProjIdRef.current = maxProjId;
+
     map.forEach((h) => {
+      // Progreso del squash del hit (lo consume WS-2): 1 al impactar → 0 en squashMs
+      h.squashT = h.lastHitAt > 0
+        ? Math.max(0, 1 - (now - h.lastHitAt) / TUNING.juice.squashMs)
+        : 0;
       if (h.hyped) {
         // Fin del baile de celebración → reset a 40 (nunca Sísifo) + inmune 5s
         if (now - h.celebrationStart >= CELEBRATION_MS) {
@@ -374,7 +466,8 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         h.apagado = false;
         return;
       }
-      // VIP caducado sin captura → escapó
+      // VIP caducado sin captura → escapó (el banner del HUD se oculta solo
+      // al pasar hud.vipUntilEpoch — no hace falta limpiarlo aquí)
       if (h.vipUntil !== 0 && now >= h.vipUntil) {
         h.vipUntil = 0;
         h.vipHits = 0;
@@ -395,8 +488,7 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       spawnVip(now);
       nextVipAtRef.current = now + (TUNING.vip.cadaS[0] + Math.random() * (TUNING.vip.cadaS[1] - TUNING.vip.cadaS[0])) * 1000;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gloriaActiveRef, chillRef]);
+  }, [gloriaActiveRef, chillRef, projectilesRef, registerPlayerShot, notifyShot]);
 
   /** Elige un NPC no celebrando/no inmune/no VIP y lo tiñe de dorado 10s */
   const spawnVip = (now: number) => {
@@ -409,6 +501,8 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     pick.vipUntil = now + TUNING.vip.duraS * 1000;
     pick.vipHits = 0;
     pick.apagado = false;
+    hud.vipUntilEpoch = pick.vipUntil; // banner con countdown en el HUD (§4)
+    playRiser(1.2); // sub-riser de aparición del VIP (§4)
   };
 
   const applyDanceBuff = useCallback((npcId: string) => {
@@ -446,23 +540,38 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (now - last < TUNING.multi.hypeBumpCooldownS * 1000) return;
     bumpCooldownRef.current.set(playerId, now);
     scoreActionRef.current('hypeBump', `¡Energizaste a ${playerId}!`);
+    notifyHit('bump');
     if (usernameRef.current) {
       sendClubFxRef.current({ kind: 'bump', from: usernameRef.current, to: playerId });
     }
   }, []);
 
-  // Lado receptor del hype-bump: "<X> te energizó" (+8, mismo cooldown de pareja)
+  // ── FX remotos (§5): disparos/granadas ajenos por el MISMO pool + hype-bump ──
   useEffect(() => {
     const unsub = subscribeClubFx((fx: ClubFxPayload) => {
-      if (fx.kind !== 'bump' || fx.to !== usernameRef.current) return;
-      const now = Date.now();
-      const last = bumpCooldownRef.current.get(fx.from) ?? 0;
-      if (now - last < TUNING.multi.hypeBumpCooldownS * 1000) return;
-      bumpCooldownRef.current.set(fx.from, now);
-      scoreActionRef.current('hypeBump', `¡${fx.from} te energizó!`);
+      if (fx.kind === 'shot') {
+        // Cosmético: cada cliente simula la trayectoria localmente. checkHits solo
+        // acredita hits del shooterId local, así que no hay doble conteo de hype.
+        _fxPos.set(fx.pos[0], fx.pos[1], fx.pos[2]);
+        _fxDir.set(fx.dir[0], fx.dir[1], fx.dir[2]);
+        shoot(_fxPos, _fxDir, fx.from);
+      } else if (fx.kind === 'grenade') {
+        _fxPos.set(fx.pos[0], fx.pos[1], fx.pos[2]);
+        _fxDir.set(fx.dir[0], fx.dir[1], fx.dir[2]);
+        throwGrenade(_fxPos, undoGrenadeArc(_fxDir), fx.from, fx.speed);
+      } else if (fx.kind === 'bump') {
+        // Lado receptor del hype-bump: "<X> te energizó" (+8, cooldown de pareja)
+        if (fx.to !== usernameRef.current) return;
+        const now = Date.now();
+        const last = bumpCooldownRef.current.get(fx.from) ?? 0;
+        if (now - last < TUNING.multi.hypeBumpCooldownS * 1000) return;
+        bumpCooldownRef.current.set(fx.from, now);
+        scoreActionRef.current('hypeBump', `¡${fx.from} te energizó!`);
+        notifyHypeBump(fx.from); // flash dorado del DamageOverlay + chime (WS-2)
+      }
     });
     return unsub;
-  }, [subscribeClubFx]);
+  }, [subscribeClubFx, shoot, throwGrenade]);
 
   // GLORIA (M5): al empezar todos a 100; al terminar 60±10 y sin inmunidades
   useEffect(() => {

@@ -92,6 +92,10 @@ export const SITE_EVENT_NAMES = [
   'enter_club',
   'login',
   'button_click',
+  // SUBIDÓN (shooter del club) — solo las 2 señales clave; el resto queda
+  // en HIDDEN_ACTIONS de analyticsLabels.ts (se trackean pero no se muestran).
+  'club_club_drop',
+  'club_session_summary',
 ];
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

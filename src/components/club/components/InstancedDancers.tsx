@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useRef, useMemo, MutableRefObject } from 'react';
+import React, { useRef, useMemo, useEffect, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useNpcPositions } from '../NpcPositionsContext';
 import { useProjectiles } from '../ProjectileContext';
 import { useHealth } from '../HealthContext';
+import { useEnergy } from '../EnergyContext';
+import { playerState } from '../playerState';
+import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
 import { earthquakeActiveUntil } from './SpecialEffects';
 
@@ -16,6 +19,9 @@ const NPC_NAMES = [
   'Kiara', 'Dex', 'Zuri', 'Mako', 'Lyra', 'Riot', 'Nova', 'Blaze',
   'Jinx', 'Vega', 'Echo', 'Pulse', 'Nyx', 'Flux', 'Raze', 'Kira',
 ];
+
+// Ids estables `npc-<nombre>` precomputados (cero allocs de string por frame)
+const NPC_IDS = NPC_NAMES.map((n) => `npc-${n}`);
 
 const COLORS: [string, string, string, string] = ['#ff0055', '#00ccff', '#00ff41', '#ff8800'];
 
@@ -48,6 +54,16 @@ const barCyan = new THREE.Color(0x00ccff);
 const barPurple = new THREE.Color(0x9933ff);
 const barGold = new THREE.Color(0xffdd00);
 const barTmp = new THREE.Color();
+
+// ─── Colores de estado (M3/M7/M11) — compartidos, cero allocs por frame ─
+const colWhite = new THREE.Color(0xffffff); // flash del hit (80ms)
+const colGold = new THREE.Color(0xffd700); // VIP dorado
+const colApagado = new THREE.Color(0x4a4a52); // desaturación del APAGADO
+const colBuff = new THREE.Color(0xb0ffd0); // aura sutil del buff de baile
+const colSkin = new THREE.Color(0xe0c4a8);
+const colLegs = new THREE.Color(0x222222);
+const colTmp = new THREE.Color();
+const colTmp2 = new THREE.Color();
 
 // ─── Shared math objects (avoid GC) ─────────────────────────────────
 const _mat4 = new THREE.Matrix4();
@@ -82,6 +98,8 @@ interface NpcState {
   hypeDropStart: Float32Array;
   wasHyped: Uint8Array; // 0/1 bool
   scaleVal: Float32Array; // current scale for hype animation
+  /** Reloj de animación POR instancia (s): se congela en el hit-stop (M3/juice) */
+  animClock: Float32Array;
 }
 
 function createNpcState(): NpcState {
@@ -101,6 +119,7 @@ function createNpcState(): NpcState {
     hypeDropStart: new Float32Array(NPC_COUNT),
     wasHyped: new Uint8Array(NPC_COUNT),
     scaleVal: new Float32Array(NPC_COUNT),
+    animClock: new Float32Array(NPC_COUNT),
   };
 
   for (let i = 0; i < NPC_COUNT; i++) {
@@ -139,15 +158,30 @@ interface InstancedDancersProps {
 export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef }) => {
   const { positions: npcPositions } = useNpcPositions();
   const { shoot } = useProjectiles();
-  const { npcHypeRef } = useHealth();
+  const { npcHypeRef, tickNpcs, ensureNpc, applyDanceBuff } = useHealth();
+  const { gloriaActiveRef, stageRef: energyStageRef, subscribe } = useEnergy();
   const shootRef = useRef(shoot);
   shootRef.current = shoot;
 
   const stateRef = useRef<NpcState | null>(null);
   if (!stateRef.current) stateRef.current = createNpcState();
 
-  const frozenTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
+
+  // CLUB DROP (M4): baile sincronizado 5s — reloj COMPARTIDO (epoch) entre los 16
+  const syncDanceUntilRef = useRef(0);
+  const syncDanceStartRef = useRef(0);
+
+  useEffect(() => {
+    const unsub = subscribe((ev) => {
+      if (ev.type === 'clubDrop') {
+        const now = Date.now();
+        syncDanceStartRef.current = now;
+        syncDanceUntilRef.current = now + 5000;
+      }
+    });
+    return unsub;
+  }, [subscribe]);
 
   // InstancedMesh refs — 6 body parts
   const bodyRef = useRef<THREE.InstancedMesh>(null);
@@ -211,13 +245,14 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
 
     if (!body || !head || !lArm || !rArm || !lLeg || !rLeg || !barBg || !barFill) return;
 
-    // Set colors once
+    // Set colors once. OJO: siempre con .slice() — los buffers se REESCRIBEN por
+    // frame con los colores de estado (M3/M7) y `bodyColors` es la paleta base.
     if (!colorsSet.current) {
-      body.instanceColor = new THREE.InstancedBufferAttribute(bodyColors, 3);
-      head.instanceColor = new THREE.InstancedBufferAttribute(headColors, 3);
+      body.instanceColor = new THREE.InstancedBufferAttribute(bodyColors.slice(), 3);
+      head.instanceColor = new THREE.InstancedBufferAttribute(headColors.slice(), 3);
       lArm.instanceColor = new THREE.InstancedBufferAttribute(bodyColors.slice(), 3);
       rArm.instanceColor = new THREE.InstancedBufferAttribute(bodyColors.slice(), 3);
-      lLeg.instanceColor = new THREE.InstancedBufferAttribute(legColors, 3);
+      lLeg.instanceColor = new THREE.InstancedBufferAttribute(legColors.slice(), 3);
       rLeg.instanceColor = new THREE.InstancedBufferAttribute(legColors.slice(), 3);
       colorsSet.current = true;
     }
@@ -227,17 +262,48 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     lastTimeRef.current = elapsed;
     const dt = Math.min(delta, 0.1);
 
-    if (isPlayingRef.current) frozenTimeRef.current = elapsed;
-    const frozenTime = frozenTimeRef.current;
     const isPlaying = isPlayingRef.current;
 
-    for (let i = 0; i < NPC_COUNT; i++) {
-      const time = frozenTime * ANIM_SPEEDS[i] + ANIM_OFFSETS[i];
-      const npcId = `npc-${NPC_NAMES[i]}`;
+    // ── Tick de gameplay (M3/M7): decay, celebraciones, VIP, squash — 1 vez por frame ──
+    tickNpcs(dt);
 
-      // ── Dance state machine ──
-      s.danceTimer[i] -= dt;
-      if (s.danceTimer[i] <= 0) {
+    const nowEpoch = Date.now();
+    const gloria = gloriaActiveRef.current;
+    const bajon = energyStageRef.current === 'bajon'; // EL BAJÓN: NPCs lentos, amplitud baja
+    const syncDance = nowEpoch < syncDanceUntilRef.current; // CLUB DROP: baile sincronizado
+    const syncDanceTime = (nowEpoch - syncDanceStartRef.current) / 1000;
+
+    // Buff de baile (M11): ¿el jugador lleva ≥3s bailando?
+    const perfNow = performance.now();
+    const dancerBuffing = playerState.danceMove > 0 && playerState.dancingSince > 0 &&
+      perfNow - playerState.dancingSince >= TUNING.baile.buffTrasS * 1000;
+    const buffR2 = TUNING.baile.buffRadio * TUNING.baile.buffRadio;
+
+    // Buffers de instanceColor (creados arriba en el primer frame)
+    const bodyCol = body.instanceColor!;
+    const headCol = head.instanceColor!;
+    const lArmCol = lArm.instanceColor!;
+    const rArmCol = rArm.instanceColor!;
+    const lLegCol = lLeg.instanceColor!;
+    const rLegCol = rLeg.instanceColor!;
+
+    for (let i = 0; i < NPC_COUNT; i++) {
+      const npcId = NPC_IDS[i];
+      // Estado de hype del NPC (spawn 30–60 la primera vez) — M3
+      const h = npcHypeRef.current.get(npcId) ?? ensureNpc(npcId);
+      const npcHyped = h.hyped;
+      const vip = h.vipUntil > nowEpoch; // M7: dorado, corre x2.5
+      const apagado = h.apagado && !npcHyped && !vip; // M3: pose celular
+
+      // Hit-stop (§4): congela SOLO el reloj de animación de esta instancia
+      if (isPlaying && nowEpoch >= h.animFreezeUntil) {
+        s.animClock[i] += dt;
+      }
+      const time = s.animClock[i] * ANIM_SPEEDS[i] + ANIM_OFFSETS[i];
+
+      // ── Dance state machine (los estados de gameplay la fuerzan) ──
+      if (vip || apagado) {
+        // El VIP corre y el APAGADO mira el celular: ninguno baila
         if (s.isDancing[i]) {
           s.isDancing[i] = 0;
           s.danceMove[i] = 0;
@@ -246,16 +312,39 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
           s.targetX[i] = t.x;
           s.targetZ[i] = t.z;
           s.waitTimer[i] = 0;
-        } else {
-          s.isDancing[i] = 1;
-          s.danceMove[i] = 1 + Math.floor(Math.random() * (DANCE_COUNT - 1));
-          s.danceTimer[i] = DANCE_DURATION_MIN + Math.random() * (DANCE_DURATION_MAX - DANCE_DURATION_MIN);
-          s.danceStartTime[i] = frozenTime;
-          if (s.danceMove[i] === 2) s.spinStartRot[i] = s.rotY[i];
+        }
+        if (vip && s.waitTimer[i] > 0.2) s.waitTimer[i] = 0.2; // el VIP no se detiene
+      } else if (gloria && !s.isDancing[i]) {
+        // GLORIA (M5): todos a 100 bailando
+        s.isDancing[i] = 1;
+        s.danceMove[i] = 1 + Math.floor(Math.random() * (DANCE_COUNT - 1));
+        s.danceTimer[i] = DANCE_DURATION_MIN + Math.random() * (DANCE_DURATION_MAX - DANCE_DURATION_MIN);
+        s.danceStartTime[i] = s.animClock[i];
+        if (s.danceMove[i] === 2) s.spinStartRot[i] = s.rotY[i];
+      } else {
+        s.danceTimer[i] -= dt;
+        if (s.danceTimer[i] <= 0) {
+          if (s.isDancing[i]) {
+            s.isDancing[i] = 0;
+            s.danceMove[i] = 0;
+            s.danceTimer[i] = IDLE_DURATION_MIN + Math.random() * (IDLE_DURATION_MAX - IDLE_DURATION_MIN);
+            const t = pickRandomTarget();
+            s.targetX[i] = t.x;
+            s.targetZ[i] = t.z;
+            s.waitTimer[i] = 0;
+          } else {
+            s.isDancing[i] = 1;
+            s.danceMove[i] = 1 + Math.floor(Math.random() * (DANCE_COUNT - 1));
+            s.danceTimer[i] = DANCE_DURATION_MIN + Math.random() * (DANCE_DURATION_MAX - DANCE_DURATION_MIN);
+            s.danceStartTime[i] = s.animClock[i];
+            if (s.danceMove[i] === 2) s.spinStartRot[i] = s.rotY[i];
+          }
         }
       }
 
       // ── Wander ──
+      // Velocidad por estado: VIP corre (x2.5), APAGADO arrastra los pies, BAJÓN lento
+      const speedFactor = vip ? TUNING.vip.speedMult : apagado ? 0.5 : bajon ? 0.7 : 1;
       if (!s.isDancing[i]) {
         if (s.waitTimer[i] > 0) {
           s.waitTimer[i] -= dt;
@@ -271,7 +360,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
           if (dist < ARRIVAL_THRESHOLD) {
             s.waitTimer[i] = 0.5 + Math.random() * 1.5;
           } else {
-            const speed = MOVE_SPEED * ANIM_SPEEDS[i] * dt;
+            const speed = MOVE_SPEED * ANIM_SPEEDS[i] * speedFactor * dt;
             const step = Math.min(speed, dist);
             s.posX[i] += (dx / dist) * step;
             s.posZ[i] += (dz / dist) * step;
@@ -284,8 +373,8 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         }
       }
 
-      // ── Shooting ──
-      if (!s.isDancing[i]) {
+      // ── Shooting (cosmético NPC↔NPC) — el apagado está mirando el celular ──
+      if (!s.isDancing[i] && !apagado) {
         s.shootTimer[i] -= dt;
         if (s.shootTimer[i] <= 0) {
           const targets: { id: string; x: number; z: number }[] = [];
@@ -310,11 +399,20 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
 
       // ── Position & hype ──
       const surfaceY = getSurfaceHeight(s.posX[i], s.posZ[i]);
-      const baseBob = isPlaying ? Math.sin(time * 4) * 0.15 : 0;
+      // Amplitud por estado (M3): el apagado no rebota; en EL BAJÓN baja al 55%
+      const amp = apagado ? 0 : bajon ? 0.55 : 1;
+      const baseBob = isPlaying ? Math.sin(time * 4) * 0.15 * amp : 0;
       let posY = surfaceY + baseBob;
 
-      const npcHype = npcHypeRef.current.get(npcId);
-      const npcHyped = !!npcHype?.hyped;
+      // Buff de baile (M11): jugador bailando ≥3s a ≤3u → decay a la mitad 10s
+      if (dancerBuffing) {
+        const bdx = playerState.position.x - s.posX[i];
+        const bdz = playerState.position.z - s.posZ[i];
+        const bdy = playerState.position.y - surfaceY;
+        if (bdx * bdx + bdz * bdz <= buffR2 && Math.abs(bdy) < 2) {
+          applyDanceBuff(npcId);
+        }
+      }
 
       if (npcHyped && !s.wasHyped[i]) s.hypeDropStart[i] = elapsed;
       s.wasHyped[i] = npcHyped ? 1 : 0;
@@ -367,8 +465,13 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       npcPositions.current.set(npcId, { x: s.posX[i], y: surfaceY, z: s.posZ[i] });
 
       // ── Dance animations → per-part transforms ──
-      const activeDance = s.danceMove[i];
-      const danceTime = frozenTime - s.danceStartTime[i];
+      let activeDance = s.danceMove[i];
+      let danceTime = s.animClock[i] - s.danceStartTime[i];
+      // CLUB DROP: baile sincronizado 5s — reloj COMPARTIDO para los 16 (§3 M4)
+      if (syncDance && !npcHyped) {
+        activeDance = 1;
+        danceTime = syncDanceTime;
+      }
       const isMoving = !s.isDancing[i] && s.waitTimer[i] <= 0;
 
       // Compute per-part local rotations based on dance
@@ -377,7 +480,18 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       let llRX = 0, rlRX = 0;
       let bodyRY = groupRotY;
 
-      if (activeDance === 1) {
+      if (apagado && !syncDance) {
+        // Pose "mirando el celular" (M3): cabeza gacha, brazos al frente — comunica
+        // aburrimiento, no hostilidad. Piernas arrastradas si camina.
+        headRX = 0.55;
+        headLocalY = 1.44;
+        laRX = -1.15;
+        laRZ = -0.12;
+        raRX = -1.15;
+        raRZ = 0.12;
+        llRX = isMoving ? Math.sin(time * 8) * 0.25 : 0;
+        rlRX = isMoving ? Math.sin(time * 8 + Math.PI) * 0.25 : 0;
+      } else if (activeDance === 1) {
         // Hands up
         const bodyBounce = Math.abs(Math.sin(danceTime * 5)) * 0.12;
         posY = surfaceY + baseBob + bodyBounce + (npcHyped ? (elapsed - s.hypeDropStart[i] < 1 ? (elapsed - s.hypeDropStart[i]) * 4.5 : 4.5) : 0);
@@ -404,9 +518,9 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         raRX = -0.5 + Math.sin(danceTime * 12 + Math.PI) * 0.5;
         raRZ = 0.3;
       } else {
-        // Idle / walking
+        // Idle / walking (amplitud reducida en EL BAJÓN)
         const animSpeed = isMoving ? 8 : 4;
-        const animIntensity = isMoving ? 0.5 : 0.3;
+        const animIntensity = (isMoving ? 0.5 : 0.3) * amp;
         headRZ = Math.sin(time * 2) * 0.1;
         headLocalY = 1.5 + Math.sin(time * animSpeed) * 0.03;
         laRZ = -0.3 + Math.sin(time * animSpeed) * animIntensity;
@@ -420,12 +534,23 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       // Scale factor for visibility
       const sc = visible ? groupScale : 0.001;
 
+      // Squash del hit (§4/WS-2): 1.25x/0.75y al impactar, resuelto en squashMs.
+      // squashT (1→0) lo escribe tickNpcs; el coseno mete el "spring" (pasa por
+      // un leve estiramiento antes de asentarse en 1).
+      let scW = sc;
+      let scH = sc;
+      if (h.squashT > 0 && !npcHyped) {
+        const e = h.squashT * Math.cos((1 - h.squashT) * Math.PI * 1.5); // 1 → −0.33 → 0
+        scW = sc * (1 + 0.25 * e);
+        scH = sc * (1 - 0.25 * e);
+      }
+
       // ── Set instance matrices ──
       // Body: at [0, 1, 0] relative to group
-      setInstance(body, i, s.posX[i], posY + 1 * sc, s.posZ[i], 0, bodyRY, 0, 0.4 * sc, 0.6 * sc, 0.25 * sc);
+      setInstance(body, i, s.posX[i], posY + 1 * scH, s.posZ[i], 0, bodyRY, 0, 0.4 * scW, 0.6 * scH, 0.25 * scW);
 
       // Head: at [0, headLocalY, 0] relative
-      setInstance(head, i, s.posX[i] + Math.sin(bodyRY) * 0 , posY + headLocalY * sc, s.posZ[i], headRX, bodyRY, headRZ, 0.3 * sc, 0.35 * sc, 0.28 * sc);
+      setInstance(head, i, s.posX[i] + Math.sin(bodyRY) * 0 , posY + headLocalY * scH, s.posZ[i], headRX, bodyRY, headRZ, 0.3 * scW, 0.35 * scH, 0.28 * scW);
 
       // Arms: offset from body center, need to account for group rotation
       const cosR = Math.cos(bodyRY);
@@ -435,29 +560,59 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       const laLocalX = -0.3, laLocalY = 1.1, laLocalZ = 0;
       const laWorldX = s.posX[i] + cosR * laLocalX - sinR * laLocalZ;
       const laWorldZ = s.posZ[i] + sinR * laLocalX + cosR * laLocalZ;
-      setInstance(lArm, i, laWorldX, posY + laLocalY * sc, laWorldZ, laRX, bodyRY, laRZ, 0.12 * sc, 0.5 * sc, 0.12 * sc);
+      setInstance(lArm, i, laWorldX, posY + laLocalY * scH, laWorldZ, laRX, bodyRY, laRZ, 0.12 * scW, 0.5 * scH, 0.12 * scW);
 
       // Right arm at [0.3, 1.1, 0] local
       const raLocalX = 0.3;
       const raWorldX = s.posX[i] + cosR * raLocalX;
       const raWorldZ = s.posZ[i] + sinR * raLocalX;
-      setInstance(rArm, i, raWorldX, posY + 1.1 * sc, raWorldZ, raRX, bodyRY, raRZ, 0.12 * sc, 0.5 * sc, 0.12 * sc);
+      setInstance(rArm, i, raWorldX, posY + 1.1 * scH, raWorldZ, raRX, bodyRY, raRZ, 0.12 * scW, 0.5 * scH, 0.12 * scW);
 
       // Left leg at [-0.1, 0.35, 0] local
       const llLocalX = -0.1;
       const llWorldX = s.posX[i] + cosR * llLocalX;
       const llWorldZ = s.posZ[i] + sinR * llLocalX;
-      setInstance(lLeg, i, llWorldX, posY + 0.35 * sc, llWorldZ, llRX, bodyRY, 0, 0.15 * sc, 0.6 * sc, 0.15 * sc);
+      setInstance(lLeg, i, llWorldX, posY + 0.35 * scH, llWorldZ, llRX, bodyRY, 0, 0.15 * scW, 0.6 * scH, 0.15 * scW);
 
       // Right leg at [0.1, 0.35, 0] local
       const rlLocalX = 0.1;
       const rlWorldX = s.posX[i] + cosR * rlLocalX;
       const rlWorldZ = s.posZ[i] + sinR * rlLocalX;
-      setInstance(rLeg, i, rlWorldX, posY + 0.35 * sc, rlWorldZ, rlRX, bodyRY, 0, 0.15 * sc, 0.6 * sc, 0.15 * sc);
+      setInstance(rLeg, i, rlWorldX, posY + 0.35 * scH, rlWorldZ, rlRX, bodyRY, 0, 0.15 * scW, 0.6 * scH, 0.15 * scW);
+
+      // ── Colores por estado (M3/M7/M11): flash > VIP > apagado > buff > base ──
+      const flash = nowEpoch < h.hitFlashUntil; // flash blanco 80ms del hit (§4)
+      colTmp.setRGB(bodyColors[i * 3], bodyColors[i * 3 + 1], bodyColors[i * 3 + 2]);
+      if (flash) {
+        colTmp.copy(colWhite);
+        colTmp2.copy(colWhite);
+      } else if (vip) {
+        colTmp.copy(colGold); // VIP dorado (M7)
+        colTmp2.copy(colSkin).lerp(colGold, 0.35);
+      } else if (apagado) {
+        colTmp.lerp(colApagado, 0.75); // desaturado: fiesta apagada (M3)
+        colTmp2.copy(colSkin).lerp(colApagado, 0.45);
+      } else if (nowEpoch < h.buffUntil) {
+        colTmp.lerp(colBuff, 0.25 + 0.12 * Math.sin(elapsed * 6)); // aura del buff (M11)
+        colTmp2.copy(colSkin);
+      } else {
+        colTmp2.copy(colSkin);
+      }
+      bodyCol.setXYZ(i, colTmp.r, colTmp.g, colTmp.b);
+      lArmCol.setXYZ(i, colTmp.r, colTmp.g, colTmp.b);
+      rArmCol.setXYZ(i, colTmp.r, colTmp.g, colTmp.b);
+      headCol.setXYZ(i, colTmp2.r, colTmp2.g, colTmp2.b);
+      if (flash) {
+        lLegCol.setXYZ(i, 1, 1, 1);
+        rLegCol.setXYZ(i, 1, 1, 1);
+      } else {
+        lLegCol.setXYZ(i, colLegs.r, colLegs.g, colLegs.b);
+        rLegCol.setXYZ(i, colLegs.r, colLegs.g, colLegs.b);
+      }
 
       // ── Hype bar ──
-      const hype = npcHype?.hype ?? 0;
-      const maxHype = npcHype?.maxHype ?? 100;
+      const hype = h.hype;
+      const maxHype = h.maxHype;
       const ratio = Math.max(0, Math.min(1, hype / maxHype));
       const barY = posY + 2.1 * sc;
 
@@ -505,6 +660,14 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     rLeg.instanceMatrix.needsUpdate = true;
     barBg.instanceMatrix.needsUpdate = true;
     barFill.instanceMatrix.needsUpdate = true;
+
+    // Colores por estado: subir los buffers (16 instancias — costo trivial)
+    bodyCol.needsUpdate = true;
+    headCol.needsUpdate = true;
+    lArmCol.needsUpdate = true;
+    rArmCol.needsUpdate = true;
+    lLegCol.needsUpdate = true;
+    rLegCol.needsUpdate = true;
   });
 
   return (

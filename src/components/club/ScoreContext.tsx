@@ -10,6 +10,8 @@ import React, { createContext, useContext, useState, useRef, useCallback, useEff
 import { supabase, UserProfile } from '../../lib/supabase';
 import { useAuth } from './AuthContext';
 import { TUNING } from './tuning';
+import { notifyCombo } from './juice';
+import { event as gaEvent } from '@/src/lib/gtag';
 
 // Puntos por acción (§6). Los nombres legacy quedan en 0 para que los call
 // sites existentes (PlayerDancer, etc.) sigan compilando sin premiar spam.
@@ -228,6 +230,7 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       comboExpiresAtRef.current = now + TUNING.combo.ventanaS * 1000;
       if (COMBO_MULT_ACTIONS.has(action)) multiplier = comboMultiplierFor(newHits);
       setCombo(newHits);
+      notifyCombo(newHits, comboMultiplierFor(newHits)); // barra de decay + color (WS-2)
       if (newHits > sessionStatsRef.current.bestCombo) sessionStatsRef.current.bestCombo = newHits;
       if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
       comboTimerRef.current = setTimeout(() => {
@@ -235,15 +238,25 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         comboHitsRef.current = 0;
         comboExpiresAtRef.current = 0;
         setCombo(0);
+        notifyCombo(0, 1);
       }, TUNING.combo.ventanaS * 1000);
     }
 
     if (basePoints === 0) return; // acciones legacy/movilidad: silencio total
 
-    // Stats de sesión (M15 / analytics de WS-4)
-    if (action === 'clubDrop') sessionStatsRef.current.clubDrops++;
-    else if (action === 'hypeDropNpc') sessionStatsRef.current.hypeDrops++;
-    else if (action === 'vip') sessionStatsRef.current.vips++;
+    // Stats de sesión (M15) + tracking GA (WS-4, obligatorio por CLAUDE.md)
+    if (action === 'clubDrop') {
+      sessionStatsRef.current.clubDrops++;
+      gaEvent('club_club_drop', { drops_session: sessionStatsRef.current.clubDrops });
+    } else if (action === 'hypeDropNpc') {
+      sessionStatsRef.current.hypeDrops++;
+      gaEvent('club_hype_drop');
+    } else if (action === 'vip') {
+      sessionStatsRef.current.vips++;
+      gaEvent('club_vip_caught');
+    } else if (action === 'hypeBump') {
+      gaEvent('club_hype_bump');
+    }
 
     const totalPoints = basePoints * count * multiplier;
     setSessionScore(s => s + totalPoints);
@@ -283,6 +296,7 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (index >= unlockedSpecials || specialCharges <= 0) return false;
     setChargesUsed(prev => prev + 1);
     setActiveSpecial(index);
+    gaEvent('club_special_used', { special: SPECIAL_NAMES[index] });
     // Clear after 5s
     setTimeout(() => setActiveSpecial(null), 5000);
     return true;
@@ -290,7 +304,8 @@ export const ScoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // LEGACY no-op: PlayerDancer ya escribe la pose en playerState.ts cada frame.
   // Mantener la firma evita tocar archivos ajenos; NO debe volver a ser estado React.
-  const setPlayerPosition = useCallback((_x: number, _y: number, _z: number) => {}, []);
+  // (Sin parámetros: una función de menor aridad es asignable al tipo (x,y,z)=>void.)
+  const setPlayerPosition = useCallback(() => {}, []);
 
   const refreshLeaderboard = useCallback(async () => {
     try {

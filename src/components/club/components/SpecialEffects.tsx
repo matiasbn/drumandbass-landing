@@ -1,15 +1,29 @@
 'use client';
 
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useScore } from '../ScoreContext';
 import { useHealth } from '../HealthContext';
+import { useEnergy } from '../EnergyContext';
+import { useNpcPositions } from '../NpcPositionsContext';
 import { playerState } from '../playerState';
+import { TUNING } from '../tuning';
+import { addTrauma } from '../juice';
+import { playSting } from '../sounds';
 
 // Module-level shared state for cross-component communication
 export let earthquakeActiveUntil = 0;
 export let levitateActiveUntil = 0;
+
+// ─── Constantes del re-rol de especiales (M12) ───────────────────────
+// (Valores del diseño §3 M12; candidatos a un bloque `especiales` de TUNING —
+// tuning.ts es de Fase 0, así que viven aquí para no tocar archivos ajenos.)
+const ONDA_RADIO = 8; // Onda: +15 hype a todos los NPCs en 8u
+const ONDA_HYPE = 15;
+const SPOTLIGHT_DURA_S = 10; // Spotlight: te sigue 10s, hits +50% hype
+const CONFETTI_REVIVE_A = 60; // Confetti: los APAGADOS suben a 60 al instante
+const TERREMOTO_ENERGIA = 25; // Terremoto: +25 Energía del Club TOTAL (clutch pre-drop)
 
 // ─── Shockwave ────────────────────────────────────────────────────────
 // Expanding ring that radiates from player position
@@ -50,8 +64,9 @@ const Shockwave: React.FC<{ position: [number, number, number]; startTime: numbe
 };
 
 // ─── Spotlight ────────────────────────────────────────────────────────
-// Bright cone of light that tracks the player
+// M12: el foco SIGUE al jugador 10s (sus hits dan +50% hype vía activateSpotlight)
 const SpotlightEffect: React.FC<{ position: [number, number, number]; startTime: number }> = ({ position, startTime }) => {
+  const groupRef = useRef<THREE.Group>(null);
   const coneRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshBasicMaterial>(null);
   const particlesRef = useRef<THREE.Points>(null);
@@ -68,10 +83,16 @@ const SpotlightEffect: React.FC<{ position: [number, number, number]; startTime:
 
   useFrame(({ clock }) => {
     const elapsed = clock.getElapsedTime() - startTime;
-    if (elapsed > 5) return;
+    if (elapsed > SPOTLIGHT_DURA_S) return;
+
+    // Sigue al jugador (posición viva del singleton playerState)
+    if (groupRef.current) {
+      const p = playerState.position;
+      groupRef.current.position.set(p.x, p.y, p.z);
+    }
 
     const fadeIn = Math.min(elapsed / 0.5, 1);
-    const fadeOut = elapsed > 4 ? 1 - (elapsed - 4) : 1;
+    const fadeOut = elapsed > SPOTLIGHT_DURA_S - 1 ? SPOTLIGHT_DURA_S - elapsed : 1;
     const opacity = fadeIn * fadeOut * 0.3;
 
     if (materialRef.current) {
@@ -83,7 +104,7 @@ const SpotlightEffect: React.FC<{ position: [number, number, number]; startTime:
   });
 
   return (
-    <group position={[position[0], position[1], position[2]]}>
+    <group ref={groupRef} position={[position[0], position[1], position[2]]}>
       {/* Light cone */}
       <mesh ref={coneRef} position={[0, 5, 0]} rotation={[Math.PI, 0, 0]}>
         <coneGeometry args={[2, 10, 16, 1, true]} />
@@ -528,7 +549,9 @@ let effectIdCounter = 0;
 
 export const SpecialEffects: React.FC = () => {
   const { activeSpecial } = useScore();
-  const { localHypeRef } = useHealth();
+  const { localHypeRef, addNpcHypeFlat, reviveApagados, activateSpotlight, onVipCapturedRef } = useHealth();
+  const { addEnergy } = useEnergy();
+  const { positions: npcPositions } = useNpcPositions();
   const [effects, setEffects] = React.useState<ActiveEffect[]>([]);
   const lastSpecialRef = useRef<number | null>(null);
   const clockRef = useRef(0);
@@ -561,7 +584,7 @@ export const SpecialEffects: React.FC = () => {
       cleanupTimerRef.current = 0;
       setEffects(prev => {
         const filtered = prev.filter(e => {
-          const duration = e.type === 0 ? 2 : e.type === 3 || e.type === 1 ? 5 : e.type === 5 ? 4 : 3;
+          const duration = e.type === 1 ? SPOTLIGHT_DURA_S : e.type === 0 ? 2 : e.type === 3 ? 5 : e.type === 5 ? 4 : 3;
           return clockRef.current - e.startTime < duration;
         });
         return filtered.length === prev.length ? prev : filtered;
@@ -569,7 +592,24 @@ export const SpecialEffects: React.FC = () => {
     }
   });
 
-  // Spawn effect when activeSpecial changes
+  // VIP capturado (M7): confetti burst sobre el NPC — lo dispara HealthContext
+  useEffect(() => {
+    onVipCapturedRef.current = (npcId: string) => {
+      const p = npcPositions.current.get(npcId);
+      if (!p) return;
+      setEffects(prev => [...prev, {
+        type: 2, // ConfettiEffect
+        position: [p.x, p.y, p.z],
+        startTime: clockRef.current,
+        id: ++effectIdCounter,
+      }]);
+    };
+    return () => {
+      onVipCapturedRef.current = null;
+    };
+  }, [onVipCapturedRef, npcPositions]);
+
+  // Spawn effect when activeSpecial changes — con su rol táctico (M12)
   React.useEffect(() => {
     if (activeSpecial !== null && activeSpecial !== lastSpecialRef.current) {
       lastSpecialRef.current = activeSpecial;
@@ -580,10 +620,36 @@ export const SpecialEffects: React.FC = () => {
         startTime: clockRef.current,
         id: ++effectIdCounter,
       }]);
+
+      // ── Re-rol táctico (M12): cada especial es una herramienta ──
+      switch (activeSpecial) {
+        case 0: { // Onda: +15 hype a todos los NPCs en 8u (sin drop: remate del jugador)
+          const r2 = ONDA_RADIO * ONDA_RADIO;
+          npcPositions.current.forEach((npcPos, id) => {
+            const dx = npcPos.x - pos.x;
+            const dy = npcPos.y - pos.y;
+            const dz = npcPos.z - pos.z;
+            if (dx * dx + dy * dy + dz * dz <= r2) addNpcHypeFlat(id, ONDA_HYPE);
+          });
+          break;
+        }
+        case 1: // Spotlight: el foco te sigue y tus hits dan +50% hype
+          activateSpotlight(SPOTLIGHT_DURA_S);
+          break;
+        case 2: // Confetti: todos los APAGADOS a 60 — el salvavidas anti-Bajón
+          reviveApagados(CONFETTI_REVIVE_A);
+          break;
+        // case 3 (Levitar): igual que hoy — sinergia con airshots (levitateActiveUntil)
+        // case 4 (Terremoto): su rol ES la energía directa (abajo)
+      }
+      // Energía por especial usado (M4 +10); Terremoto entrega +25 TOTAL (M12)
+      addEnergy(activeSpecial === 4 ? TERREMOTO_ENERGIA : TUNING.energia.porEspecial, 'especial');
+      addTrauma(0.3); // tabla §4: especial usado
+      playSting(activeSpecial); // sting propio de cada especial (§4)
     } else if (activeSpecial === null) {
       lastSpecialRef.current = null;
     }
-  }, [activeSpecial]);
+  }, [activeSpecial, addNpcHypeFlat, activateSpotlight, reviveApagados, addEnergy, npcPositions]);
 
   return (
     <>

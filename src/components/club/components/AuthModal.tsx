@@ -24,11 +24,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialView = 'login',
   canClose = true,
 }) => {
-  const [view, setView] = useState<AuthView>(initialView);
+  const [view] = useState<AuthView>(initialView);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [success] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { signInWithGoogle, signInWithApple, updateProfile, needsProfile, user } = useAuth();

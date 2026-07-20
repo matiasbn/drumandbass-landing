@@ -37,7 +37,6 @@ export const MobileControls: React.FC = () => {
   const lookLastYRef = useRef(0);
 
   // Grenade charge refs
-  const grenadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const grenadeChargingRef = useRef(false);
 
   useEffect(() => {

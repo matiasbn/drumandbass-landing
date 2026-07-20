@@ -92,6 +92,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS high_score INTEGER DEFAULT 0;
 
+-- Migration: SUBIDÓN (club shooter) — récords históricos (M15)
+-- best_club_drops define el título cosmético del chat (≥1 Warm-up, ≥3 Selector, ≥5 Hype Master)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS best_combo INTEGER DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS best_club_drops INTEGER DEFAULT 0;
+
 -- Migration: Add admin column to profiles
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
 

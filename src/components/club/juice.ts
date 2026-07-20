@@ -16,6 +16,7 @@
 //  - addTrauma(TUNING.juice.traumaHypeDrop / traumaClubDrop) en drops (WS-1)
 
 import { TUNING } from './tuning';
+import { qualityRef } from './quality';
 import { playHitTick, playKickDrum, playDing, playChime } from './sounds';
 
 const J = TUNING.juice;
@@ -95,7 +96,8 @@ export function sampleJuice(dtS: number): JuiceSample {
   // Decay del trauma siempre (aunque el shake esté apagado, no debe acumularse)
   juiceState.trauma = Math.max(0, juiceState.trauma - J.traumaDecayPerS * dtS);
 
-  if (!shakeEnabled) {
+  // Shake off: por toggle propio o por calidad BAJA (WS-3)
+  if (!shakeEnabled || qualityRef.current === 'baja') {
     _sample.offX = 0;
     _sample.offY = 0;
     _sample.roll = 0;
@@ -135,6 +137,9 @@ export const hud = {
   combo: { hits: 0, mult: 1, until: 0 },
   /** Cola de hitmarkers pendientes — CrosshairHUD la consume */
   hitQueue: [] as HitKind[],
+  /** Epoch ms hasta el que hay un VIP en la pista (0 = ninguno) — banner con
+   *  countdown del HUD (§4, M7). Lo escribe HealthContext. */
+  vipUntilEpoch: 0,
 };
 
 /** Disparo local efectuado: reinicia el crosshair de cooldown y da el kick de cámara. */
