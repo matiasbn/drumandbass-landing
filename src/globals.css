@@ -39,6 +39,41 @@ body {
   box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 1);
 }
 
+/* "Sello" brutalista: el titular de éxito entra golpeando y se asienta. */
+@keyframes brutalist-stamp {
+  0% {
+    transform: scale(1.35) rotate(-4deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(0.94) rotate(1.5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+/* Slide-in del toast desde abajo. */
+@keyframes brutalist-toast-in {
+  0% {
+    transform: translateY(140%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-stamp {
+    animation: brutalist-stamp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .animate-toast-in {
+    animation: brutalist-toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
 .brutalist-shadow-red {
   box-shadow: 8px 8px 0px 0px #ff0000;
 }
