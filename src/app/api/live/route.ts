@@ -26,6 +26,16 @@ export const revalidate = 60;
 
 export async function GET() {
   try {
+    const override = process.env.CLUB_STREAM;
+    if (override) {
+      const youtubeVideoId = extractYouTubeVideoId(override) ?? override;
+      return NextResponse.json({
+        isLive: !!youtubeVideoId,
+        youtubeVideoId,
+        title: null,
+      });
+    }
+
     const streamings = await getStreamings();
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);

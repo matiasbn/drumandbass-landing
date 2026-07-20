@@ -2,11 +2,90 @@
 
 import React, { useRef, useState, useEffect, useMemo, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMultiplayer, PlayerState } from '../MultiplayerContext';
 import { CharacterMesh } from './CharacterMesh';
-import { isGifMessage, decodeGifUrl } from '../../../lib/chatMessage';
+
+// Lightweight 3D text billboard using canvas texture (replaces expensive Html elements)
+const TextSprite: React.FC<{
+  text: string;
+  position: [number, number, number];
+  fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
+  borderColor?: string;
+  maxWidth?: number;
+}> = ({ text, position, fontSize = 24, color = '#ffffff', backgroundColor, borderColor, maxWidth = 300 }) => {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    ctx.font = `bold ${fontSize}px monospace`;
+    const metrics = ctx.measureText(text);
+    const paddingX = 16;
+    const paddingY = 10;
+    const width = Math.min(Math.ceil(metrics.width) + paddingX * 2, maxWidth);
+    const height = fontSize + paddingY * 2;
+    canvas.width = width;
+    canvas.height = height;
+
+    if (backgroundColor) {
+      ctx.fillStyle = backgroundColor;
+      // Rounded rect
+      const r = 6;
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(width - r, 0);
+      ctx.quadraticCurveTo(width, 0, width, r);
+      ctx.lineTo(width, height - r);
+      ctx.quadraticCurveTo(width, height, width - r, height);
+      ctx.lineTo(r, height);
+      ctx.quadraticCurveTo(0, height, 0, height - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      if (borderColor) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, width / 2, height / 2, maxWidth - 32);
+
+    // Add glow for colored text
+    if (color !== '#ffffff') {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      ctx.fillText(text, width / 2, height / 2, maxWidth - 32);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }, [text, fontSize, color, backgroundColor, borderColor, maxWidth]);
+
+  // Clean up texture on unmount or when texture changes
+  useEffect(() => {
+    return () => {
+      texture.dispose();
+    };
+  }, [texture]);
+
+  const aspect = texture.image.width / texture.image.height;
+  const scale = 0.012 * fontSize;
+
+  return (
+    <sprite position={position} scale={[scale * aspect, scale, 1]}>
+      <spriteMaterial map={texture} transparent depthTest={false} />
+    </sprite>
+  );
+};
 
 interface RemotePlayerProps {
   player: PlayerState;
@@ -32,11 +111,8 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
     }
   }, [player.lastMessage, player.lastMessageAt]);
 
-  const isGif = visibleBubble ? isGifMessage(visibleBubble) : false;
-  const gifUrl = isGif && visibleBubble ? decodeGifUrl(visibleBubble) : null;
   const truncatedBubble = useMemo(() => {
     if (!visibleBubble) return null;
-    if (isGifMessage(visibleBubble)) return visibleBubble;
     return visibleBubble.length > 60 ? visibleBubble.slice(0, 57) + '...' : visibleBubble;
   }, [visibleBubble]);
 
@@ -48,8 +124,8 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
   const headRef = useRef<THREE.Group>(null);
   const frozenTimeRef = useRef<number>(0);
 
-  const targetPos = useRef({ x: player.x, z: player.z });
-  const currentPos = useRef({ x: player.x, z: player.z });
+  const targetPos = useRef({ x: player.x, y: player.y ?? 0, z: player.z });
+  const currentPos = useRef({ x: player.x, y: player.y ?? 0, z: player.z });
   const targetRotation = useRef(player.rotation);
   const currentRotation = useRef(player.rotation);
 
@@ -59,9 +135,9 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
   const spinStartRotationRef = useRef(0);
 
   React.useEffect(() => {
-    targetPos.current = { x: player.x, z: player.z };
+    targetPos.current = { x: player.x, y: player.y ?? 0, z: player.z };
     targetRotation.current = player.rotation;
-  }, [player.x, player.z, player.rotation]);
+  }, [player.x, player.y, player.z, player.rotation]);
 
   const BASE_JUMP_HEIGHT = 0.15;
 
@@ -86,6 +162,7 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
     }
 
     currentPos.current.x += (targetPos.current.x - currentPos.current.x) * 0.1;
+    currentPos.current.y += (targetPos.current.y - currentPos.current.y) * 0.1;
     currentPos.current.z += (targetPos.current.z - currentPos.current.z) * 0.1;
     currentRotation.current += (targetRotation.current - currentRotation.current) * 0.1;
 
@@ -97,7 +174,7 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
       const baseBob = isPlaying ? Math.sin(time * 4 + player.id.length) * BASE_JUMP_HEIGHT : 0;
       const jumpY = player.jumping ? Math.abs(Math.sin((time - danceStartRef.current) * 6)) * JUMP_HEIGHT_REMOTE : 0;
       groupRef.current.position.x = currentPos.current.x;
-      groupRef.current.position.y = baseBob + jumpY;
+      groupRef.current.position.y = currentPos.current.y + baseBob + jumpY;
       groupRef.current.position.z = currentPos.current.z;
 
       // Spin dance overrides rotation
@@ -308,44 +385,27 @@ const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, isPlayingRef }) => 
 
   return (
     <group ref={groupRef} position={[player.x, 0, player.z]}>
-      {/* Chat bubble */}
+      {/* Chat bubble (3D sprite — no DOM sync overhead) */}
       {truncatedBubble && (
-        <Html position={[0, 2.8, 0]} center distanceFactor={10} zIndexRange={[10, 0]}>
-          <div
-            className="pointer-events-none"
-            style={{
-              backgroundColor: 'rgba(0,0,0,0.85)',
-              border: '1px solid rgba(255,0,85,0.5)',
-              borderRadius: '6px',
-              textAlign: 'center',
-              overflow: 'hidden',
-            }}
-          >
-            {isGif && gifUrl ? (
-              <img src={gifUrl} alt="GIF" style={{ maxWidth: '180px', maxHeight: '135px', display: 'block' }} />
-            ) : (
-              <div className="px-4 py-2 text-lg font-mono" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
-                {truncatedBubble}
-              </div>
-            )}
-          </div>
-        </Html>
+        <TextSprite
+          text={truncatedBubble}
+          position={[0, 2.8, 0]}
+          fontSize={20}
+          color="#ffffff"
+          backgroundColor="rgba(0,0,0,0.85)"
+          borderColor="rgba(255,0,85,0.5)"
+        />
       )}
 
-      {/* Name label above head */}
-      <Html position={[0, 2.2, 0]} center distanceFactor={10} zIndexRange={[10, 0]}>
-        <div
-          className="px-2 py-0.5 text-xs font-bold whitespace-nowrap pointer-events-none"
-          style={{
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            color: player.color,
-            border: `1px solid ${player.color}`,
-            textShadow: `0 0 10px ${player.color}`,
-          }}
-        >
-          {player.username}
-        </div>
-      </Html>
+      {/* Name label above head (3D sprite) */}
+      <TextSprite
+        text={player.username}
+        position={[0, 2.2, 0]}
+        fontSize={14}
+        color={player.color}
+        backgroundColor="rgba(0,0,0,0.7)"
+        borderColor={player.color}
+      />
 
       <CharacterMesh
         playerColor={player.color}

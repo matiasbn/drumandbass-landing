@@ -2,39 +2,43 @@
 
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { Scene } from './components/Scene';
+import { ThirdPersonCamera } from './components/ThirdPersonCamera';
 import { usePlayback } from './PlaybackContext';
 import { useLive } from './LiveContext';
 
-export const NightclubCanvas: React.FC = () => {
+interface NightclubCanvasProps {
+  antialias?: boolean;
+}
+
+export const NightclubCanvas: React.FC<NightclubCanvasProps> = ({ antialias = true }) => {
   const { isPlayingRef } = usePlayback();
   const { isLive, youtubeVideoId } = useLive();
 
   return (
     <Canvas
-      shadows
       camera={{
-        position: [12, 10, 12],
-        fov: 50,
+        position: [0, 10, 18],
+        fov: 55,
         near: 0.1,
-        far: 100,
+        far: 200,
       }}
+      dpr={1}
+      gl={{ powerPreference: 'high-performance', antialias }}
       style={{ background: '#000000' }}
     >
       <Scene isPlayingRef={isPlayingRef} isLive={isLive} youtubeVideoId={youtubeVideoId} />
-      <OrbitControls
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-        minDistance={8}
-        maxDistance={40}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 2.3}
-        minAzimuthAngle={-Math.PI / 3}
-        maxAzimuthAngle={Math.PI / 3}
-      />
-      <fog attach="fog" args={['#050508', 25, 60]} />
+      <EffectComposer multisampling={0}>
+        <Bloom
+          intensity={0.8}
+          luminanceThreshold={0.5}
+          luminanceSmoothing={0.9}
+          mipmapBlur
+        />
+      </EffectComposer>
+      <ThirdPersonCamera />
+      <fog attach="fog" args={['#050508', 30, 120]} />
     </Canvas>
   );
 };

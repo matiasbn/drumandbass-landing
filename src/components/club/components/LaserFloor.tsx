@@ -56,7 +56,7 @@ float fbm(vec3 p) {
   float v = 0.0;
   float a = 0.5;
   vec3 shift = vec3(100.0);
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 2; i++) {
     v += a * noise3d(p);
     p = p * 2.0 + shift;
     a *= 0.5;
@@ -68,10 +68,8 @@ vec3 coneColor(int idx, float hueShift) {
   vec3 col;
   if (idx == 0) col = vec3(1.0, 0.0, 0.5);
   else if (idx == 1) col = vec3(0.5, 0.05, 1.0);
-  else if (idx == 2) col = vec3(0.1, 0.35, 1.0);
-  else if (idx == 3) col = vec3(0.85, 0.0, 0.85);
-  else if (idx == 4) col = vec3(0.15, 0.2, 1.0);
-  else col = vec3(0.0, 0.8, 0.95);
+  else if (idx == 2) col = vec3(0.85, 0.0, 0.85);
+  else col = vec3(0.15, 0.2, 1.0);
 
   float angle = hueShift;
   float cosA = cos(angle);
@@ -101,12 +99,7 @@ void main() {
   vec3 fogCoord = vec3(fragUV * 3.0, t * 0.08);
   fogCoord.y -= t * 0.03;
   fogCoord.x += t * 0.015;
-  float fogDensity = fbm(fogCoord);
-
-  vec3 fogCoord2 = vec3(fragUV * 6.0 + 50.0, t * 0.12);
-  fogCoord2.y -= t * 0.05;
-  float fogDetail = fbm(fogCoord2);
-  float fog = fogDensity * 0.5 + fogDetail * 0.5;
+  float fog = fbm(fogCoord);
   fog = fog * fog * 1.5;
 
   vec3 col = vec3(0.0);
@@ -114,10 +107,10 @@ void main() {
   float hueShift = sin(t * 0.07) * 0.2;
   float globalBeat = pow(abs(sin(t * PI / 1.5)), 8.0) * 0.2;
 
-  // Far layer: 3 cones
-  for (int i = 0; i < 3; i++) {
+  // Far layer: 2 cones
+  for (int i = 0; i < 2; i++) {
     float fi = float(i);
-    float originX = (fi - 1.0) * 0.4 * aspect;
+    float originX = (fi - 0.5) * 0.4 * aspect;
     originX += sin(t * 0.07 + fi * 2.5) * 0.1 * aspect;
     vec2 origin = vec2(originX, 1.05);
 
@@ -143,12 +136,12 @@ void main() {
     col += coneCol * volumetric * 0.35 * intensity * (1.0 + globalBeat);
   }
 
-  // Near layer: 3 cones
-  for (int i = 0; i < 3; i++) {
+  // Near layer: 2 cones
+  for (int i = 0; i < 2; i++) {
     float fi = float(i);
-    int colorIdx = i + 3;
+    int colorIdx = i + 2;
 
-    float originX = (fi - 1.0) * 0.5 * aspect + 0.15 * aspect;
+    float originX = (fi - 0.5) * 0.5 * aspect + 0.15 * aspect;
     originX += sin(t * 0.1 + fi * 3.1 + 1.0) * 0.08 * aspect;
     vec2 origin = vec2(originX, 1.02);
 
@@ -187,11 +180,10 @@ void main() {
   float whiteBlend = smoothstep(0.4, 1.2, brightness);
   col = mix(col, vec3(brightness * 1.3), whiteBlend * 0.5);
 
-  // Ground haze
+  // Ground haze — simplified, single fbm call
   float groundHaze = smoothstep(0.2, 0.0, fragUV.y);
-  float hazeFog = fbm(vec3(fragUV.x * 4.0, fragUV.y * 2.0, t * 0.05 + 10.0));
   col += col * groundHaze * 0.3;
-  col += vec3(0.06, 0.03, 0.1) * groundHaze * hazeFog;
+  col += vec3(0.06, 0.03, 0.1) * groundHaze * fog;
 
   // Tone mapping
   float exposure = 2.0;

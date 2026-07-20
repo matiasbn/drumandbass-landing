@@ -20,46 +20,40 @@ export const Lighting: React.FC<LightingProps> = ({ isPlayingRef }) => {
   const frozenTimeRef = useRef<number>(0);
 
   useFrame(({ clock }) => {
-    const isPlaying = isPlayingRef.current;
-
-    if (isPlaying) {
+    if (isPlayingRef.current) {
       frozenTimeRef.current = clock.getElapsedTime();
     }
     const time = frozenTimeRef.current;
 
     if (spotLight1Ref.current) {
-      spotLight1Ref.current.target.position.x = Math.sin(time * 0.5) * 4;
-      spotLight1Ref.current.target.position.z = Math.cos(time * 0.5) * 4;
+      spotLight1Ref.current.target.position.x = Math.sin(time * 0.5) * 10;
+      spotLight1Ref.current.target.position.z = Math.cos(time * 0.5) * 10;
       spotLight1Ref.current.target.updateMatrixWorld();
     }
     if (spotLight2Ref.current) {
-      spotLight2Ref.current.target.position.x = Math.sin(time * 0.7 + Math.PI) * 4;
-      spotLight2Ref.current.target.position.z = Math.cos(time * 0.7 + Math.PI) * 4;
+      spotLight2Ref.current.target.position.x = Math.sin(time * 0.7 + Math.PI) * 10;
+      spotLight2Ref.current.target.position.z = Math.cos(time * 0.7 + Math.PI) * 10;
       spotLight2Ref.current.target.updateMatrixWorld();
     }
   });
 
   return (
     <>
-      <ambientLight intensity={1.0} color="#222233" />
-      <pointLight position={[0, 10, 0]} intensity={60} color="#ffffff" distance={35} decay={2} />
-      {/* DJ booth spotlight - bright and focused */}
+      <ambientLight intensity={1.2} color="#222233" />
+      <pointLight position={[0, 12, 0]} intensity={60} color="#ffffff" distance={60} decay={2} />
+      {/* DJ spotlight — no shadow for perf */}
       <spotLight
-        position={[0, 6, -3]}
+        position={[0, 8, 0]}
         angle={0.6}
         penumbra={0.4}
-        intensity={50}
+        intensity={40}
         color={COLORS.neonPink}
-        castShadow
-        shadow-mapSize-width={512}
-        shadow-mapSize-height={512}
-        target-position={[0, 1, -5]}
+        target-position={[0, 1.5, 0]}
       />
-      {/* Extra white fill on DJ area */}
-      <pointLight position={[0, 4, -5]} intensity={20} color="#ffffff" distance={10} decay={2} />
+      {/* Sweeping spotlights */}
       <spotLight
         ref={spotLight1Ref}
-        position={[-5, 8, -2]}
+        position={[-10, 10, -5]}
         angle={0.35}
         penumbra={0.5}
         intensity={25}
@@ -67,18 +61,15 @@ export const Lighting: React.FC<LightingProps> = ({ isPlayingRef }) => {
       />
       <spotLight
         ref={spotLight2Ref}
-        position={[5, 8, -2]}
+        position={[10, 10, 5]}
         angle={0.35}
         penumbra={0.5}
         intensity={25}
         color={COLORS.neonPink}
       />
-      <pointLight position={[-4, 0.5, 0]} intensity={8} color={COLORS.cyberBlue} distance={8} decay={2} />
-      <pointLight position={[4, 0.5, 0]} intensity={8} color={COLORS.neonPink} distance={8} decay={2} />
-      <pointLight position={[0, 0.5, 4]} intensity={8} color={COLORS.matrixGreen} distance={8} decay={2} />
-      {/* Jungle ambient green glow near DJ area */}
-      <pointLight position={[-3, 2, -5]} intensity={5} color="#22cc33" distance={6} decay={2} />
-      <pointLight position={[3, 2, -5]} intensity={5} color="#22cc33" distance={6} decay={2} />
+      {/* 2 accent lights instead of 4+2 */}
+      <pointLight position={[-8, 0.5, -8]} intensity={6} color={COLORS.cyberBlue} distance={12} decay={2} />
+      <pointLight position={[8, 0.5, 8]} intensity={6} color={COLORS.matrixGreen} distance={12} decay={2} />
     </>
   );
 };

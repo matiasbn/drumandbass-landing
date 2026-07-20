@@ -44,7 +44,7 @@ export const DJ: React.FC<DJProps> = ({ isPlayingRef }) => {
   });
 
   return (
-    <group position={[0, 0, -5.8]}>
+    <group position={[0, 1.5, -0.8]}>
       <mesh position={[0, 1.4, 0]} castShadow>
         <boxGeometry args={[0.6, 0.8, 0.35]} />
         <meshStandardMaterial color="#1a1a1a" />

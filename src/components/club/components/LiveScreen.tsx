@@ -28,14 +28,14 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
   });
 
   return (
-    <group position={[0, 4.5, -6.5]}>
+    <group position={[0, 5, -14]} rotation={[0, 0, 0]}>
       {/* Screen frame */}
       <mesh position={[0, 0, -0.05]}>
         <boxGeometry args={[9, 5.2, 0.1]} />
         <meshStandardMaterial color="#111111" />
       </mesh>
 
-      {/* Screen surface - black when video is playing, glow only when live without video */}
+      {/* Screen surface */}
       <mesh ref={glowRef}>
         <planeGeometry args={[8.5, 4.8]} />
         <meshStandardMaterial
@@ -45,7 +45,7 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
         />
       </mesh>
 
-      {/* YouTube iframe on the main screen */}
+      {/* YouTube iframe — autoplay with audio */}
       {isLive && youtubeVideoId && (
         <Html
           transform
@@ -61,12 +61,11 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
           <div style={{ position: 'relative', width: 640, height: 360 }}>
             <iframe
               data-testid="youtube-iframe"
-              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=0&rel=0`}
+              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=0&rel=0&playsinline=1`}
               style={{ width: 640, height: 360, border: 'none' }}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-            {/* Overlay: blocks interaction by default so 3D drag works. Tap to unlock video controls. */}
             {!interacting && (
               <div
                 onClick={() => setInteracting(true)}
@@ -86,7 +85,7 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
         </Html>
       )}
 
-      {/* LIVE indicator - red dot */}
+      {/* LIVE indicator */}
       {isLive && (
         <mesh ref={indicatorRef} position={[3.5, 2.0, 0.02]}>
           <circleGeometry args={[0.15, 16]} />

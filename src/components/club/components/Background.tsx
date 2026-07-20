@@ -20,14 +20,14 @@ const Particles: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPl
   const particlesRef = useRef<THREE.Points>(null);
   const frozenTimeRef = useRef<number>(0);
 
-  const particleCount = 300;
+  const particleCount = 150;
 
   const positions = useMemo(() => {
     const pos = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 50;
-      pos[i * 3 + 1] = Math.random() * 15;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 50;
+      pos[i * 3] = (Math.random() - 0.5) * 80;
+      pos[i * 3 + 1] = Math.random() * 20;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 80;
     }
     return pos;
   }, []);
@@ -84,7 +84,7 @@ const Particles: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPl
 const InfiniteGrid: React.FC = () => {
   const { positions, colors } = useMemo(() => {
     const gridExtent = 30;
-    const spacing = 3;
+    const spacing = 4;
     const pts: number[] = [];
     const cols: number[] = [];
     const cBlue = new THREE.Color(COLORS.cyberBlue);
@@ -115,9 +115,9 @@ const InfiniteGrid: React.FC = () => {
 const LightBeams: React.FC = () => {
   const beamPositions = useMemo(() => {
     const positions: [number, number, number][] = [];
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const radius = 18 + Math.random() * 5;
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const radius = 28 + Math.random() * 8;
       positions.push([
         Math.cos(angle) * radius,
         6,
@@ -141,57 +141,6 @@ const LightBeams: React.FC = () => {
           />
         </mesh>
       ))}
-    </group>
-  );
-};
-
-const Fireflies: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPlayingRef }) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const frozenTimeRef = useRef<number>(0);
-  const count = 30;
-
-  const positions = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 16;
-      pos[i * 3 + 1] = Math.random() * 4;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 14 - 2;
-    }
-    return pos;
-  }, []);
-
-  const colors = useMemo(() => {
-    const cols = new Float32Array(count * 3);
-    const fireflyColors = [new THREE.Color('#aaff00'), new THREE.Color('#ffcc00'), new THREE.Color('#88ff33')];
-    for (let i = 0; i < count; i++) {
-      const c = fireflyColors[Math.floor(Math.random() * fireflyColors.length)];
-      cols[i * 3] = c.r;
-      cols[i * 3 + 1] = c.g;
-      cols[i * 3 + 2] = c.b;
-    }
-    return cols;
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (isPlayingRef.current) {
-      frozenTimeRef.current = clock.getElapsedTime();
-    }
-    if (groupRef.current) {
-      const t = frozenTimeRef.current;
-      groupRef.current.position.y = Math.sin(t * 0.5) * 0.3;
-      groupRef.current.position.x = Math.sin(t * 0.3) * 0.2;
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-          <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-        </bufferGeometry>
-        <pointsMaterial size={0.18} vertexColors transparent opacity={0.9} sizeAttenuation />
-      </points>
     </group>
   );
 };

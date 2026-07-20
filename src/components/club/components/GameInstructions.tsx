@@ -46,11 +46,26 @@ export const GameInstructions: React.FC = () => {
           <section>
             <h3 className="text-[#00ff41] text-sm mb-2">CONTROLES</h3>
             <div className="space-y-1 text-white/70">
-              <Row keys="Flechas" desc="Mover personaje" />
-              <Row keys="Espacio" desc="Saltar (+1pt)" />
-              <Row keys="1-5" desc="Movimientos de baile (+5pt)" />
-              <Row keys="6" desc="Saludar a jugador cercano" />
-              <Row keys="Mouse" desc="Rotar camara & zoom" />
+              <Row keys="WASD" desc="Mover personaje" />
+              <Row keys="Mouse" desc="Mirar alrededor (click para activar)" />
+              <Row keys="Espacio" desc="Saltar (doble salto en el aire)" />
+              <Row keys="Click Izq" desc="Disparar confetti" />
+              <Row keys="Click Der" desc="Granada confetti (mantener para cargar)" />
+              <Row keys="1-5" desc="Movimientos de baile" />
+              <Row keys="Q" desc="Saludar a jugador cercano" />
+              <Row keys="ESC" desc="Soltar mouse" />
+            </div>
+          </section>
+
+          {/* Hype System */}
+          <section>
+            <h3 className="text-[#9933ff] text-sm mb-2">SISTEMA HYPE</h3>
+            <div className="space-y-1 text-white/70">
+              <div className="leading-relaxed">Todos tienen una barra de <span className="text-[#00ccff]">HYPE</span> que sube al recibir confetti. Al llegar a <span className="text-[#ffdd00]">100%</span> activas un <span className="text-[#ffdd00]">HYPE DROP!</span></div>
+              <Row keys="Disparo" desc="+15 hype al objetivo" />
+              <Row keys="Granada" desc="+25 hype en area" />
+              <Row keys="-3/s" desc="El hype decae lentamente" />
+              <Row keys="100%" desc="HYPE DROP! Levitas + confetti + bonus" />
             </div>
           </section>
 
@@ -77,6 +92,9 @@ export const GameInstructions: React.FC = () => {
               <Row keys="+8" desc="Choque con otro jugador" />
               <Row keys="+10" desc="Por minuto en el club" />
               <Row keys="+15" desc="Sync con otro jugador" />
+              <Row keys="+2" desc="Disparar confetti" />
+              <Row keys="+10" desc="Acertar a otro jugador" />
+              <Row keys="+5" desc="Ser alcanzado (ambos ganan!)" />
             </div>
           </section>
 
@@ -106,6 +124,8 @@ export const GameInstructions: React.FC = () => {
               <div className="leading-relaxed"><span className="text-[#00ccff]">Bump</span> — Camina hacia otro jugador para chocar (+8)</div>
               <div className="leading-relaxed"><span className="text-[#00ccff]">Crowd Hype</span> — 3+ jugadores bailando juntos = x2 multiplicador</div>
               <div className="leading-relaxed"><span className="text-[#00ccff]">Wave</span> — Presiona 6 cerca de un jugador para saludar</div>
+              <div className="leading-relaxed"><span className="text-[#ffff00]">Energia</span> — Dispara confetti para cargar el hype de otros jugadores</div>
+              <div className="leading-relaxed"><span className="text-[#ff8800]">Granada Confetti</span> — Carga de hype en area, explota al tocar el suelo</div>
             </div>
           </section>
         </div>
