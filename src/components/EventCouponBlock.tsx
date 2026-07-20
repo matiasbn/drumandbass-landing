@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { RiCoupon3Line } from '@remixicon/react';
 
 import { createClient } from '@/src/lib/supabase';
+import { MOCK_AUTH_ENABLED, readMockPersona, SOCIAL } from '@/src/lib/devAuth';
 import { event } from '@/src/lib/gtag';
 import BigButton from '@/src/components/BigButton';
 
@@ -37,6 +38,9 @@ export default function EventCouponBlock({
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [copied, setCopied] = useState(false);
+  // El código depende de la cuenta, así que hay que decir cuál es: con varias
+  // cuentas de Google, "eres Junglist" sin decir quién no significa nada.
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   // Si eligió seguir sin inscribirse, el banner se colapsa a una franja.
   const [dismissed, setDismissed] = useState(false);
 
@@ -71,6 +75,44 @@ export default function EventCouponBlock({
 
   useEffect(() => {
     let alive = true;
+
+    // Con un perfil simulado la sesión de Supabase no existe: decide la API. El
+    // perfil 'social' cae a la sesión real (camino de abajo).
+    if (MOCK_AUTH_ENABLED) {
+      const persona = readMockPersona();
+      if (persona && persona !== SOCIAL) {
+        setUserEmail(persona.email);
+        fetch(`/api/evento/${eventId}/coupon`)
+          .then(r => r.json())
+          .then(data => {
+            if (!alive) return;
+            if (data.status === 'ok') setState({ kind: 'ok', code: data.code, isNew: data.kind === 'new' });
+            else if (data.status === 'anon') setState({ kind: 'anon' });
+            else setState({ kind: data.isJunglist ? 'no_coupon' : 'not_junglist' });
+          })
+          .catch(() => alive && setState({ kind: 'anon' }));
+        return;
+      }
+    }
+
+    // Sin token de Supabase no hay sesión posible, y eso se sabe de inmediato: se
+    // pinta la puerta en el primer frame en vez de esperar el round-trip de
+    // getUser(). Quien llega desde el correo suele ser anónimo, y ver el evento y
+    // que la puerta caiga encima un segundo después es peor que verla de entrada.
+    //
+    // El token va en COOKIES, no en localStorage: el cliente se crea con
+    // createBrowserClient de @supabase/ssr para que el servidor pueda leer la
+    // sesión. Buscarlo en localStorage daría siempre "anónimo".
+    try {
+      const hasSession = document.cookie.split(';').some(c => c.trim().startsWith('sb-'));
+      if (!hasSession) {
+        setState({ kind: 'anon' });
+        return;
+      }
+    } catch {
+      // sin acceso a cookies se sigue por la vía normal
+    }
+
     (async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -79,6 +121,7 @@ export default function EventCouponBlock({
         setState({ kind: 'anon' });
         return;
       }
+      setUserEmail(user.email ?? null);
       try {
         const res = await fetch(`/api/evento/${eventId}/coupon`);
         const data = await res.json();
@@ -123,6 +166,14 @@ export default function EventCouponBlock({
       document.body.style.overflow = previous;
     };
   }, [gateOpen]);
+
+  // Salir y volver a elegir cuenta: el caso real es tener varias de Google y no
+  // saber con cuál entraste.
+  const switchAccount = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    await login();
+  };
 
   const login = async () => {
     const supabase = createClient();
@@ -180,6 +231,19 @@ export default function EventCouponBlock({
           </button>
         </div>
         <p className="mono text-xs uppercase mt-4 opacity-80">Úsalo al comprar tu ticket.</p>
+        {userEmail && (
+          <p className="mono text-xs mt-4 opacity-80">
+            Conectado como <strong>{userEmail}</strong>
+            {' · '}
+            <button
+              type="button"
+              onClick={switchAccount}
+              className="underline hover:opacity-100 cursor-pointer"
+            >
+              Cambiar cuenta
+            </button>
+          </p>
+        )}
       </section>
     );
   }

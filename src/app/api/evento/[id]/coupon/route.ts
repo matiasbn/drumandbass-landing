@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createSupabaseServer } from '@/src/lib/supabase-server';
+import {
+  MOCK_AUTH_ENABLED,
+  MOCK_COOKIE,
+  SOCIAL,
+  resolveIdentity,
+  mockCouponFor,
+} from '@/src/lib/devAuth';
 
 // Revela el cupón Junglist de un evento SOLO al usuario autenticado que además
 // es junglist (o DJ, que siempre es junglist). La función get_event_coupon
@@ -12,6 +20,31 @@ export async function GET(
 ) {
   const { id } = await params;
   const supabase = await createSupabaseServer();
+
+  // Modo mock (solo dev): responde según el perfil simulado, usando los códigos
+  // REALES del evento para que la matriz se pruebe contra datos de verdad. El
+  // default es Anónimo; 'social' cae a la sesión real de más abajo.
+  if (MOCK_AUTH_ENABLED) {
+    const identity = resolveIdentity((await cookies()).get(MOCK_COOKIE)?.value);
+    if (identity !== SOCIAL) {
+      if (identity.key === 'anon') {
+        return NextResponse.json({ status: 'anon', mock: true }, { status: 401 });
+      }
+      const { data: ev } = await supabase
+        .from('cms_events')
+        .select('coupon_junglist_new, coupon_junglist')
+        .eq('id', id)
+        .maybeSingle();
+      const coupon = mockCouponFor(
+        identity,
+        ev?.coupon_junglist_new ?? null,
+        ev?.coupon_junglist ?? null
+      );
+      return coupon
+        ? NextResponse.json({ status: 'ok', ...coupon, mock: true })
+        : NextResponse.json({ status: 'no_coupon', isJunglist: identity.isJunglist, mock: true });
+    }
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ status: 'anon' }, { status: 401 });

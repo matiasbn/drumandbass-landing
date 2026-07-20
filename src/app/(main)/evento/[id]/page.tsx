@@ -1,17 +1,15 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import type { Metadata } from 'next';
-import { RiWhatsappLine } from '@remixicon/react';
 
 import dayjs from '@/src/lib/date';
 import { getEventById } from '@/src/lib/cms';
-import { WHATSAPP_LINK } from '@/src/constants';
 import TicketButton from '@/src/components/TicketButton';
 import ProximityBadge from '@/src/components/ProximityBadge';
-import BigButton from '@/src/components/BigButton';
 import TrackOnMount from '@/src/components/TrackOnMount';
 import CampaignVisitBeacon from '@/src/components/CampaignVisitBeacon';
 import EventCouponBlock from '@/src/components/EventCouponBlock';
+import EventCommunityCTA from '@/src/components/EventCommunityCTA';
 
 // Landing pública de un evento (por id). Es el destino de los correos de campaña
 // (para medir la visita en GA de forma confiable) y también sirve para compartir
@@ -128,21 +126,9 @@ export default async function EventoLandingPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Cross-sell: comunidad */}
-      <section className="p-6 lg:p-12 border-b-4 border-black">
-        <h2 className="text-3xl lg:text-5xl font-black uppercase italic mb-2">Súmate a la comunidad</h2>
-        <p className="mono text-sm lg:text-base font-bold uppercase opacity-60 mb-6 leading-tight">
-          Compres o no ticket, hay más movidas de Drum and Bass en Chile esperándote.
-        </p>
-        <div className="flex flex-col lg:flex-row gap-4">
-          <BigButton variant="blue" className="flex-1 text-lg py-6" href="/junglist">
-            Únete como Junglist
-          </BigButton>
-          <BigButton variant="whatsapp" className="flex-1 text-lg py-6" href={WHATSAPP_LINK}>
-            <RiWhatsappLine /> Grupo de WhatsApp
-          </BigButton>
-        </div>
-      </section>
+      {/* Cross-sell: comunidad. El componente es dueño de toda la sección porque
+          el texto depende de si ya es junglist. */}
+      <EventCommunityCTA />
 
       <style>{`.event-landing-desc > * { margin-bottom: .5em; }`}</style>
     </main>

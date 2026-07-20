@@ -1,3 +1,4 @@
+import { DEV_TOOLS_ENABLED } from './devFlags';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -14,8 +15,7 @@ dayjs.extend(isoWeek);
  * Apagados por defecto (opt-in): se activan con MOCK_EVENTS=1 en dev.
  * Nunca se renderizan en producción.
  */
-export const MOCK_EVENTS_ENABLED =
-  process.env.NODE_ENV === 'development' && process.env.MOCK_EVENTS === '1';
+export const MOCK_EVENTS_ENABLED = DEV_TOOLS_ENABLED && process.env.MOCK_EVENTS === '1';
 
 // Mismo formato que guarda el CMS, ej. "2026-07-25T18:00".
 const fmt = (d: dayjs.Dayjs) => d.format('YYYY-MM-DDTHH:mm');

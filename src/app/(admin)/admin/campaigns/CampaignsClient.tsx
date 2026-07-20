@@ -6,6 +6,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
+import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
 import {
   resolveCoupon,
@@ -54,6 +55,14 @@ interface EventLite {
 // Borradores editados de los correos segmentados (sobreviven a recargas).
 const DRAFT_PREFIX = 'dnb:campaign-draft:';
 
+const COUPON_MODE_LABELS: Record<string, string> = {
+  none: 'Sin descuento',
+  both_same: 'Mismo código para todos',
+  both_split: 'Códigos separados por segmento',
+  new_only: 'Solo junglists nuevos',
+  existing_only: 'Solo junglists ya registrados',
+};
+
 const STEPS = [
   { num: 1, label: 'Plantilla', desc: 'Elige una plantilla' },
   { num: 2, label: 'Correo', desc: 'Arma el correo' },
@@ -65,6 +74,7 @@ interface CampaignSummary {
   id: string;
   name: string | null;
   template: string | null;
+  event_id: string | null;
   subject: string;
   coupon_mode: string | null;
   coupon_new_code: string | null;
@@ -146,6 +156,7 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> | null }) {
 }
 
 export default function CampaignsClient() {
+  const { loading: authLoading, isAdmin, user, signInWithGoogle } = useAdminAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selected, setSelected] = useState<Set<AudienceKey>>(new Set());
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -345,8 +356,8 @@ export default function CampaignsClient() {
 
   // Carga el historial al entrar a esa vista.
   useEffect(() => {
-    if (view === 'historial') fetchCampaigns();
-  }, [view, fetchCampaigns]);
+    if (view === 'historial' && isAdmin) fetchCampaigns();
+  }, [view, isAdmin, fetchCampaigns]);
 
   const chooseTemplate = (key: TemplateKey | 'custom') => {
     setTemplate(key);
@@ -592,6 +603,7 @@ export default function CampaignsClient() {
           segmentSubjects: segmented ? segSubjects : undefined,
           coupon: {
             enabled: couponEnabled,
+            target: couponTarget,
             sameForAll: couponSameForAll,
             newCode: couponNewCode,
             existingCode: couponExistingCode,
@@ -618,6 +630,48 @@ export default function CampaignsClient() {
       {hint && <p className="mono text-[10px] text-gray-500">{hint}</p>}
     </div>
   );
+
+  if (authLoading) {
+    return <p className="mono text-sm text-gray-500">Cargando…</p>;
+  }
+
+  // Decir cuál es el problema y con qué cuenta: un "no hay datos" ante un 403
+  // manda a buscar el error donde no está.
+  if (!isAdmin) {
+    return (
+      <div className="brutalist-border bg-white p-8 brutalist-shadow max-w-lg">
+        <p className="font-black uppercase text-xl mb-2">No tienes acceso</p>
+        <p className="mono text-sm text-gray-600 mb-1">
+          Esta sección es solo para administradores.
+        </p>
+        <p className="mono text-sm text-gray-600 mb-6">
+          {user?.email ? (
+            <>
+              Estás conectado como <strong>{user.email}</strong>.
+            </>
+          ) : (
+            'No has iniciado sesión.'
+          )}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {/* signInWithGoogle ya fuerza prompt: 'select_account', así que sirve
+              tanto para entrar como para cambiarse de cuenta. */}
+          <button
+            onClick={signInWithGoogle}
+            className="brutalist-border bg-[#ff0055] text-white px-4 py-2 font-bold uppercase text-sm hover:bg-[#dd0044] transition-colors cursor-pointer"
+          >
+            {user ? 'Cambiar de cuenta' : 'Iniciar sesión'}
+          </button>
+          <Link
+            href="/admin"
+            className="brutalist-border bg-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-100 transition-colors"
+          >
+            Volver
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -1351,21 +1405,68 @@ export default function CampaignsClient() {
                               </span>
                             </div>
 
-                            {c.coupon_mode && c.coupon_mode !== 'none' && (
-                              <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
-                                <span className="brutalist-border px-2 py-1 bg-[#ff0055] text-white font-bold">
-                                  {c.coupon_mode === 'single' ? 'Mismo código' : 'Códigos separados'}
-                                </span>
-                                {c.coupon_new_code && (
-                                  <span className="brutalist-border px-2 py-1 bg-white">
-                                    Nuevo: {c.coupon_new_code}
-                                  </span>
-                                )}
-                                <span className="brutalist-border px-2 py-1 bg-white">
-                                  Ya junglist: {c.coupon_existing_code || 'sin descuento'}
-                                </span>
+                            {/* Detalle de la campaña */}
+                            <dl className="brutalist-border bg-white p-3 mb-3 mono text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Asunto</dt>
+                                <dd className="break-words">{c.subject}</dd>
                               </div>
-                            )}
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Enviada</dt>
+                                <dd>{dayjs(c.sent_at || c.created_at).format('DD MMM YYYY · HH:mm')}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Plantilla</dt>
+                                <dd>{c.template === 'evento' ? 'Evento' : c.template || 'Personalizada'}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Audiencias</dt>
+                                <dd>
+                                  {c.audiences?.length
+                                    ? c.audiences
+                                        .map(a => AUDIENCES.find(x => x.key === a)?.label ?? a)
+                                        .join(' · ')
+                                    : 'Solo correos individuales'}
+                                </dd>
+                              </div>
+                              {c.event_id && (
+                                <div className="sm:col-span-2">
+                                  <dt className="font-bold uppercase text-gray-500">Landing</dt>
+                                  <dd>
+                                    <a
+                                      href={`/evento/${c.event_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline break-all hover:text-[#ff0055]"
+                                    >
+                                      /evento/{c.event_id}
+                                    </a>
+                                  </dd>
+                                </div>
+                              )}
+                              <div className="sm:col-span-2 pt-2 border-t-2 border-gray-200">
+                                <dt className="font-bold uppercase text-gray-500">Descuento Junglist</dt>
+                                <dd>
+                                  {!c.coupon_mode || c.coupon_mode === 'none' ? (
+                                    'Sin descuento — a todos les llegó el mismo correo.'
+                                  ) : (
+                                    <>
+                                      <span className="inline-block bg-[#ff0055] text-white font-bold px-2 py-0.5 mb-1">
+                                        {COUPON_MODE_LABELS[c.coupon_mode] ?? c.coupon_mode}
+                                      </span>
+                                      <p>
+                                        Junglist nuevo:{' '}
+                                        <strong>{c.coupon_new_code || 'sin descuento'}</strong>
+                                      </p>
+                                      <p>
+                                        Junglist ya registrado:{' '}
+                                        <strong>{c.coupon_existing_code || 'sin descuento'}</strong>
+                                      </p>
+                                    </>
+                                  )}
+                                </dd>
+                              </div>
+                            </dl>
                             <p className="mono text-[10px] text-gray-500 mb-2">
                               Aperturas poco fiables (los clientes de correo precargan imágenes); la
                               visita a la landing es la señal firme.

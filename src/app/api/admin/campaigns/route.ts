@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
 import { resolveCoupon, segmentBody, segmentSubject } from '@/src/lib/campaignCopy';
 import { BASE_URL } from '@/src/constants';
+import { verifyAdmin } from '@/src/lib/authz';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -30,18 +31,6 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
   );
 }
 
-async function verifyAdmin(supabase: ReturnType<typeof createSupabaseServer>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, isAdmin: false };
-
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-
-  return { user, isAdmin: adminProfile?.is_admin === true };
-}
 
 async function getEmailsByAudiences(
   supabase: ReturnType<typeof createSupabaseServer>,
@@ -363,17 +352,19 @@ export async function POST(request: NextRequest) {
   //    no lo es, "inscríbete y accede al descuento". Si a un segmento no le
   //    corresponde descuento (p. ej. el cupón es solo para junglists nuevos),
   //    recibe el correo normal, sin prometer nada que no pueda canjear.
-  const junglistSet = couponEnabled ? await getJunglistEmails(supabase) : new Set<string>();
+  // Se segmenta SIEMPRE, aunque no haya cupón: si no, todos quedarían guardados
+  // como 'no_junglist' y el desglose del historial mentiría. Sin cupón ambos
+  // segmentos reciben exactamente el mismo correo.
+  const junglistSet = await getJunglistEmails(supabase);
   const segments = [
     {
       key: 'junglist' as const,
-      emails: couponEnabled ? emails.filter(e => junglistSet.has(e)) : [],
+      emails: emails.filter(e => junglistSet.has(e)),
       withCoupon: junglistGetsCoupon,
     },
     {
       key: 'no_junglist' as const,
-      // Sin cupón no hay nada que segmentar: todos reciben el mismo correo.
-      emails: couponEnabled ? emails.filter(e => !junglistSet.has(e)) : emails,
+      emails: emails.filter(e => !junglistSet.has(e)),
       withCoupon: nonJunglistGetsCoupon,
     },
   ];
