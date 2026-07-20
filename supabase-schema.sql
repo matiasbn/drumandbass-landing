@@ -220,7 +220,11 @@ CREATE TABLE IF NOT EXISTS cms_events (
   date TEXT NOT NULL,
   end_date TEXT,
   description_html TEXT,
+  -- URL de venta ACTIVA (la que muestra el sitio en el botón TICKETS).
   tickets TEXT,
+  -- Historial de TODAS las URLs de venta que usó el evento (incluida la activa).
+  -- Se guardan todas para que analytics nunca pierda clics al cambiar el link.
+  ticket_links TEXT[] NOT NULL DEFAULT '{}',
   info TEXT,
   flyer_url TEXT,
   flyer_width INTEGER,

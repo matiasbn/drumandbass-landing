@@ -17,7 +17,7 @@ interface EventCardProps {
 // El destacado es la MISMA tarjeta, sólo más grande. Todo escala de forma fluida con
 // clamp() para que se vea consistente en móvil / tablet / desktop / xl sin saltos.
 const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
-  const { title, flyer, date, endDate, tickets, venue, address, description } = event;
+  const { id, title, flyer, date, endDate, tickets, venue, address, description } = event;
   const formattedDate = featured
     ? dayjs(date).format('ddd DD MMM YYYY [·] HH:mm')
     : dayjs(date).format('ddd DD MMM [·] HH:mm');
@@ -130,6 +130,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
           title={title}
           url={tickets}
           date={date}
+          eventId={id}
         />
         <ProximityBadge date={date} endDate={endDate} size={featured ? 'md' : 'sm'} shadow />
       </div>

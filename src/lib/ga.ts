@@ -63,6 +63,12 @@ export interface AnalyticsOverview {
   // dimensions "event_title" y "event_date" en GA4.
   ticketClicks: TicketClick[];
   ticketClicksAvailable: boolean;
+  // Clics SALIENTES (medición automática de GA, evento `click`). Fuente confiable
+  // que no depende de nuestros eventos propios. El route los cruza con el CMS
+  // (marcador dnbt + ticket_links) para tickets, y con dominios/YouTube para los
+  // totales de WhatsApp/redes/El Sótano. Opcional: la vista mensual no los usa.
+  outboundByUrl?: AnalyticsNamedValue[];
+  outboundByDomain?: AnalyticsNamedValue[];
 }
 
 export interface TicketClick {
@@ -70,6 +76,7 @@ export interface TicketClick {
   date: string; // YYYY-MM-DD
   value: number;
 }
+
 
 const num = (v?: string | null) => (v ? Number(v) : 0);
 
@@ -135,7 +142,7 @@ export async function getAnalyticsOverview(
   const dateRanges = range ? [range] : [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
   try {
-    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes, devicesRes] = await Promise.all([
+    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes, devicesRes, domainRes, urlRes] = await Promise.all([
       client.runReport({
         property,
         dateRanges,
@@ -200,41 +207,37 @@ export async function getAnalyticsOverview(
         metrics: [{ name: 'activeUsers' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
       }),
+      // Clics salientes por DOMINIO (para totales: WhatsApp, redes).
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'linkDomain' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: { filter: { fieldName: 'eventName', stringFilter: { value: 'click' } } },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: 100,
+      }),
+      // Clics salientes por URL (para tickets por evento y videos de El Sótano).
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'linkUrl' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: { filter: { fieldName: 'eventName', stringFilter: { value: 'click' } } },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: 1000,
+      }),
     ]);
 
     const s = summaryRes[0].rows?.[0]?.metricValues ?? [];
 
-    // Clics a tickets por evento, identificado por TÍTULO + FECHA (event_title y
-    // event_date). Requiere las custom dimensions "event_title" y "event_date" en
-    // GA4; si faltan, la API falla y devolvemos vacío sin romper el resto.
-    let ticketClicks: TicketClick[] = [];
-    let ticketClicksAvailable = false;
-    try {
-      const tc = await client.runReport({
-        property,
-        dateRanges,
-        dimensions: [{ name: 'customEvent:event_title' }, { name: 'customEvent:event_date' }],
-        metrics: [{ name: 'eventCount' }],
-        dimensionFilter: {
-          filter: {
-            fieldName: 'eventName',
-            stringFilter: { value: 'event_link_click' },
-          },
-        },
-        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-        limit: 50,
-      });
-      ticketClicks = (tc[0].rows ?? [])
-        .map((r) => ({
-          title: r.dimensionValues?.[0]?.value ?? '',
-          date: r.dimensionValues?.[1]?.value ?? '',
-          value: num(r.metricValues?.[0]?.value),
-        }))
-        .filter((r) => r.title && r.title !== '(not set)');
-      ticketClicksAvailable = true;
-    } catch {
-      // custom dimensions "event_title"/"event_date" no registradas aún
-    }
+    // Clics salientes (medición automática de GA). El route los cruza con el CMS.
+    const outboundByDomain: AnalyticsNamedValue[] = (domainRes[0].rows ?? [])
+      .map((r) => ({ label: r.dimensionValues?.[0]?.value ?? '', value: num(r.metricValues?.[0]?.value) }))
+      .filter((r) => r.label);
+    const outboundByUrl: AnalyticsNamedValue[] = (urlRes[0].rows ?? [])
+      .map((r) => ({ label: r.dimensionValues?.[0]?.value ?? '', value: num(r.metricValues?.[0]?.value) }))
+      .filter((r) => r.label);
 
     // Pivot país × canal: total de usuarios por país + desglose por origen.
     const countryMap = new Map<string, { label: string; total: number; sources: AnalyticsNamedValue[] }>();
@@ -258,8 +261,10 @@ export async function getAnalyticsOverview(
     return {
       configured: true,
       days,
-      ticketClicks,
-      ticketClicksAvailable,
+      ticketClicks: [], // el route lo llena cruzando los clics salientes con el CMS
+      ticketClicksAvailable: true,
+      outboundByUrl,
+      outboundByDomain,
       summary: {
         activeUsers: num(s[0]?.value),
         newUsers: num(s[1]?.value),
