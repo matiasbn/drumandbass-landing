@@ -210,6 +210,8 @@ export async function POST(request: NextRequest) {
     buttonText,
     buttonUrl,
     coupon,
+    segmentBodies,
+    segmentSubjects,
   } = body as {
     audiences: string[];
     extraEmails?: string[];
@@ -231,6 +233,9 @@ export async function POST(request: NextRequest) {
       newCode?: string;
       existingCode?: string;
     };
+    /** Cuerpo/asunto editados a mano por segmento; si vienen, mandan sobre el copy por defecto. */
+    segmentBodies?: Record<string, string>;
+    segmentSubjects?: Record<string, string>;
   };
 
   if (!subject || !title) {
@@ -373,8 +378,9 @@ export async function POST(request: NextRequest) {
     if (segment.emails.length === 0) continue;
 
     const useCoupon = couponEnabled && segment.withCoupon;
-    const bodyForSegment = segmentBody(bodyHtml, segment.key, useCoupon);
-    const subjectForSegment = segmentSubject(subject, title, useCoupon);
+    // Si el admin editó el correo de este segmento, se usa tal cual.
+    const bodyForSegment = segmentBodies?.[segment.key] ?? segmentBody(bodyHtml, segment.key, useCoupon);
+    const subjectForSegment = segmentSubjects?.[segment.key] ?? segmentSubject(subject, title, useCoupon);
 
     for (let i = 0; i < segment.emails.length; i += BATCH_SIZE) {
       const batch = segment.emails.slice(i, i + BATCH_SIZE);

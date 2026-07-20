@@ -179,6 +179,12 @@ export default function CampaignsClient() {
   const [couponNewCode, setCouponNewCode] = useState('');
   const [couponExistingCode, setCouponExistingCode] = useState('');
   const [previewIndex, setPreviewIndex] = useState(0);
+  // Cuando el descuento genera dos correos distintos, cada uno se edita por
+  // separado: el selector cambia qué correo estás editando y previsualizando.
+  const [segBodies, setSegBodies] = useState<Record<Segment, string>>({ junglist: '', no_junglist: '' });
+  const [segSubjects, setSegSubjects] = useState<Record<Segment, string>>({ junglist: '', no_junglist: '' });
+  // Se incrementa al aplicar una plantilla, para regenerar los borradores.
+  const [draftSeed, setDraftSeed] = useState(0);
 
   // Vista: componer una campaña nueva o revisar el historial.
   const [view, setView] = useState<'nueva' | 'historial'>('nueva');
@@ -190,6 +196,8 @@ export default function CampaignsClient() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Leído dentro de onUpdate del editor (que se crea una sola vez).
+  const editModeRef = useRef<{ segmented: boolean; seg: Segment }>({ segmented: false, seg: 'no_junglist' });
 
   const editor = useEditor({
     extensions: [
@@ -199,7 +207,12 @@ export default function CampaignsClient() {
     ],
     content: '',
     immediatelyRender: false,
-    onUpdate: ({ editor }) => setBodyHtml(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      const { segmented, seg } = editModeRef.current;
+      if (segmented) setSegBodies(prev => ({ ...prev, [seg]: html }));
+      else setBodyHtml(html);
+    },
     onCreate: ({ editor }) => setBodyHtml(editor.getHTML()),
     editorProps: {
       attributes: {
@@ -355,6 +368,7 @@ export default function CampaignsClient() {
     setButtonUrl(`${BASE_URL}/evento/${ev.id}`);
     setBodyHtml(body);
     editor?.commands.setContent(body);
+    setDraftSeed(n => n + 1);
   };
 
   const step1Valid = template === 'custom' || (template === 'evento' && !!chosenEventId);
@@ -402,9 +416,9 @@ export default function CampaignsClient() {
     }
   }, []);
 
-  // Vistas previas por segmento. Si el descuento no aplica a todos, el correo
-  // difiere y hay que poder revisar ambos: se muestran como carrusel.
-  const previews = useMemo(() => {
+  // ¿El descuento genera dos correos distintos? Con cupón, el párrafo que se
+  // agrega difiere por segmento, así que basta con que alguno lleve descuento.
+  const segHasCoupon = useMemo(() => {
     const codes = resolveCoupon({
       enabled: couponEnabled,
       target: couponTarget,
@@ -412,19 +426,65 @@ export default function CampaignsClient() {
       newCode: couponNewCode,
       existingCode: couponExistingCode,
     });
-    const base = bodyHtml || '<p style="color:#666;">Contenido del correo...</p>';
+    return {
+      junglist: segmentHasCoupon('junglist', codes),
+      no_junglist: segmentHasCoupon('no_junglist', codes),
+    };
+  }, [couponEnabled, couponTarget, couponSameForAll, couponNewCode, couponExistingCode]);
+
+  const segmented = couponEnabled && (segHasCoupon.junglist || segHasCoupon.no_junglist);
+  const activeSegment: Segment = segmented && previewIndex === 0 ? 'junglist' : 'no_junglist';
+
+  useEffect(() => {
+    editModeRef.current = { segmented, seg: activeSegment };
+  }, [segmented, activeSegment]);
+
+  // Al cambiar la forma de la segmentación (o al aplicar una plantilla) se
+  // regeneran ambos borradores desde el cuerpo/asunto base. Editar el texto de
+  // un segmento NO dispara esto, así que los cambios manuales se conservan.
+  const shapeKey = `${segmented}|${segHasCoupon.junglist}|${segHasCoupon.no_junglist}|${draftSeed}`;
+  useEffect(() => {
+    if (!segmented) return;
+    setSegBodies({
+      junglist: segmentBody(bodyHtml, 'junglist', segHasCoupon.junglist),
+      no_junglist: segmentBody(bodyHtml, 'no_junglist', segHasCoupon.no_junglist),
+    });
+    setSegSubjects({
+      junglist: segmentSubject(subject, title, segHasCoupon.junglist),
+      no_junglist: segmentSubject(subject, title, segHasCoupon.no_junglist),
+    });
+    // Solo shapeKey: incluir bodyHtml/subject regeneraría en cada tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeKey]);
+
+  // Cargar en el editor el cuerpo del correo que se está editando.
+  useEffect(() => {
+    if (!editor) return;
+    const target = segmented ? segBodies[activeSegment] : bodyHtml;
+    if (target !== undefined && editor.getHTML() !== target) {
+      editor.commands.setContent(target);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSegment, segmented, segBodies, editor]);
+
+  const previews = useMemo(() => {
     const safeTitle = title || 'Titulo del correo';
+    const placeholder = '<p style="color:#666;">Contenido del correo...</p>';
 
     const build = (segment: Segment) => {
-      const hasCoupon = segmentHasCoupon(segment, codes);
+      const hasCoupon = segHasCoupon[segment];
+      const body = segmented
+        ? segBodies[segment] || placeholder
+        : segmentBody(bodyHtml || placeholder, segment, hasCoupon);
+      const subj = segmented ? segSubjects[segment] : subject;
       return {
         segment,
         label: SEGMENT_LABELS[segment],
         hasCoupon,
-        subject: segmentSubject(subject || '(sin asunto)', safeTitle, hasCoupon),
+        subject: subj || '(sin asunto)',
         html: buildEmailHtml({
           title: safeTitle,
-          body: segmentBody(base, segment, hasCoupon),
+          body,
           imageBase64: imagePreview || undefined,
           buttonText: buttonText || undefined,
           buttonUrl: buttonUrl || undefined,
@@ -434,13 +494,11 @@ export default function CampaignsClient() {
 
     const junglist = build('junglist');
     const noJunglist = build('no_junglist');
-    // Si ambos correos son idénticos, no tiene sentido el carrusel.
-    return junglist.html === noJunglist.html && junglist.subject === noJunglist.subject
-      ? [noJunglist]
-      : [junglist, noJunglist];
+    // Sin segmentación sale un solo correo: no hay nada que elegir.
+    return segmented ? [junglist, noJunglist] : [noJunglist];
   }, [
     title, bodyHtml, imagePreview, buttonText, buttonUrl, subject,
-    couponEnabled, couponTarget, couponSameForAll, couponNewCode, couponExistingCode,
+    segmented, segBodies, segSubjects, segHasCoupon,
   ]);
 
   const activePreview = previews[Math.min(previewIndex, previews.length - 1)];
@@ -473,6 +531,8 @@ export default function CampaignsClient() {
           imageBase64: imagePreview || undefined,
           buttonText: buttonText || undefined,
           buttonUrl: buttonUrl || undefined,
+          segmentBodies: segmented ? segBodies : undefined,
+          segmentSubjects: segmented ? segSubjects : undefined,
           coupon: {
             enabled: couponEnabled,
             sameForAll: couponSameForAll,
@@ -670,8 +730,12 @@ export default function CampaignsClient() {
                 {fieldLabel('Asunto del correo')}
                 <input
                   type="text"
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
+                  value={segmented ? segSubjects[activeSegment] : subject}
+                  onChange={e =>
+                    segmented
+                      ? setSegSubjects(prev => ({ ...prev, [activeSegment]: e.target.value }))
+                      : setSubject(e.target.value)
+                  }
                   placeholder="No te pierdas el evento del año!"
                   className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
                 />
@@ -814,7 +878,7 @@ export default function CampaignsClient() {
                     Se enviarán {previews.length} correos distintos
                   </p>
                   <p className="mono text-[10px] text-gray-500 mb-3">
-                    Elige cuál revisar en la vista previa.
+                    Elige cuál editar y previsualizar. Cada uno tiene su propio asunto y contenido.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     {previews.map((p, i) => (
@@ -878,8 +942,17 @@ export default function CampaignsClient() {
 
               {/* Body rich text */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-start">
-                {fieldLabel('Contenido del correo')}
+                {fieldLabel(
+                  'Contenido del correo',
+                  segmented ? 'del correo seleccionado' : undefined
+                )}
                 <div className="flex-1 brutalist-border">
+                  {segmented && (
+                    <div className="bg-[#ff0055] text-white px-3 py-2 mono text-[11px] font-bold uppercase border-b-4 border-black">
+                      Editando: {SEGMENT_LABELS[activeSegment]} ·{' '}
+                      {segHasCoupon[activeSegment] ? 'con descuento' : 'sin descuento'}
+                    </div>
+                  )}
                   <Toolbar editor={editor} />
                   <EditorContent editor={editor} />
                 </div>
