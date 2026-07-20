@@ -63,10 +63,12 @@ export interface AnalyticsOverview {
   // dimensions "event_title" y "event_date" en GA4.
   ticketClicks: TicketClick[];
   ticketClicksAvailable: boolean;
-  // Filas crudas (título × día del clic). El route las cruza con las ocurrencias
-  // del CMS para atribuir cada clic al evento correcto. Opcional: la vista mensual
-  // no la usa.
-  ticketClickRows?: TicketClickRow[];
+  // Clics SALIENTES (medición automática de GA, evento `click`). Fuente confiable
+  // que no depende de nuestros eventos propios. El route los cruza con el CMS
+  // (marcador dnbt + ticket_links) para tickets, y con dominios/YouTube para los
+  // totales de WhatsApp/redes/El Sótano. Opcional: la vista mensual no los usa.
+  outboundByUrl?: AnalyticsNamedValue[];
+  outboundByDomain?: AnalyticsNamedValue[];
 }
 
 export interface TicketClick {
@@ -75,14 +77,6 @@ export interface TicketClick {
   value: number;
 }
 
-// Fila cruda de clics a "Tickets": título del evento × día en que ocurrió el clic
-// (dimensión nativa `date`). El route la asigna a la próxima ocurrencia de ese
-// título — no hace falta la custom dimension event_date.
-export interface TicketClickRow {
-  title: string;
-  day: string; // YYYYMMDD (día del clic)
-  value: number;
-}
 
 const num = (v?: string | null) => (v ? Number(v) : 0);
 
@@ -148,7 +142,7 @@ export async function getAnalyticsOverview(
   const dateRanges = range ? [range] : [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
   try {
-    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes, devicesRes] = await Promise.all([
+    const [summaryRes, dailyRes, pagesRes, eventsRes, channelsRes, countriesRes, devicesRes, domainRes, urlRes] = await Promise.all([
       client.runReport({
         property,
         dateRanges,
@@ -213,43 +207,37 @@ export async function getAnalyticsOverview(
         metrics: [{ name: 'activeUsers' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
       }),
+      // Clics salientes por DOMINIO (para totales: WhatsApp, redes).
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'linkDomain' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: { filter: { fieldName: 'eventName', stringFilter: { value: 'click' } } },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: 100,
+      }),
+      // Clics salientes por URL (para tickets por evento y videos de El Sótano).
+      client.runReport({
+        property,
+        dateRanges,
+        dimensions: [{ name: 'linkUrl' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: { filter: { fieldName: 'eventName', stringFilter: { value: 'click' } } },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: 1000,
+      }),
     ]);
 
     const s = summaryRes[0].rows?.[0]?.metricValues ?? [];
 
-    // Clics a "Tickets" por TÍTULO del evento y por el DÍA en que ocurrió el clic
-    // (dimensión nativa `date`). Solo necesita la custom dimension "event_title";
-    // NO usa event_date. El route asigna cada clic a la próxima ocurrencia de ese
-    // título según el día del clic (los eventos homónimos siempre tienen fechas
-    // distintas). Si "event_title" no está registrada, la API falla y devolvemos
-    // vacío sin romper el resto.
-    let ticketClickRows: TicketClickRow[] = [];
-    let ticketClicksAvailable = false;
-    try {
-      const tc = await client.runReport({
-        property,
-        dateRanges,
-        dimensions: [{ name: 'customEvent:event_title' }, { name: 'date' }],
-        metrics: [{ name: 'eventCount' }],
-        dimensionFilter: {
-          filter: {
-            fieldName: 'eventName',
-            stringFilter: { value: 'event_link_click' },
-          },
-        },
-        limit: 1000,
-      });
-      ticketClickRows = (tc[0].rows ?? [])
-        .map((r) => ({
-          title: r.dimensionValues?.[0]?.value ?? '',
-          day: r.dimensionValues?.[1]?.value ?? '',
-          value: num(r.metricValues?.[0]?.value),
-        }))
-        .filter((r) => r.title && r.title !== '(not set)');
-      ticketClicksAvailable = true;
-    } catch {
-      // custom dimension "event_title" no registrada aún
-    }
+    // Clics salientes (medición automática de GA). El route los cruza con el CMS.
+    const outboundByDomain: AnalyticsNamedValue[] = (domainRes[0].rows ?? [])
+      .map((r) => ({ label: r.dimensionValues?.[0]?.value ?? '', value: num(r.metricValues?.[0]?.value) }))
+      .filter((r) => r.label);
+    const outboundByUrl: AnalyticsNamedValue[] = (urlRes[0].rows ?? [])
+      .map((r) => ({ label: r.dimensionValues?.[0]?.value ?? '', value: num(r.metricValues?.[0]?.value) }))
+      .filter((r) => r.label);
 
     // Pivot país × canal: total de usuarios por país + desglose por origen.
     const countryMap = new Map<string, { label: string; total: number; sources: AnalyticsNamedValue[] }>();
@@ -273,9 +261,10 @@ export async function getAnalyticsOverview(
     return {
       configured: true,
       days,
-      ticketClicks: [], // el route lo llena cruzando ticketClickRows con el CMS
-      ticketClicksAvailable,
-      ticketClickRows,
+      ticketClicks: [], // el route lo llena cruzando los clics salientes con el CMS
+      ticketClicksAvailable: true,
+      outboundByUrl,
+      outboundByDomain,
       summary: {
         activeUsers: num(s[0]?.value),
         newUsers: num(s[1]?.value),

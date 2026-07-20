@@ -11,7 +11,7 @@ interface EventItemProps {
 }
 
 const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
-  const { title, flyer, date, endDate, tickets, description, venue, address } = event;
+  const { id, title, flyer, date, endDate, tickets, description, venue, address } = event;
   const formattedDate = dayjs(date).format('dddd DD  MMMM  YYYY [@] HH:mm');
   const isEven = index % 2 === 0;
 
@@ -84,6 +84,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
               title={title}
               url={tickets}
               date={date}
+              eventId={id}
             />
           </div>
         </div>
