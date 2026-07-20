@@ -4,6 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCamera } from '../CameraContext';
+import { sampleJuice } from '../juice';
 
 const CAMERA_DISTANCE = 5;
 const CAMERA_HEIGHT_OFFSET = 2.2;
@@ -63,7 +64,7 @@ export const ThirdPersonCamera: React.FC = () => {
     };
   }, [gl.domElement, cameraYawRef, cameraPitchRef, pointerLockedRef]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const target = playerPosRef.current;
     const yaw = cameraYawRef.current;
     const pitch = cameraPitchRef.current;
@@ -92,6 +93,18 @@ export const ThirdPersonCamera: React.FC = () => {
       smoothPosRef.current.y + 1.5,
       smoothPosRef.current.z + shoulderZ * 0.3,
     );
+
+    // Juice (§4): trauma-shake + kick de disparo aplicados SOBRE el offset visual —
+    // la posición base se recalcula entera cada frame, así que esto es puramente
+    // transitorio y nunca contamina la posición simulada del jugador.
+    const j = sampleJuice(Math.min(delta, 0.05));
+    if (j.kickPitchRad !== 0) camera.rotateX(j.kickPitchRad); // pitch +0.6° con recover 120ms
+    if (j.roll !== 0) camera.rotateZ(j.roll); // roll de shake (máx 1°)
+    if (j.offX !== 0 || j.offY !== 0) {
+      camera.translateX(j.offX); // desplazamiento de shake en espacio local (máx 0.12u)
+      camera.translateY(j.offY);
+    }
+    if (j.kickBack !== 0) camera.translateZ(j.kickBack); // retroceso del kick (0.06u)
   });
 
   return null;

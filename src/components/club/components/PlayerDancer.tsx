@@ -13,6 +13,8 @@ import { useCamera } from '../CameraContext';
 import { useHealth } from '../HealthContext';
 import { HealthBar3D } from './HealthBar3D';
 import { MAP } from '../constants';
+import { TUNING } from '../tuning';
+import { setPlayerPose, setPlayerDance } from '../playerState';
 import { levitateActiveUntil } from './SpecialEffects';
 
 // Lightweight 3D text billboard using canvas texture
@@ -151,9 +153,6 @@ interface PlayerDancerProps {
   isPlayingRef: MutableRefObject<boolean>;
 }
 
-const JUMP_VELOCITY = 0.28;
-const DOUBLE_JUMP_VELOCITY = 0.22;
-const GRAVITY = 0.018;
 const DANCE_DURATION = [0, 4, 3, 4, 4, 3]; // seconds per dance move (index 0 unused)
 
 export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
@@ -171,7 +170,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const { scoreAction, setPlayerPosition } = useScore();
   const { shoot, throwGrenade, checkHits } = useProjectiles();
   const { positions: npcPositions } = useNpcPositions();
-  const { playerPosRef: camPlayerPosRef, cameraYawRef } = useCamera();
+  const { playerPosRef: camPlayerPosRef, cameraYawRef, cameraPitchRef, pointerLockedRef } = useCamera();
   const { localHypeRef, addHype, addNpcHype, getHypeAmount, isHyped, decayHype } = useHealth();
   const addHypeRef = useRef(addHype);
   addHypeRef.current = addHype;
@@ -266,8 +265,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     maxZ: 14,
   };
 
-  const MOVE_SPEED = 0.14;
-  const BASE_JUMP_HEIGHT = 0.15;
+  const BASE_JUMP_HEIGHT = 0.15; // amplitud del bob de baile (visual, no física)
 
   useEffect(() => {
     const isChatFocused = () => {
@@ -305,15 +303,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           break;
         case ' ':
           if (!isJumpingRef.current && jumpYRef.current <= surfaceYRef.current + 0.01) {
-            // First jump from ground
+            // First jump from ground (velocidad en u/s — física delta-time M14)
             isJumpingRef.current = true;
             hasDoubleJumpedRef.current = false;
-            jumpVelocityRef.current = JUMP_VELOCITY;
+            jumpVelocityRef.current = TUNING.fisica.jumpVel;
             scoreActionRef.current('jump', 'Jump');
           } else if (isJumpingRef.current && !hasDoubleJumpedRef.current) {
             // Double jump while airborne
             hasDoubleJumpedRef.current = true;
-            jumpVelocityRef.current = DOUBLE_JUMP_VELOCITY;
+            jumpVelocityRef.current = TUNING.fisica.doubleJumpVel;
             scoreActionRef.current('jump', 'Double Jump!');
           }
           break;
@@ -377,20 +375,35 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
       }
     };
 
+    // Dirección de disparo desde la cámara: yaw + pitch reales (M1)
+    const aimDirection = () => {
+      const yaw = cameraYawRef.current;
+      const pitch = cameraPitchRef.current;
+      const cosP = Math.cos(pitch);
+      // pitch positivo = cámara mirando hacia abajo → la bala baja
+      return new THREE.Vector3(Math.sin(yaw) * cosP, -Math.sin(pitch), Math.cos(yaw) * cosP);
+    };
+
+    // Gate de input (M1): en desktop solo se dispara con pointer lock activo.
+    // El click que ADQUIERE el lock no cuenta (el lock llega async después del click)
+    // y los clicks sobre UI tampoco (sin lock, el puntero está libre sobre la UI).
+    // Los eventos sintéticos (isTrusted === false) vienen de MobileControls: pasan siempre.
+    const inputAllowed = (e: MouseEvent) => !e.isTrusted || pointerLockedRef.current;
+
     // Mouse: left click = shoot, right click hold = grenade charge
     const handleMouseDown = (e: MouseEvent) => {
       if (isChatFocused()) return;
+      if (!inputAllowed(e)) return;
       if (e.button === 0) {
         // Left click — shoot
         const now7 = Date.now();
-        if (now7 - shootCooldownRef.current < 500) return;
+        if (now7 - shootCooldownRef.current < TUNING.arma.shotCooldownMs) return;
         shootCooldownRef.current = now7;
-        const rot = cameraYawRef.current;
-        const dir = new THREE.Vector3(Math.sin(rot), 0, Math.cos(rot));
+        const dir = aimDirection();
         // Spawn projectile in front of the character (0.8 units forward) so it visually exits from the front
         const pos = new THREE.Vector3(
           positionRef.current.x + dir.x * 0.8,
-          jumpYRef.current + 1.2,
+          jumpYRef.current + 1.2 + dir.y * 0.8,
           positionRef.current.z + dir.z * 0.8,
         );
         shootRef.current(pos, dir, usernameRef.current ?? '');
@@ -399,7 +412,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         // Right click — start charging grenade
         e.preventDefault();
         const now8 = Date.now();
-        if (now8 - grenadeCooldownRef.current < 2000) return;
+        if (now8 - grenadeCooldownRef.current < TUNING.granada.cooldownS * 1000) return;
         if (grenadeChargeStartRef.current !== null) return;
         grenadeChargeStartRef.current = now8;
       }
@@ -407,19 +420,19 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 2 && grenadeChargeStartRef.current !== null) {
-        // Release grenade
+        // Release grenade — carga 0.4–1.2s → velocidad 8→16 u/s (M9)
         const elapsed = (Date.now() - grenadeChargeStartRef.current) / 1000;
-        const charge = Math.min(elapsed / 2, 1);
+        const { cargaMinS, cargaMaxS, velMin, velMax } = TUNING.granada;
+        const charge = Math.min(Math.max((elapsed - cargaMinS) / (cargaMaxS - cargaMinS), 0), 1);
         grenadeChargeStartRef.current = null;
         grenadeChargeRef.current = 0;
         grenadeCooldownRef.current = Date.now();
-        const rot2 = cameraYawRef.current;
-        const speed = 3 + charge * 7;
-        const dir2 = new THREE.Vector3(Math.sin(rot2), 0, Math.cos(rot2));
+        const speed = velMin + charge * (velMax - velMin);
+        const dir2 = aimDirection();
         // Spawn grenade in front of the character
         const pos2 = new THREE.Vector3(
           positionRef.current.x + dir2.x * 0.8,
-          jumpYRef.current + 1.2,
+          jumpYRef.current + 1.2 + dir2.y * 0.8,
           positionRef.current.z + dir2.z * 0.8,
         );
         throwGrenadeRef.current(pos2, dir2, usernameRef.current ?? '', speed);
@@ -445,10 +458,13 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   }, []);
 
   useFrame(({ clock, camera }, delta) => {
+    // Física delta-time (M14): unidades /s del TUNING, clamp del dt a 50ms
+    const dt = Math.min(delta, TUNING.fisica.dtClampMs / 1000);
+
     // Update grenade charge value (3D bar reads from ref each frame)
     if (grenadeChargeStartRef.current !== null) {
       const elapsed = (Date.now() - grenadeChargeStartRef.current) / 1000;
-      grenadeChargeRef.current = Math.min(elapsed / 2, 1);
+      grenadeChargeRef.current = Math.min(elapsed / TUNING.granada.cargaMaxS, 1);
     }
 
     // Hype: decay over time
@@ -474,23 +490,26 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     let moveX = 0;
     let moveZ = 0;
 
+    // Velocidad en u/s escalada por dt (M14)
+    const moveStep = TUNING.fisica.moveSpeed * dt;
+
     // Block input when dead
     const keys = alive ? keysRef.current : { forward: false, backward: false, left: false, right: false };
     if (keys.forward) {
-      moveX += camForward.x * MOVE_SPEED;
-      moveZ += camForward.z * MOVE_SPEED;
+      moveX += camForward.x * moveStep;
+      moveZ += camForward.z * moveStep;
     }
     if (keys.backward) {
-      moveX -= camForward.x * MOVE_SPEED;
-      moveZ -= camForward.z * MOVE_SPEED;
+      moveX -= camForward.x * moveStep;
+      moveZ -= camForward.z * moveStep;
     }
     if (keys.left) {
-      moveX -= camRight.x * MOVE_SPEED;
-      moveZ -= camRight.z * MOVE_SPEED;
+      moveX -= camRight.x * moveStep;
+      moveZ -= camRight.z * moveStep;
     }
     if (keys.right) {
-      moveX += camRight.x * MOVE_SPEED;
-      moveZ += camRight.z * MOVE_SPEED;
+      moveX += camRight.x * moveStep;
+      moveZ += camRight.z * moveStep;
     }
 
     const isMoving = moveX !== 0 || moveZ !== 0;
@@ -540,10 +559,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     const surfaceY = getSurfaceHeight(positionRef.current.x, positionRef.current.z);
     surfaceYRef.current = surfaceY;
 
-    // Jump physics
+    // Jump physics (delta-time: gravedad en u/s², velocidad en u/s)
     if (isJumpingRef.current) {
-      jumpVelocityRef.current -= GRAVITY;
-      jumpYRef.current += jumpVelocityRef.current;
+      jumpVelocityRef.current -= TUNING.fisica.gravity * dt;
+      jumpYRef.current += jumpVelocityRef.current * dt;
       if (jumpYRef.current <= surfaceY) {
         jumpYRef.current = surfaceY;
         isJumpingRef.current = false;
@@ -556,8 +575,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         isJumpingRef.current = true;
         hasDoubleJumpedRef.current = false;
       }
-      jumpVelocityRef.current -= GRAVITY;
-      jumpYRef.current += jumpVelocityRef.current;
+      jumpVelocityRef.current -= TUNING.fisica.gravity * dt;
+      jumpYRef.current += jumpVelocityRef.current * dt;
       if (jumpYRef.current <= surfaceY) {
         jumpYRef.current = surfaceY;
         isJumpingRef.current = false;
@@ -748,6 +767,12 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         }
       }
     }
+
+    // Escritura por frame al singleton playerState (refs, cero React) — lo leen
+    // airshots (M8), buff de baile (M11) y ScoreContext (posición sin re-renders)
+    const airborne = isJumpingRef.current || jumpYRef.current > surfaceYRef.current + 0.01;
+    setPlayerPose(myX, jumpYRef.current, myZ, airborne);
+    setPlayerDance(danceMoveRef.current);
 
     // Report position to score system
     setPlayerPositionRef.current(myX, jumpYRef.current, myZ);

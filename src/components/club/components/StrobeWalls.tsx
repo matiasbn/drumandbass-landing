@@ -1,12 +1,44 @@
 'use client';
 
-import React, { useRef, useMemo, MutableRefObject } from 'react';
+// Muros strobe (WS-3): sincronizados al beatClock de 174 BPM (M2) — el MISMO
+// pulso que valida el beat-shot, porque el jugador sincroniza con lo que VE.
+// Cada panel flashea cada 4 beats (≈1.38s, casi el 1.4s del look original) y los
+// 4 paneles van desfasados 1 beat entre sí: en CADA beat flashea exactamente un muro.
+// Etapas de energía (M4): media → 70%, EL BAJÓN → strobes apagados, GLORIA → full.
+// Calidad baja: versión simple (1 material basic compartido pulsando al beat).
+
+import React, { useRef, useMemo, useEffect, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { BEAT_PERIOD_MS, getBeatPhase } from '../beatClock';
+import { useQuality } from '../quality';
+import { useEnergyOptional } from './Lighting';
 
 interface StrobeWallsProps {
   isPlayingRef: MutableRefObject<boolean>;
 }
+
+const BEAT_S = BEAT_PERIOD_MS / 1000;
+// Un flash por panel cada 4 beats — reemplaza el viejo flashInterval fijo de 1.4s
+const FLASH_INTERVAL_S = 4 * BEAT_S;
+
+// Factor por etapa de energía (strobes APAGADOS en EL BAJÓN)
+const STAGE_FACTOR = { full: 1.0, media: 0.7, bajon: 0.0 } as const;
+
+interface PanelConfig {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  size: [number, number];
+  /** Desfase en beats (0-3): reparte los flashes para que cada beat tenga un muro */
+  beatOffset: number;
+}
+
+const PANELS: PanelConfig[] = [
+  { position: [-18, 5, 0], rotation: [0, Math.PI / 2, 0], size: [14, 12], beatOffset: 0 },
+  { position: [18, 5, 0], rotation: [0, -Math.PI / 2, 0], size: [14, 12], beatOffset: 2 },
+  { position: [0, 5.5, -18], rotation: [0.05, 0, 0], size: [14, 12], beatOffset: 1 },
+  { position: [0, 5.5, 18], rotation: [-0.05, Math.PI, 0], size: [14, 12], beatOffset: 3 },
+];
 
 const strobeVertexShader = `
 varying vec2 vUv;
@@ -20,6 +52,7 @@ const strobeFragmentShader = `
 precision highp float;
 uniform float u_time;
 uniform vec2 u_res;
+uniform float u_intensity;
 
 #define PI 3.141592653589793
 #define MAX_SHAPES 2
@@ -100,8 +133,7 @@ ShapeData getShape(int idx, float flashInterval, float time) {
   float cycleLen = float(MAX_SHAPES) * flashInterval;
   float cycle = floor(time / cycleLen);
   float seed = fi * 13.37 + cycle * 97.31;
-  float jitter = (hash(seed + 10.0) - 0.5) * 0.2 * flashInterval;
-  s.birthTime = fi * flashInterval + jitter;
+  s.birthTime = fi * flashInterval;
   vec2 basePos = hash2(seed + 1.0) * 2.0 - 1.0;
   s.center = basePos * vec2(0.25, 0.20);
   float baseAngle = floor(hash(seed + 2.0) * 8.0) * (PI / 4.0);
@@ -120,7 +152,9 @@ void main() {
   vec2 p = (vUv - 0.5) * vec2(aspect, 1.0);
 
   float t = u_time;
-  float flashInterval = 1.4;
+  // Beat-lock: 4 beats de 174 BPM por flash (antes 1.4s arbitrarios).
+  // Sin jitter de nacimiento: el flash cae EXACTO en el beat (es la guía del beat-shot).
+  float flashInterval = ${FLASH_INTERVAL_S.toFixed(6)};
   float decayDuration = 2.5;
   float cycleLen = float(MAX_SHAPES) * flashInterval;
   float cycleTime = mod(t, cycleLen);
@@ -193,86 +227,158 @@ void main() {
   col = ACESFilm(col);
   col = pow(max(col, 0.0), vec3(0.95));
 
+  col *= u_intensity;
+
   float alpha = max(col.r, max(col.g, col.b));
   alpha = smoothstep(0.02, 0.15, alpha);
-  gl_FragColor = vec4(col, alpha * 0.85);
+  gl_FragColor = vec4(col, alpha * 0.85 * u_intensity);
 }
 `;
 
-const StrobePanel: React.FC<{
-  position: [number, number, number];
-  rotation: [number, number, number];
-  size: [number, number];
-  timeOffset: number;
-  isPlayingRef: MutableRefObject<boolean>;
-}> = ({ position, rotation, size, timeOffset, isPlayingRef }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const frozenTimeRef = useRef<number>(0);
+/** Tiempo alineado al beat: en cada beat, beatTime es un múltiplo exacto de BEAT_S */
+function useBeatTime(isPlayingRef: MutableRefObject<boolean>) {
+  // beats acumulados + última fase vista (para detectar el wrap)
+  const stateRef = useRef({ beats: 0, lastPhase: 0, beatTime: 0 });
+  const tick = () => {
+    if (!isPlayingRef.current) return stateRef.current.beatTime;
+    const s = stateRef.current;
+    const ph = getBeatPhase();
+    if (ph < s.lastPhase - 0.5) s.beats++;
+    s.lastPhase = ph;
+    s.beatTime = (s.beats + ph) * BEAT_S;
+    return s.beatTime;
+  };
+  return tick;
+}
 
-  const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      vertexShader: strobeVertexShader,
-      fragmentShader: strobeFragmentShader,
-      uniforms: {
-        u_time: { value: timeOffset },
-        u_res: { value: new THREE.Vector2(size[0] * 48, size[1] * 48) },
-      },
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-  }, [timeOffset, size]);
-
-  useFrame(({ clock }) => {
-    if (isPlayingRef.current) {
-      frozenTimeRef.current = clock.getElapsedTime();
+/** Factor de intensidad por etapa de energía, con lerp suave */
+function useEnergyFactor() {
+  const energy = useEnergyOptional();
+  const factorRef = useRef(1);
+  const tick = (delta: number) => {
+    let target = 1;
+    if (energy) {
+      target = energy.gloriaActiveRef.current ? 1 : STAGE_FACTOR[energy.stageRef.current];
     }
-    material.uniforms.u_time.value = frozenTimeRef.current + timeOffset;
+    const dt = Math.min(delta, 0.05);
+    factorRef.current += (target - factorRef.current) * Math.min(1, dt * 3);
+    return factorRef.current;
+  };
+  return tick;
+}
+
+// --- Versión completa (calidad alta/media): shader por panel, beat-locked ---
+
+const FullStrobes: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
+  const meshRefs = useRef<(THREE.Mesh | null)[]>([null, null, null, null]);
+  const beatTick = useBeatTime(isPlayingRef);
+  const energyTick = useEnergyFactor();
+
+  const materials = useMemo(
+    () =>
+      PANELS.map(
+        (panel) =>
+          new THREE.ShaderMaterial({
+            vertexShader: strobeVertexShader,
+            fragmentShader: strobeFragmentShader,
+            uniforms: {
+              u_time: { value: panel.beatOffset * BEAT_S },
+              u_res: { value: new THREE.Vector2(panel.size[0] * 48, panel.size[1] * 48) },
+              u_intensity: { value: 1 },
+            },
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+      ),
+    [],
+  );
+
+  useEffect(() => {
+    return () => materials.forEach((m) => m.dispose());
+  }, [materials]);
+
+  useFrame((_, delta) => {
+    const beatTime = beatTick();
+    const factor = energyTick(delta);
+    const visible = factor > 0.02;
+    for (let i = 0; i < PANELS.length; i++) {
+      materials[i].uniforms.u_time.value = beatTime + PANELS[i].beatOffset * BEAT_S;
+      materials[i].uniforms.u_intensity.value = factor;
+      const mesh = meshRefs.current[i];
+      if (mesh) mesh.visible = visible;
+    }
   });
 
   return (
-    <mesh ref={meshRef} position={position} rotation={rotation} material={material}>
-      <planeGeometry args={size} />
-    </mesh>
+    <group>
+      {PANELS.map((panel, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            meshRefs.current[i] = el;
+          }}
+          position={panel.position}
+          rotation={panel.rotation}
+          material={materials[i]}
+        >
+          <planeGeometry args={panel.size} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
+// --- Versión simple (calidad baja): 1 material basic compartido, flash al beat ---
+
+const SimpleStrobes: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
+  const beatTick = useBeatTime(isPlayingRef);
+  const energyTick = useEnergyFactor();
+  const groupRef = useRef<THREE.Group>(null);
+
+  const material = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: '#7f4ce6', // lavanda de la paleta strobe
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    return () => material.dispose();
+  }, [material]);
+
+  useFrame((_, delta) => {
+    const beatTime = beatTick();
+    const factor = energyTick(delta);
+    // Pulso cada 2 beats con decay exponencial — la misma guía rítmica, sin shader
+    const cycle = (beatTime / BEAT_S) % 2;
+    material.opacity = 0.28 * Math.exp(-cycle * 3.5) * factor;
+    if (groupRef.current) groupRef.current.visible = factor > 0.02;
+  });
+
+  return (
+    <group ref={groupRef}>
+      {PANELS.map((panel, i) => (
+        <mesh key={i} position={panel.position} rotation={panel.rotation} material={material}>
+          <planeGeometry args={panel.size} />
+        </mesh>
+      ))}
+    </group>
   );
 };
 
 export const StrobeWalls: React.FC<StrobeWallsProps> = ({ isPlayingRef }) => {
-  return (
-    <group>
-      {/* Left wall */}
-      <StrobePanel
-        position={[-18, 5, 0]}
-        rotation={[0, Math.PI / 2, 0]}
-        size={[14, 12]}
-        timeOffset={0}
-        isPlayingRef={isPlayingRef}
-      />
-      {/* Right wall */}
-      <StrobePanel
-        position={[18, 5, 0]}
-        rotation={[0, -Math.PI / 2, 0]}
-        size={[14, 12]}
-        timeOffset={7}
-        isPlayingRef={isPlayingRef}
-      />
-      {/* Back wall */}
-      <StrobePanel
-        position={[0, 5.5, -18]}
-        rotation={[0.05, 0, 0]}
-        size={[14, 12]}
-        timeOffset={5}
-        isPlayingRef={isPlayingRef}
-      />
-      {/* Front wall */}
-      <StrobePanel
-        position={[0, 5.5, 18]}
-        rotation={[-0.05, Math.PI, 0]}
-        size={[14, 12]}
-        timeOffset={3}
-        isPlayingRef={isPlayingRef}
-      />
-    </group>
+  const quality = useQuality();
+  return quality === 'baja' ? (
+    <SimpleStrobes isPlayingRef={isPlayingRef} />
+  ) : (
+    <FullStrobes isPlayingRef={isPlayingRef} />
   );
 };

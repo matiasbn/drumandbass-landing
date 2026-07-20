@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useRef, useMemo, Suspense, MutableRefObject } from 'react';
+// Fondo del club (WS-3): partículas (÷2 en calidad baja), grid de líneas,
+// 6 vigas de luz lejanas ahora en 1 InstancedMesh, y suelo texturizado.
+// ≈ 4 draw calls.
+
+import React, { useRef, useMemo, useEffect, Suspense, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
+import { NEON } from '../materials';
+import { useQuality } from '../quality';
 
 const COLORS = {
-  matrixGreen: '#00ff41',
-  cyberBlue: '#00ccff',
-  neonPink: '#ff0055',
-  warningOrange: '#ff8800',
+  matrixGreen: NEON.green,
+  cyberBlue: NEON.cyan,
+  neonPink: NEON.pink,
+  warningOrange: NEON.orange,
 };
 
 interface BackgroundProps {
@@ -19,20 +25,18 @@ interface BackgroundProps {
 const Particles: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPlayingRef }) => {
   const particlesRef = useRef<THREE.Points>(null);
   const frozenTimeRef = useRef<number>(0);
+  const quality = useQuality();
 
-  const particleCount = 150;
+  // Calidad baja: partículas ÷2
+  const particleCount = quality === 'baja' ? 75 : 150;
 
-  const positions = useMemo(() => {
+  const { positions, colors } = useMemo(() => {
     const pos = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
       pos[i * 3] = (Math.random() - 0.5) * 80;
       pos[i * 3 + 1] = Math.random() * 20;
       pos[i * 3 + 2] = (Math.random() - 0.5) * 80;
     }
-    return pos;
-  }, []);
-
-  const colors = useMemo(() => {
     const cols = new Float32Array(particleCount * 3);
     const colorOptions = [
       new THREE.Color(COLORS.matrixGreen),
@@ -46,8 +50,8 @@ const Particles: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPl
       cols[i * 3 + 1] = color.g;
       cols[i * 3 + 2] = color.b;
     }
-    return cols;
-  }, []);
+    return { positions: pos, colors: cols };
+  }, [particleCount]);
 
   useFrame(({ clock }) => {
     if (isPlayingRef.current) {
@@ -59,7 +63,7 @@ const Particles: React.FC<{ isPlayingRef: MutableRefObject<boolean> }> = ({ isPl
   });
 
   return (
-    <points ref={particlesRef}>
+    <points ref={particlesRef} key={particleCount}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -112,37 +116,37 @@ const InfiniteGrid: React.FC = () => {
   );
 };
 
+// 6 vigas de luz lejanas → 1 InstancedMesh (antes 6 meshes)
 const LightBeams: React.FC = () => {
-  const beamPositions = useMemo(() => {
-    const positions: [number, number, number][] = [];
+  const mesh = useMemo(() => {
+    const colorArray = [COLORS.cyberBlue, COLORS.neonPink, COLORS.matrixGreen, COLORS.warningOrange];
+    const geo = new THREE.BoxGeometry(0.15, 14, 0.15);
+    const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.15 });
+    const im = new THREE.InstancedMesh(geo, mat, 6);
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
       const radius = 28 + Math.random() * 8;
-      positions.push([
-        Math.cos(angle) * radius,
-        6,
-        Math.sin(angle) * radius,
-      ]);
+      m.makeTranslation(Math.cos(angle) * radius, 6, Math.sin(angle) * radius);
+      im.setMatrixAt(i, m);
+      im.setColorAt(i, c.set(colorArray[i % colorArray.length]));
     }
-    return positions;
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.frustumCulled = false;
+    return im;
   }, []);
 
-  const colorArray = [COLORS.cyberBlue, COLORS.neonPink, COLORS.matrixGreen, COLORS.warningOrange];
+  useEffect(() => {
+    return () => {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      mesh.dispose();
+    };
+  }, [mesh]);
 
-  return (
-    <group>
-      {beamPositions.map((pos, i) => (
-        <mesh key={i} position={pos}>
-          <boxGeometry args={[0.15, 14, 0.15]} />
-          <meshBasicMaterial
-            color={colorArray[i % colorArray.length]}
-            transparent
-            opacity={0.15}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
+  return <primitive object={mesh} />;
 };
 
 const TexturedGround: React.FC = () => {

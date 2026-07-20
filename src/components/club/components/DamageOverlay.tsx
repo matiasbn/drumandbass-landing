@@ -2,9 +2,11 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import { useHealth } from '../HealthContext';
+import { onHypeBumpRef } from '../juice';
 
 /**
- * Full-screen hype overlay effects.
+ * Full-screen hype overlay effects (re-propuesto WS-2: todo es DORADO, nada de daño).
+ * Incluye el flash de hype-bump "<X> te energizó" (§5) vía onHypeBumpRef de juice.ts.
  * Uses direct DOM manipulation — no React re-renders.
  */
 export const DamageOverlay: React.FC = () => {
@@ -12,6 +14,9 @@ export const DamageOverlay: React.FC = () => {
   const flashRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const goldFlashRef = useRef<HTMLDivElement>(null);
+  const bumpBannerRef = useRef<HTMLDivElement>(null);
+  const bumpNameRef = useRef<HTMLSpanElement>(null);
+  const bumpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flashHype = useCallback(() => {
@@ -68,29 +73,74 @@ export const DamageOverlay: React.FC = () => {
     }, 2000);
   }, []);
 
+  // Hype-bump entre jugadores (§5): flash dorado + "<X> te energizó"
+  const showHypeBump = useCallback((fromName: string) => {
+    flashHype();
+    const banner = bumpBannerRef.current;
+    if (!banner || !bumpNameRef.current) return;
+    bumpNameRef.current.textContent = fromName;
+    banner.style.display = 'flex';
+    banner.style.opacity = '1';
+    banner.style.transform = 'translate(-50%, 0) scale(1)';
+    if (bumpTimerRef.current) clearTimeout(bumpTimerRef.current);
+    bumpTimerRef.current = setTimeout(() => {
+      if (bumpBannerRef.current) {
+        bumpBannerRef.current.style.opacity = '0';
+        bumpBannerRef.current.style.transform = 'translate(-50%, -8px) scale(0.95)';
+        setTimeout(() => {
+          if (bumpBannerRef.current) bumpBannerRef.current.style.display = 'none';
+        }, 400);
+      }
+    }, 1400);
+  }, [flashHype]);
+
   useEffect(() => {
     onHypeRef.current = flashHype;
     onHypeDropRef.current = showHypeDrop;
+    onHypeBumpRef.current = showHypeBump;
     return () => {
       onHypeRef.current = null;
       onHypeDropRef.current = null;
+      onHypeBumpRef.current = null;
       if (dropTimerRef.current) clearTimeout(dropTimerRef.current);
+      if (bumpTimerRef.current) clearTimeout(bumpTimerRef.current);
     };
-  }, [flashHype, showHypeDrop, onHypeRef, onHypeDropRef]);
+  }, [flashHype, showHypeDrop, showHypeBump, onHypeRef, onHypeDropRef]);
 
   return (
     <>
-      {/* Hype hit flash — subtle cyan/purple glow on edges */}
+      {/* Flash de energía — borde DORADO (hype ganado / hype-bump; ya no hay daño) */}
       <div
         ref={flashRef}
         className="fixed inset-0 z-[100] pointer-events-none"
         style={{
           display: 'none',
-          background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,204,255,0.3) 70%, rgba(153,51,255,0.4) 100%)',
+          background: 'radial-gradient(ellipse at center, transparent 42%, rgba(255,215,0,0.28) 72%, rgba(255,170,0,0.4) 100%)',
           opacity: 0,
           transition: 'opacity 0.4s ease-out',
         }}
       />
+      {/* Banner de hype-bump: "<X> te energizó" */}
+      <div
+        ref={bumpBannerRef}
+        className="fixed left-1/2 top-[18%] z-[103] pointer-events-none items-center gap-2 px-4 py-2 font-mono"
+        style={{
+          display: 'none',
+          opacity: 0,
+          transform: 'translate(-50%, 0) scale(1)',
+          transition: 'opacity 0.35s ease-out, transform 0.35s ease-out',
+          background: 'rgba(0,0,0,0.65)',
+          border: '1px solid rgba(255,215,0,0.6)',
+          color: '#ffd700',
+          textShadow: '0 0 10px rgba(255,215,0,0.8)',
+          fontSize: 'clamp(0.8rem, 2vw, 1.05rem)',
+          letterSpacing: '0.1em',
+        }}
+      >
+        <span ref={bumpNameRef} className="font-bold" />
+        <span>te energizó</span>
+        <span className="font-bold">+8</span>
+      </div>
       {/* Gold flash on hype drop trigger */}
       <div
         ref={goldFlashRef}

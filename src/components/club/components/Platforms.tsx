@@ -1,7 +1,13 @@
 'use client';
 
-import React from 'react';
+// Plataformas (WS-3): antes cada plataforma/escalón eran 5-9 meshes sueltos
+// (~130 draw calls). Ahora todo el set (bases, tapas, bordes neón y franjas de
+// pared) se vuelca en 2 InstancedMesh estáticos = 2 draw calls.
+// PLATFORMS y getSurfaceHeight NO cambian: colliders.ts y la física dependen de ellos.
+
+import React, { useEffect, useMemo } from 'react';
 import { MAP } from '../constants';
+import { GEO_BOX, MAT_BODY, MAT_NEON, buildStaticInstances, StaticInst } from '../materials';
 
 interface Platform {
   id: string;
@@ -180,111 +186,61 @@ export function getSurfaceHeight(x: number, z: number): number {
   return maxY;
 }
 
-const PlatformMesh: React.FC<{ platform: Platform }> = ({ platform }) => {
-  const { position, size, color, emissive, emissiveIntensity = 0.4, isStair } = platform;
+// Vuelca una plataforma en los buckets instanciados (misma geometría/offsets que
+// el viejo PlatformMesh: base + tapa + bordes neón + franjas de pared en decks).
+function pushPlatform(body: StaticInst[], neon: StaticInst[], platform: Platform): void {
+  const { position, size, color, emissive, isStair } = platform;
   const topY = position[1] + size[1] / 2;
   const bottomY = position[1] - size[1] / 2;
-  const isTall = size[1] >= 1.0; // Decks get wall stripes
+  const isTall = size[1] >= 1.0;
 
-  return (
-    <group>
-      <mesh position={position}>
-        <boxGeometry args={size} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={emissiveIntensity}
-          metalness={0.4}
-          roughness={0.5}
-        />
-      </mesh>
-      {/* Top surface overlay — lighter for contrast */}
-      {!isStair && (
-        <mesh position={[position[0], topY + 0.01, position[2]]}>
-          <boxGeometry args={[size[0], 0.02, size[2]]} />
-          <meshStandardMaterial color="#1e1e35" emissive="#1a1a2e" emissiveIntensity={0.5} metalness={0.4} roughness={0.5} />
-        </mesh>
-      )}
-      {/* Glowing edge strips for platforms */}
-      {!isStair && (
-        <>
-          <mesh position={[position[0], topY + 0.02, position[2] + size[2] / 2]}>
-            <boxGeometry args={[size[0], 0.04, 0.04]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2} />
-          </mesh>
-          <mesh position={[position[0], topY + 0.02, position[2] - size[2] / 2]}>
-            <boxGeometry args={[size[0], 0.04, 0.04]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2} />
-          </mesh>
-          <mesh position={[position[0] - size[0] / 2, topY + 0.02, position[2]]}>
-            <boxGeometry args={[0.04, 0.04, size[2]]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2} />
-          </mesh>
-          <mesh position={[position[0] + size[0] / 2, topY + 0.02, position[2]]}>
-            <boxGeometry args={[0.04, 0.04, size[2]]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2} />
-          </mesh>
-        </>
-      )}
-      {/* Stair step: glowing front edge on each step */}
-      {isStair && (
-        <>
-          <mesh position={[position[0], topY + 0.01, position[2] + size[2] / 2]}>
-            <boxGeometry args={[size[0], 0.03, 0.03]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2.5} />
-          </mesh>
-          <mesh position={[position[0], topY + 0.01, position[2] - size[2] / 2]}>
-            <boxGeometry args={[size[0], 0.03, 0.03]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2.5} />
-          </mesh>
-          <mesh position={[position[0] - size[0] / 2, topY + 0.01, position[2]]}>
-            <boxGeometry args={[0.03, 0.03, size[2]]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2.5} />
-          </mesh>
-          <mesh position={[position[0] + size[0] / 2, topY + 0.01, position[2]]}>
-            <boxGeometry args={[0.03, 0.03, size[2]]} />
-            <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={2.5} />
-          </mesh>
-        </>
-      )}
-      {/* Wall neon stripes for tall platforms (decks) */}
-      {isTall && !isStair && (() => {
-        const stripeYs: number[] = [];
-        for (let y = bottomY + 0.5; y < topY - 0.2; y += 0.8) {
-          stripeYs.push(y);
-        }
-        return stripeYs.map((y, i) => (
-          <group key={`stripes-${i}`}>
-            {/* Front + back */}
-            <mesh position={[position[0], y, position[2] + size[2] / 2 + 0.01]}>
-              <boxGeometry args={[size[0], 0.05, 0.01]} />
-              <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={1.5} />
-            </mesh>
-            <mesh position={[position[0], y, position[2] - size[2] / 2 - 0.01]}>
-              <boxGeometry args={[size[0], 0.05, 0.01]} />
-              <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={1.5} />
-            </mesh>
-            {/* Left + right */}
-            <mesh position={[position[0] - size[0] / 2 - 0.01, y, position[2]]}>
-              <boxGeometry args={[0.01, 0.05, size[2]]} />
-              <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={1.5} />
-            </mesh>
-            <mesh position={[position[0] + size[0] / 2 + 0.01, y, position[2]]}>
-              <boxGeometry args={[0.01, 0.05, size[2]]} />
-              <meshStandardMaterial color={emissive} emissive={emissive} emissiveIntensity={1.5} />
-            </mesh>
-          </group>
-        ));
-      })()}
-    </group>
-  );
-};
+  body.push({ p: position, s: size, c: color });
+
+  if (!isStair) {
+    body.push({ p: [position[0], topY + 0.01, position[2]], s: [size[0], 0.02, size[2]], c: '#1e1e35' });
+    // Bordes brillantes del perímetro superior
+    neon.push({ p: [position[0], topY + 0.02, position[2] + size[2] / 2], s: [size[0], 0.04, 0.04], c: emissive, i: 2 });
+    neon.push({ p: [position[0], topY + 0.02, position[2] - size[2] / 2], s: [size[0], 0.04, 0.04], c: emissive, i: 2 });
+    neon.push({ p: [position[0] - size[0] / 2, topY + 0.02, position[2]], s: [0.04, 0.04, size[2]], c: emissive, i: 2 });
+    neon.push({ p: [position[0] + size[0] / 2, topY + 0.02, position[2]], s: [0.04, 0.04, size[2]], c: emissive, i: 2 });
+  } else {
+    // Escalón: borde frontal brillante en cada peldaño
+    neon.push({ p: [position[0], topY + 0.01, position[2] + size[2] / 2], s: [size[0], 0.03, 0.03], c: emissive, i: 2.5 });
+    neon.push({ p: [position[0], topY + 0.01, position[2] - size[2] / 2], s: [size[0], 0.03, 0.03], c: emissive, i: 2.5 });
+    neon.push({ p: [position[0] - size[0] / 2, topY + 0.01, position[2]], s: [0.03, 0.03, size[2]], c: emissive, i: 2.5 });
+    neon.push({ p: [position[0] + size[0] / 2, topY + 0.01, position[2]], s: [0.03, 0.03, size[2]], c: emissive, i: 2.5 });
+  }
+
+  // Franjas neón horizontales en las paredes de los decks
+  if (isTall && !isStair) {
+    for (let y = bottomY + 0.5; y < topY - 0.2; y += 0.8) {
+      neon.push({ p: [position[0], y, position[2] + size[2] / 2 + 0.01], s: [size[0], 0.05, 0.01], c: emissive, i: 1.5 });
+      neon.push({ p: [position[0], y, position[2] - size[2] / 2 - 0.01], s: [size[0], 0.05, 0.01], c: emissive, i: 1.5 });
+      neon.push({ p: [position[0] - size[0] / 2 - 0.01, y, position[2]], s: [0.01, 0.05, size[2]], c: emissive, i: 1.5 });
+      neon.push({ p: [position[0] + size[0] / 2 + 0.01, y, position[2]], s: [0.01, 0.05, size[2]], c: emissive, i: 1.5 });
+    }
+  }
+}
 
 export const Platforms: React.FC = () => {
+  const meshes = useMemo(() => {
+    const body: StaticInst[] = [];
+    const neon: StaticInst[] = [];
+    PLATFORMS.forEach((platform) => pushPlatform(body, neon, platform));
+    return [
+      buildStaticInstances(GEO_BOX, MAT_BODY, body),
+      buildStaticInstances(GEO_BOX, MAT_NEON, neon),
+    ];
+  }, []);
+
+  useEffect(() => {
+    return () => meshes.forEach((m) => m.dispose());
+  }, [meshes]);
+
   return (
     <group>
-      {PLATFORMS.map((platform) => (
-        <PlatformMesh key={platform.id} platform={platform} />
+      {meshes.map((m, idx) => (
+        <primitive key={idx} object={m} />
       ))}
     </group>
   );

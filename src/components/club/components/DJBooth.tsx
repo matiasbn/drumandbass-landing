@@ -1,338 +1,198 @@
 'use client';
 
-import React, { Suspense } from 'react';
+// Booth del DJ (WS-3): antes ~100 meshes sueltos (uno por perilla) = ~100 draw calls.
+// Ahora toda la utilería es DATA que se vuelca en 4 InstancedMesh estáticos
+// (cajas/cilindros × cuerpo/neón) + 1 mesh con la textura de madera = 5 draw calls.
+// Se elimina el detalle invisible desde la cámara de juego (puntos del plato,
+// surcos del vinilo, headshell); el look neón (pantallas, VUs, botones) se conserva.
+
+import React, { Suspense, useEffect, useMemo } from 'react';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
+import {
+  GEO_BOX,
+  GEO_CYL,
+  MAT_BODY,
+  MAT_NEON,
+  NEON,
+  buildStaticInstances,
+  StaticInst,
+} from '../materials';
 
-const COLORS = {
-  matrixGreen: '#00ff41',
-  cyberBlue: '#00ccff',
-  neonPink: '#ff0055',
-  warningOrange: '#ff8800',
-};
+// Colores de cuerpo (van por instancia sobre MAT_BODY)
+const DARK = '#1a1a1a';
+const SURFACE = '#222222';
+const SILVER = '#888888';
+const CHROME = '#aaaaaa';
+const RUBBER = '#0a0a0a';
+const VINYL = '#111111';
 
-const MAT = {
-  darkBody: { color: '#1a1a1a', emissive: '#1a1a1a', emissiveIntensity: 0.6, roughness: 0.4, metalness: 0.1 },
-  surface: { color: '#222222', emissive: '#222222', emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.2 },
-  silver: { color: '#888888', emissive: '#555555', emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4 },
-  chrome: { color: '#aaaaaa', emissive: '#666666', emissiveIntensity: 0.7, roughness: 0.2, metalness: 0.5 },
-  screen: { color: '#111122', emissive: '#111122', emissiveIntensity: 0.8, roughness: 0.1, metalness: 0 },
-  rubber: { color: '#0a0a0a', emissive: '#0a0a0a', emissiveIntensity: 0.4, roughness: 0.9, metalness: 0 },
-  vinyl: { color: '#111111', emissive: '#111111', emissiveIntensity: 0.35, roughness: 0.5, metalness: 0 },
-};
+const BASE_Y = 1.5; // el grupo original vivía en [0, 1.5, 0]
+const EQUIP_Y = BASE_Y + 1.15; // bandeja de equipos
 
-// Technics SL-1200 turntable
-const Technics: React.FC<{ position: [number, number, number] }> = ({ position }) => (
-  <group position={position}>
-    {/* Base housing */}
-    <mesh>
-      <boxGeometry args={[0.9, 0.08, 0.7]} />
-      <meshStandardMaterial {...MAT.silver} />
-    </mesh>
-    {/* Platter well */}
-    <mesh position={[0.05, 0.045, 0.02]}>
-      <cylinderGeometry args={[0.28, 0.28, 0.01, 16]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Platter */}
-    <mesh position={[0.05, 0.055, 0.02]}>
-      <cylinderGeometry args={[0.26, 0.26, 0.02, 16]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Platter dots */}
-    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-      <mesh key={`dot-${i}`} position={[0.05 + 0.22 * Math.cos((i / 8) * Math.PI * 2), 0.07, 0.02 + 0.22 * Math.sin((i / 8) * Math.PI * 2)]}>
-        <cylinderGeometry args={[0.008, 0.008, 0.005, 6]} />
-        <meshStandardMaterial {...MAT.darkBody} />
-      </mesh>
-    ))}
-    {/* Vinyl record */}
-    <mesh position={[0.05, 0.07, 0.02]}>
-      <cylinderGeometry args={[0.22, 0.22, 0.005, 16]} />
-      <meshStandardMaterial {...MAT.vinyl} />
-    </mesh>
-    {/* Record grooves */}
-    <mesh position={[0.05, 0.075, 0.02]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.08, 0.21, 16]} />
-      <meshStandardMaterial color="#0d0d0d" emissive="#0d0d0d" emissiveIntensity={0.3} side={2} />
-    </mesh>
-    {/* Label */}
-    <mesh position={[0.05, 0.076, 0.02]}>
-      <cylinderGeometry args={[0.06, 0.06, 0.003, 16]} />
-      <meshStandardMaterial color="#882200" emissive="#882200" emissiveIntensity={0.5} />
-    </mesh>
-    {/* Spindle */}
-    <mesh position={[0.05, 0.08, 0.02]}>
-      <cylinderGeometry args={[0.008, 0.008, 0.02, 8]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Tonearm base */}
-    <mesh position={[-0.3, 0.06, -0.2]}>
-      <cylinderGeometry args={[0.04, 0.04, 0.04, 12]} />
-      <meshStandardMaterial {...MAT.silver} />
-    </mesh>
-    {/* Tonearm */}
-    <mesh position={[-0.15, 0.09, -0.05]} rotation={[0, 0.4, 0]}>
-      <boxGeometry args={[0.015, 0.015, 0.35]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Headshell */}
-    <mesh position={[-0.02, 0.09, 0.08]} rotation={[0, 0.4, 0]}>
-      <boxGeometry args={[0.03, 0.01, 0.04]} />
-      <meshStandardMaterial {...MAT.silver} />
-    </mesh>
-    {/* Pitch fader area */}
-    <mesh position={[-0.35, 0.045, 0.1]}>
-      <boxGeometry args={[0.08, 0.01, 0.3]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Pitch slider */}
-    <mesh position={[-0.35, 0.055, 0.1]}>
-      <boxGeometry args={[0.04, 0.02, 0.05]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Start/stop button */}
-    <mesh position={[-0.3, 0.05, 0.28]}>
-      <cylinderGeometry args={[0.025, 0.025, 0.015, 12]} />
-      <meshStandardMaterial {...MAT.silver} />
-    </mesh>
-    {/* Target light */}
-    <mesh position={[-0.05, 0.06, -0.28]}>
-      <boxGeometry args={[0.02, 0.02, 0.02]} />
-      <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={1.5} />
-    </mesh>
-  </group>
-);
+interface Buckets {
+  bodyBox: StaticInst[];
+  bodyCyl: StaticInst[];
+  neonBox: StaticInst[];
+  neonCyl: StaticInst[];
+}
 
-// Pioneer CDJ-3000
-const CDJ3000: React.FC<{ position: [number, number, number] }> = ({ position }) => (
-  <group position={position}>
-    {/* Main body */}
-    <mesh>
-      <boxGeometry args={[0.7, 0.12, 0.65]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Top panel */}
-    <mesh position={[0, 0.065, 0]}>
-      <boxGeometry args={[0.68, 0.01, 0.63]} />
-      <meshStandardMaterial {...MAT.surface} />
-    </mesh>
-    {/* Jog wheel well */}
-    <mesh position={[0, 0.075, 0.08]}>
-      <cylinderGeometry args={[0.2, 0.2, 0.01, 16]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Jog wheel outer ring */}
-    <mesh position={[0, 0.08, 0.08]} rotation={[-Math.PI / 2, 0, 0]}>
-      <torusGeometry args={[0.17, 0.025, 8, 16]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Jog wheel center display */}
-    <mesh position={[0, 0.085, 0.08]}>
-      <cylinderGeometry args={[0.14, 0.14, 0.005, 16]} />
-      <meshStandardMaterial {...MAT.screen} />
-    </mesh>
-    {/* Jog display ring */}
-    <mesh position={[0, 0.088, 0.08]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.11, 0.13, 16]} />
-      <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={0.8} side={2} />
-    </mesh>
-    {/* Screen */}
-    <mesh position={[0, 0.075, -0.2]}>
-      <boxGeometry args={[0.35, 0.01, 0.12]} />
-      <meshStandardMaterial color="#001122" emissive="#001122" emissiveIntensity={1.2} />
-    </mesh>
-    {/* Screen bezel */}
-    <mesh position={[0, 0.073, -0.2]}>
-      <boxGeometry args={[0.37, 0.008, 0.14]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Performance pads (2x4 grid) */}
-    {[0, 1, 2, 3].map((col) => [0, 1].map((row) => (
-      <mesh key={`pad-${col}-${row}`} position={[-0.12 + col * 0.08, 0.075, 0.24 + row * 0.045]}>
-        <boxGeometry args={[0.06, 0.015, 0.035]} />
-        <meshStandardMaterial color="#333333" emissive="#333333" emissiveIntensity={0.5} roughness={0.6} metalness={0} />
-      </mesh>
-    ))).flat()}
-    {/* Play/cue buttons */}
-    <mesh position={[-0.2, 0.075, 0.15]}>
-      <boxGeometry args={[0.06, 0.02, 0.04]} />
-      <meshStandardMaterial color={COLORS.matrixGreen} emissive={COLORS.matrixGreen} emissiveIntensity={0.8} />
-    </mesh>
-    <mesh position={[0.2, 0.075, 0.15]}>
-      <boxGeometry args={[0.06, 0.02, 0.04]} />
-      <meshStandardMaterial color={COLORS.neonPink} emissive={COLORS.neonPink} emissiveIntensity={0.8} />
-    </mesh>
-    {/* Browse knob */}
-    <mesh position={[0.25, 0.09, -0.15]}>
-      <cylinderGeometry args={[0.03, 0.03, 0.04, 12]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* USB slot indicator */}
-    <mesh position={[0.28, 0.075, -0.25]}>
-      <boxGeometry args={[0.04, 0.01, 0.015]} />
-      <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={1} />
-    </mesh>
-  </group>
-);
+// Technics SL-1200 en x0 (sin puntos del plato ni surcos: invisibles en juego)
+function pushTechnics(b: Buckets, x0: number): void {
+  const y = EQUIP_Y;
+  b.bodyBox.push({ p: [x0, y, 0], s: [0.9, 0.08, 0.7], c: SILVER });
+  b.bodyCyl.push({ p: [x0 + 0.05, y + 0.045, 0.02], s: [0.28, 0.01, 0.28], c: DARK });
+  b.bodyCyl.push({ p: [x0 + 0.05, y + 0.055, 0.02], s: [0.26, 0.02, 0.26], c: CHROME });
+  b.bodyCyl.push({ p: [x0 + 0.05, y + 0.07, 0.02], s: [0.22, 0.005, 0.22], c: VINYL });
+  b.neonCyl.push({ p: [x0 + 0.05, y + 0.076, 0.02], s: [0.06, 0.003, 0.06], c: '#882200', i: 0.9 });
+  b.bodyCyl.push({ p: [x0 - 0.3, y + 0.06, -0.2], s: [0.04, 0.04, 0.04], c: SILVER });
+  b.bodyBox.push({ p: [x0 - 0.15, y + 0.09, -0.05], s: [0.015, 0.015, 0.35], r: [0, 0.4, 0], c: CHROME });
+  b.bodyBox.push({ p: [x0 - 0.35, y + 0.045, 0.1], s: [0.08, 0.01, 0.3], c: DARK });
+  b.bodyBox.push({ p: [x0 - 0.35, y + 0.055, 0.1], s: [0.04, 0.02, 0.05], c: CHROME });
+  b.bodyCyl.push({ p: [x0 - 0.3, y + 0.05, 0.28], s: [0.025, 0.015, 0.025], c: SILVER });
+  b.neonBox.push({ p: [x0 - 0.05, y + 0.06, -0.28], s: [0.02, 0.02, 0.02], c: NEON.cyan, i: 1.5 });
+}
 
-// Pioneer DJM-A9 mixer
-const DJMA9: React.FC<{ position: [number, number, number] }> = ({ position }) => (
-  <group position={position}>
-    {/* Main body */}
-    <mesh>
-      <boxGeometry args={[0.75, 0.12, 0.65]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Top panel */}
-    <mesh position={[0, 0.065, 0]}>
-      <boxGeometry args={[0.73, 0.01, 0.63]} />
-      <meshStandardMaterial {...MAT.surface} />
-    </mesh>
-    {/* Screen */}
-    <mesh position={[0, 0.075, -0.22]}>
-      <boxGeometry args={[0.3, 0.01, 0.08]} />
-      <meshStandardMaterial color="#001122" emissive="#001122" emissiveIntensity={1.2} />
-    </mesh>
-    {/* 4 channel faders */}
-    {[-0.22, -0.08, 0.08, 0.22].map((x, i) => (
-      <group key={`ch-${i}`}>
-        {/* Fader track */}
-        <mesh position={[x, 0.075, 0.18]}>
-          <boxGeometry args={[0.04, 0.01, 0.2]} />
-          <meshStandardMaterial {...MAT.darkBody} />
-        </mesh>
-        {/* Fader knob */}
-        <mesh position={[x, 0.085, 0.18 - i * 0.02]}>
-          <boxGeometry args={[0.035, 0.025, 0.03]} />
-          <meshStandardMaterial {...MAT.chrome} />
-        </mesh>
-      </group>
-    ))}
-    {/* EQ knobs per channel (3 per channel x 4 channels) */}
-    {[-0.22, -0.08, 0.08, 0.22].map((x, ch) =>
-      [-0.08, -0.03, 0.02].map((z, eq) => (
-        <mesh key={`eq-${ch}-${eq}`} position={[x, 0.085, z]}>
-          <cylinderGeometry args={[0.02, 0.02, 0.03, 10]} />
-          <meshStandardMaterial {...MAT.chrome} />
-        </mesh>
-      ))
-    ).flat()}
-    {/* Crossfader track */}
-    <mesh position={[0, 0.075, 0.28]}>
-      <boxGeometry args={[0.35, 0.01, 0.03]} />
-      <meshStandardMaterial {...MAT.darkBody} />
-    </mesh>
-    {/* Crossfader knob */}
-    <mesh position={[0, 0.085, 0.28]}>
-      <boxGeometry args={[0.04, 0.025, 0.025]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* VU meters (LED strips per channel) */}
-    {[-0.15, 0.15].map((x, idx) => (
-      <group key={`vu-${idx}`} position={[x, 0.075, -0.12]}>
-        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-          <mesh key={i} position={[0, 0.005, i * 0.012]}>
-            <boxGeometry args={[0.025, 0.01, 0.008]} />
-            <meshStandardMaterial
-              color={i < 4 ? COLORS.matrixGreen : i < 6 ? COLORS.warningOrange : COLORS.neonPink}
-              emissive={i < 4 ? COLORS.matrixGreen : i < 6 ? COLORS.warningOrange : COLORS.neonPink}
-              emissiveIntensity={i < 4 ? 1.2 : 0.5}
-            />
-          </mesh>
-        ))}
-      </group>
-    ))}
-    {/* Master knob */}
-    <mesh position={[0.3, 0.09, -0.22]}>
-      <cylinderGeometry args={[0.025, 0.025, 0.04, 12]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Booth knob */}
-    <mesh position={[-0.3, 0.09, -0.22]}>
-      <cylinderGeometry args={[0.025, 0.025, 0.04, 12]} />
-      <meshStandardMaterial {...MAT.chrome} />
-    </mesh>
-    {/* Send/return buttons */}
-    {[-0.28, -0.22, 0.22, 0.28].map((x, i) => (
-      <mesh key={`btn-${i}`} position={[x, 0.08, -0.1]}>
-        <boxGeometry args={[0.03, 0.015, 0.03]} />
-        <meshStandardMaterial
-          color={i < 2 ? COLORS.cyberBlue : COLORS.neonPink}
-          emissive={i < 2 ? COLORS.cyberBlue : COLORS.neonPink}
-          emissiveIntensity={0.6}
-        />
-      </mesh>
-    ))}
-  </group>
-);
+// Pioneer CDJ-3000 en x0
+function pushCDJ(b: Buckets, x0: number): void {
+  const y = EQUIP_Y;
+  b.bodyBox.push({ p: [x0, y, 0], s: [0.7, 0.12, 0.65], c: DARK });
+  b.bodyBox.push({ p: [x0, y + 0.065, 0], s: [0.68, 0.01, 0.63], c: SURFACE });
+  // Jog wheel: pozo + aro cromado + aro display cian + centro oscuro
+  b.bodyCyl.push({ p: [x0, y + 0.075, 0.08], s: [0.2, 0.01, 0.2], c: DARK });
+  b.bodyCyl.push({ p: [x0, y + 0.08, 0.08], s: [0.19, 0.03, 0.19], c: CHROME });
+  b.neonCyl.push({ p: [x0, y + 0.0975, 0.08], s: [0.135, 0.004, 0.135], c: NEON.cyan, i: 0.8 });
+  b.bodyCyl.push({ p: [x0, y + 0.1005, 0.08], s: [0.11, 0.005, 0.11], c: '#111122' });
+  // Pantalla + bisel
+  b.bodyBox.push({ p: [x0, y + 0.073, -0.2], s: [0.37, 0.008, 0.14], c: DARK });
+  b.neonBox.push({ p: [x0, y + 0.075, -0.2], s: [0.35, 0.01, 0.12], c: '#001122', i: 2 });
+  // Performance pads 2×4
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 2; row++) {
+      b.bodyBox.push({
+        p: [x0 - 0.12 + col * 0.08, y + 0.075, 0.24 + row * 0.045],
+        s: [0.06, 0.015, 0.035],
+        c: '#333333',
+      });
+    }
+  }
+  // Play / cue
+  b.neonBox.push({ p: [x0 - 0.2, y + 0.075, 0.15], s: [0.06, 0.02, 0.04], c: NEON.green, i: 0.8 });
+  b.neonBox.push({ p: [x0 + 0.2, y + 0.075, 0.15], s: [0.06, 0.02, 0.04], c: NEON.pink, i: 0.8 });
+  // Browse knob + USB
+  b.bodyCyl.push({ p: [x0 + 0.25, y + 0.09, -0.15], s: [0.03, 0.04, 0.03], c: CHROME });
+  b.neonBox.push({ p: [x0 + 0.28, y + 0.075, -0.25], s: [0.04, 0.01, 0.015], c: NEON.cyan, i: 1 });
+}
 
-const DJBoothInner: React.FC = () => {
-  const [woodTexture, metalTexture] = useTexture(['/textures/wood.jpg', '/textures/metal.jpg']);
+// Pioneer DJM-A9 en el centro
+function pushDJM(b: Buckets): void {
+  const y = EQUIP_Y;
+  const x0 = 0;
+  b.bodyBox.push({ p: [x0, y, 0], s: [0.75, 0.12, 0.65], c: DARK });
+  b.bodyBox.push({ p: [x0, y + 0.065, 0], s: [0.73, 0.01, 0.63], c: SURFACE });
+  b.neonBox.push({ p: [x0, y + 0.075, -0.22], s: [0.3, 0.01, 0.08], c: '#001122', i: 2 });
+  // 4 canales: fader + perillas EQ
+  const chXs = [-0.22, -0.08, 0.08, 0.22];
+  chXs.forEach((x, ch) => {
+    b.bodyBox.push({ p: [x0 + x, y + 0.075, 0.18], s: [0.04, 0.01, 0.2], c: DARK });
+    b.bodyBox.push({ p: [x0 + x, y + 0.085, 0.18 - ch * 0.02], s: [0.035, 0.025, 0.03], c: CHROME });
+    [-0.08, -0.03, 0.02].forEach((z) => {
+      b.bodyCyl.push({ p: [x0 + x, y + 0.085, z], s: [0.02, 0.03, 0.02], c: CHROME });
+    });
+  });
+  // Crossfader
+  b.bodyBox.push({ p: [x0, y + 0.075, 0.28], s: [0.35, 0.01, 0.03], c: DARK });
+  b.bodyBox.push({ p: [x0, y + 0.085, 0.28], s: [0.04, 0.025, 0.025], c: CHROME });
+  // VU meters (los LEDs son identidad del look — se conservan todos)
+  [-0.15, 0.15].forEach((x) => {
+    for (let led = 0; led < 7; led++) {
+      const c = led < 4 ? NEON.green : led < 6 ? NEON.orange : NEON.pink;
+      b.neonBox.push({
+        p: [x0 + x, y + 0.08, -0.12 + led * 0.012],
+        s: [0.025, 0.01, 0.008],
+        c,
+        i: led < 4 ? 1.2 : 0.5,
+      });
+    }
+  });
+  // Master / booth knobs
+  b.bodyCyl.push({ p: [x0 + 0.3, y + 0.09, -0.22], s: [0.025, 0.04, 0.025], c: CHROME });
+  b.bodyCyl.push({ p: [x0 - 0.3, y + 0.09, -0.22], s: [0.025, 0.04, 0.025], c: CHROME });
+  // Send/return
+  [-0.28, -0.22, 0.22, 0.28].forEach((x, idx) => {
+    b.neonBox.push({ p: [x0 + x, y + 0.08, -0.1], s: [0.03, 0.015, 0.03], c: idx < 2 ? NEON.cyan : NEON.pink, i: 0.6 });
+  });
+}
+
+function buildBoothData(): Buckets {
+  const b: Buckets = { bodyBox: [], bodyCyl: [], neonBox: [], neonCyl: [] };
+
+  // Mueble (la caja de madera se renderiza aparte con textura)
+  b.bodyBox.push({ p: [0, BASE_Y + 0.5, 0.76], s: [4, 0.9, 0.05], c: SILVER }); // panel frontal
+  b.bodyBox.push({ p: [0, BASE_Y + 1.05, 0], s: [4.1, 0.1, 1.7], c: DARK }); // superficie
+  b.bodyBox.push({ p: [0, BASE_Y + 1.05, 0.85], s: [4.15, 0.12, 0.05], c: SILVER }); // molduras
+  b.bodyBox.push({ p: [0, BASE_Y + 1.05, -0.85], s: [4.15, 0.12, 0.05], c: SILVER });
+  // Cintas neón del frente (identidad del booth)
+  b.neonBox.push({ p: [0, BASE_Y + 0.9, 0.79], s: [3.8, 0.06, 0.02], c: NEON.pink, i: 3 });
+  b.neonBox.push({ p: [0, BASE_Y + 0.1, 0.79], s: [3.8, 0.06, 0.02], c: NEON.cyan, i: 3 });
+
+  // Equipos: Technics | CDJ | DJM-A9 | CDJ | Technics
+  pushTechnics(b, -2.0);
+  pushCDJ(b, -0.9);
+  pushDJM(b);
+  pushCDJ(b, 0.9);
+  pushTechnics(b, 2.0);
+
+  // Goma antideslizante bajo los equipos (detalle barato, 2 instancias)
+  b.bodyBox.push({ p: [-1.45, EQUIP_Y - 0.045, 0], s: [0.15, 0.01, 0.6], c: RUBBER });
+  b.bodyBox.push({ p: [1.45, EQUIP_Y - 0.045, 0], s: [0.15, 0.01, 0.6], c: RUBBER });
+
+  return b;
+}
+
+const WoodCabinet: React.FC = () => {
+  const woodTexture = useTexture('/textures/wood.jpg');
   woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
   woodTexture.repeat.set(3, 1);
-  metalTexture.wrapS = metalTexture.wrapT = THREE.RepeatWrapping;
-  metalTexture.repeat.set(4, 1);
 
   return (
-    <group position={[0, 1.5, 0]}>
-      {/* Booth cabinet - centered on DJ platform */}
-      <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[4, 1, 1.5]} />
-        <meshStandardMaterial
-          color="#aa8866"
-          map={woodTexture}
-          emissive="#221100"
-          emissiveIntensity={0.3}
-          metalness={0.1}
-          roughness={0.8}
-        />
-      </mesh>
-
-      {/* Front metal panel */}
-      <mesh position={[0, 0.5, 0.76]} castShadow>
-        <boxGeometry args={[4, 0.9, 0.05]} />
-        <meshStandardMaterial color="#888888" map={metalTexture} emissive="#111111" emissiveIntensity={0.2} metalness={0.6} roughness={0.3} />
-      </mesh>
-
-      {/* Neon edge strips */}
-      <mesh position={[0, 0.9, 0.79]}>
-        <boxGeometry args={[3.8, 0.06, 0.02]} />
-        <meshStandardMaterial color={COLORS.neonPink} emissive={COLORS.neonPink} emissiveIntensity={3} />
-      </mesh>
-      <mesh position={[0, 0.1, 0.79]}>
-        <boxGeometry args={[3.8, 0.06, 0.02]} />
-        <meshStandardMaterial color={COLORS.cyberBlue} emissive={COLORS.cyberBlue} emissiveIntensity={3} />
-      </mesh>
-
-      {/* Top surface */}
-      <mesh position={[0, 1.05, 0]} receiveShadow>
-        <boxGeometry args={[4.1, 0.1, 1.7]} />
-        <meshStandardMaterial color="#1a1a1a" emissive="#111111" emissiveIntensity={0.4} metalness={0.3} roughness={0.2} />
-      </mesh>
-
-      {/* Front/back edge trim */}
-      <mesh position={[0, 1.05, 0.85]}>
-        <boxGeometry args={[4.15, 0.12, 0.05]} />
-        <meshStandardMaterial color="#888888" emissive="#444444" emissiveIntensity={0.4} metalness={0.6} roughness={0.2} />
-      </mesh>
-      <mesh position={[0, 1.05, -0.85]}>
-        <boxGeometry args={[4.15, 0.12, 0.05]} />
-        <meshStandardMaterial color="#888888" emissive="#444444" emissiveIntensity={0.4} metalness={0.6} roughness={0.2} />
-      </mesh>
-
-      {/* Equipment layout: Technics | CDJ | DJM-A9 | CDJ | Technics */}
-      <Technics position={[-2.0, 1.15, 0]} />
-      <CDJ3000 position={[-0.9, 1.15, 0]} />
-      <DJMA9 position={[0, 1.15, 0]} />
-      <CDJ3000 position={[0.9, 1.15, 0]} />
-      <Technics position={[2.0, 1.15, 0]} />
-    </group>
+    <mesh position={[0, BASE_Y + 0.5, 0]}>
+      <boxGeometry args={[4, 1, 1.5]} />
+      <meshStandardMaterial
+        color="#aa8866"
+        map={woodTexture}
+        emissive="#221100"
+        emissiveIntensity={0.3}
+        metalness={0.1}
+        roughness={0.8}
+      />
+    </mesh>
   );
 };
 
-export const DJBooth: React.FC = () => (
-  <Suspense fallback={null}>
-    <DJBoothInner />
-  </Suspense>
-);
+export const DJBooth: React.FC = () => {
+  const meshes = useMemo(() => {
+    const b = buildBoothData();
+    return [
+      buildStaticInstances(GEO_BOX, MAT_BODY, b.bodyBox),
+      buildStaticInstances(GEO_CYL, MAT_BODY, b.bodyCyl),
+      buildStaticInstances(GEO_BOX, MAT_NEON, b.neonBox),
+      buildStaticInstances(GEO_CYL, MAT_NEON, b.neonCyl),
+    ];
+  }, []);
+
+  useEffect(() => {
+    return () => meshes.forEach((m) => m.dispose());
+  }, [meshes]);
+
+  return (
+    <group>
+      {meshes.map((m, idx) => (
+        <primitive key={idx} object={m} />
+      ))}
+      <Suspense fallback={null}>
+        <WoodCabinet />
+      </Suspense>
+    </group>
+  );
+};

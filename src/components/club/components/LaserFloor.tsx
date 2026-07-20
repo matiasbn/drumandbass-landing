@@ -1,12 +1,24 @@
 'use client';
 
-import React, { useRef, useMemo, MutableRefObject } from 'react';
+// Lásers de la pista (WS-3): el throb global ahora late con el beatClock de
+// 174 BPM (M2) vía uniform u_beat — misma fuente que strobes y beat-shot.
+// Etapas de energía (M4): media → lásers LENTOS (tiempo a 55%) y algo más tenues;
+// EL BAJÓN → muy lentos y al 40%. Calidad baja: no se renderiza (es puro fill-rate).
+
+import React, { useRef, useMemo, useEffect, MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { getBeatPhase } from '../beatClock';
+import { useQuality } from '../quality';
+import { useEnergyOptional } from './Lighting';
 
 interface LaserFloorProps {
   isPlayingRef: MutableRefObject<boolean>;
 }
+
+// Velocidad del sweep e intensidad por etapa de energía
+const STAGE_SPEED = { full: 1.0, media: 0.55, bajon: 0.35 } as const;
+const STAGE_INTENSITY = { full: 1.0, media: 0.75, bajon: 0.4 } as const;
 
 const laserVertexShader = `
 varying vec2 vUv;
@@ -20,6 +32,8 @@ const laserFragmentShader = `
 precision highp float;
 uniform float u_time;
 uniform vec2 u_res;
+uniform float u_beat;
+uniform float u_intensity;
 
 #define PI 3.14159265359
 
@@ -94,7 +108,7 @@ void main() {
   uv.x = (uv.x - 0.5) * aspect;
 
   float t = u_time * 0.5;
-  float intensity = 1.0;
+  float intensity = u_intensity;
 
   vec3 fogCoord = vec3(fragUV * 3.0, t * 0.08);
   fogCoord.y -= t * 0.03;
@@ -105,7 +119,8 @@ void main() {
   vec3 col = vec3(0.0);
 
   float hueShift = sin(t * 0.07) * 0.2;
-  float globalBeat = pow(abs(sin(t * PI / 1.5)), 8.0) * 0.2;
+  // Throb global al beat real de 174 BPM (u_beat viene del beatClock, no de sin(t))
+  float globalBeat = u_beat * 0.25;
 
   // Far layer: 2 cones
   for (int i = 0; i < 2; i++) {
@@ -149,10 +164,9 @@ void main() {
     float sweepFreq = 0.4 + fi * 0.13;
     float theta = sin(t * sweepFreq + fi * 2.3 + 0.7) * sweepAmp;
 
-    float beatFreq = 1.8 + fi * 0.4;
-    float snap = pow(abs(sin(t * beatFreq)), 6.0);
+    // Snap del barrido acoplado al beat real
     float snapGate = smoothstep(0.5, 0.85, sin(t * 0.7 + fi * 2.094));
-    theta += snap * snapGate * 0.18 * sin(t * beatFreq * 0.5);
+    theta += u_beat * snapGate * 0.15 * sin(t * 1.3 + fi);
 
     vec2 dir = vec2(sin(theta), -cos(theta));
 
@@ -183,7 +197,7 @@ void main() {
   // Ground haze — simplified, single fbm call
   float groundHaze = smoothstep(0.2, 0.0, fragUV.y);
   col += col * groundHaze * 0.3;
-  col += vec3(0.06, 0.03, 0.1) * groundHaze * fog;
+  col += vec3(0.06, 0.03, 0.1) * groundHaze * fog * intensity;
 
   // Tone mapping
   float exposure = 2.0;
@@ -201,9 +215,13 @@ void main() {
 }
 `;
 
-export const LaserFloor: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
+const LaserFloorInner: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const frozenTimeRef = useRef<number>(0);
+  // Tiempo propio acumulado: la etapa de energía escala su velocidad (lásers lentos)
+  const laserTimeRef = useRef<number>(0);
+  const speedRef = useRef(1);
+  const intensityRef = useRef(1);
+  const energy = useEnergyOptional();
 
   const shaderMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -212,6 +230,8 @@ export const LaserFloor: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
       uniforms: {
         u_time: { value: 0.0 },
         u_res: { value: new THREE.Vector2(1024, 1024) },
+        u_beat: { value: 0.0 },
+        u_intensity: { value: 1.0 },
       },
       transparent: true,
       blending: THREE.AdditiveBlending,
@@ -220,11 +240,33 @@ export const LaserFloor: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
     });
   }, []);
 
-  useFrame(({ clock }) => {
-    if (isPlayingRef.current) {
-      frozenTimeRef.current = clock.getElapsedTime();
+  useEffect(() => {
+    return () => shaderMaterial.dispose();
+  }, [shaderMaterial]);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.05);
+
+    // Objetivos por etapa (GLORIA = full) con lerp suave
+    let targetSpeed = 1;
+    let targetIntensity = 1;
+    if (energy) {
+      const gloria = energy.gloriaActiveRef.current;
+      const stage = energy.stageRef.current;
+      targetSpeed = gloria ? 1 : STAGE_SPEED[stage];
+      targetIntensity = gloria ? 1 : STAGE_INTENSITY[stage];
     }
-    shaderMaterial.uniforms.u_time.value = frozenTimeRef.current;
+    speedRef.current += (targetSpeed - speedRef.current) * Math.min(1, dt * 2);
+    intensityRef.current += (targetIntensity - intensityRef.current) * Math.min(1, dt * 2);
+
+    if (isPlayingRef.current) {
+      laserTimeRef.current += dt * speedRef.current;
+      // Pulso al beat: cae con la fase (máximo justo EN el beat, igual que isOnBeat)
+      const beatPulse = Math.pow(1 - getBeatPhase(), 3);
+      shaderMaterial.uniforms.u_beat.value = beatPulse;
+    }
+    shaderMaterial.uniforms.u_time.value = laserTimeRef.current;
+    shaderMaterial.uniforms.u_intensity.value = intensityRef.current;
   });
 
   return (
@@ -237,4 +279,11 @@ export const LaserFloor: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
       <planeGeometry args={[14, 14]} />
     </mesh>
   );
+};
+
+export const LaserFloor: React.FC<LaserFloorProps> = ({ isPlayingRef }) => {
+  const quality = useQuality();
+  // Calidad baja: los lásers son puro costo de fragment shader — fuera
+  if (quality === 'baja') return null;
+  return <LaserFloorInner isPlayingRef={isPlayingRef} />;
 };

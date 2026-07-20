@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useScore } from '../ScoreContext';
 import { useHealth } from '../HealthContext';
+import { playerState } from '../playerState';
 
 // Module-level shared state for cross-component communication
 export let earthquakeActiveUntil = 0;
@@ -526,13 +527,14 @@ interface ActiveEffect {
 let effectIdCounter = 0;
 
 export const SpecialEffects: React.FC = () => {
-  const { activeSpecial, playerPosition } = useScore();
+  const { activeSpecial } = useScore();
   const { localHypeRef } = useHealth();
   const [effects, setEffects] = React.useState<ActiveEffect[]>([]);
   const lastSpecialRef = useRef<number | null>(null);
   const clockRef = useRef(0);
-  const playerPosRef = useRef(playerPosition);
-  playerPosRef.current = playerPosition;
+  // La posición del jugador vive en el singleton playerState (siempre al día,
+  // sin re-renders); se referencia el objeto mutable directamente.
+  const playerPosRef = useRef(playerState.position);
   const wasHypedRef = useRef(false);
 
   const cleanupTimerRef = useRef(0);

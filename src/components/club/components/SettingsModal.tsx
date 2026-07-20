@@ -3,6 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { RiCloseLine, RiUserLine, RiAtLine } from '@remixicon/react';
 import { useAuth } from '../AuthContext';
+import { Quality, setQuality, useQuality } from '../quality';
+import { event } from '@/src/lib/gtag';
+
+const QUALITY_OPTIONS: { value: Quality; label: string }[] = [
+  { value: 'alta', label: 'ALTA' },
+  { value: 'media', label: 'MEDIA' },
+  { value: 'baja', label: 'BAJA' },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -18,6 +26,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [antialias, setAntialias] = useState(true);
   const [antialiasChanged, setAntialiasChanged] = useState(false);
+  const quality = useQuality();
 
   useEffect(() => {
     if (isOpen) {
@@ -156,6 +165,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           {/* Graphics section */}
           <div className="mt-6 pt-6 border-t border-white/10">
             <h3 className="text-xs font-mono text-white/50 tracking-wider mb-4">GRÁFICOS</h3>
+
+            {/* Calidad gráfica: Alta (Bloom + dpr 1.5) / Media / Baja (sin Bloom, strobes simples, partículas ÷2, shake off) */}
+            <div className="mb-5">
+              <div className="text-sm font-mono text-white tracking-wider">CALIDAD</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5 mb-2">
+                Baja desactiva Bloom, strobes y vibración de cámara
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {QUALITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setQuality(opt.value);
+                      event('club_quality_change', { quality: opt.value });
+                    }}
+                    className={`py-2 font-mono text-xs tracking-wider border transition-colors ${
+                      quality === opt.value
+                        ? 'bg-[#ff0055] border-[#ff0055] text-white'
+                        : 'bg-black/50 border-white/20 text-white/60 hover:border-white/40 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="flex items-center justify-between">
               <div>
