@@ -26,6 +26,7 @@ export interface CmsEventRow {
   end_date: string | null;
   description_html: string | null;
   tickets: string | null;
+  ticket_links: string[] | null;
   info: string | null;
   flyer_url: string | null;
   flyer_width: number | null;
@@ -54,6 +55,7 @@ export function mapEventRow(row: CmsEventRow): CmsEvent {
     endDate: row.end_date ?? undefined,
     description: row.description_html ?? undefined,
     tickets: row.tickets ?? undefined,
+    ticketLinks: row.ticket_links ?? undefined,
     info: row.info ?? undefined,
     flyer: row.flyer_url
       ? {

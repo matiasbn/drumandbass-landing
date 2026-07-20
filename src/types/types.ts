@@ -11,7 +11,10 @@ export interface CmsEvent {
   date: string;
   endDate?: string;
   description?: string;
+  /** URL de venta activa (la que muestra el botón TICKETS). */
   tickets?: string;
+  /** Todas las URLs de venta que usó el evento (incluida la activa). Para analytics. */
+  ticketLinks?: string[];
   info?: string;
   flyer?: {
     url: string;
