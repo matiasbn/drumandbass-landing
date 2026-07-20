@@ -4,12 +4,15 @@ export function buildEmailHtml({
   imageBase64,
   buttonText,
   buttonUrl,
+  trackingPixelUrl,
 }: {
   title: string;
   body: string;
   imageBase64?: string;
   buttonText?: string;
   buttonUrl?: string;
+  /** Pixel 1×1 para medir aperturas (opcional). Se inyecta al final del cuerpo. */
+  trackingPixelUrl?: string;
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -126,6 +129,7 @@ export function buildEmailHtml({
       </td>
     </tr>
   </table>
+  ${trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;" />` : ''}
 </body>
 </html>`;
 }

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
+import { BASE_URL } from '@/src/constants';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -128,6 +129,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: Array.from(allEmails).slice(0, 20) });
   }
 
+  // Historial: lista de campañas enviadas.
+  if (searchParams.get('list') === '1') {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('id, name, template, event_id, subject, coupon_code, audiences, recipients, sent_count, failed_count, status, sent_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) return NextResponse.json({ campaigns: [], error: error.message }, { status: 500 });
+    return NextResponse.json({ campaigns: data || [] });
+  }
+
+  // Detalle de una campaña + sus destinatarios.
+  const campaignId = searchParams.get('campaign');
+  if (campaignId) {
+    const [{ data: campaign }, { data: recipients }] = await Promise.all([
+      supabase.from('campaigns').select('*').eq('id', campaignId).maybeSingle(),
+      supabase
+        .from('campaign_recipients')
+        .select('email, status, opened_at, visited_at, visit_count')
+        .eq('campaign_id', campaignId)
+        .order('email'),
+    ]);
+    if (!campaign) return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 });
+    return NextResponse.json({ campaign, recipients: recipients || [] });
+  }
+
   // Audience counts mode
   const audiences = searchParams.get('audiences')?.split(',').filter(Boolean) || [];
 
@@ -154,21 +181,31 @@ export async function POST(request: NextRequest) {
   const {
     audiences,
     extraEmails: extraEmailsList,
+    name,
+    template,
+    eventId,
     subject,
     title,
     bodyHtml,
     imageBase64,
     buttonText,
     buttonUrl,
+    couponCode,
+    couponDescription,
   } = body as {
     audiences: string[];
     extraEmails?: string[];
+    name?: string;
+    template?: string;
+    eventId?: string | null;
     subject: string;
     title: string;
     bodyHtml: string;
     imageBase64?: string;
     buttonText?: string;
     buttonUrl?: string;
+    couponCode?: string;
+    couponDescription?: string;
   };
 
   if (!subject || !title) {
@@ -188,21 +225,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No hay destinatarios' }, { status: 400 });
   }
 
-  const html = buildEmailHtml({ title, body: bodyHtml, imageBase64, buttonText, buttonUrl });
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
   const resend = new Resend(apiKey);
 
-  // Resend batch: max 100 per call
+  // 1) Persistimos la campaña (obtenemos su id, que sirve como campaign_id).
+  const { data: campaign, error: campaignError } = await supabase
+    .from('campaigns')
+    .insert({
+      name: name || null,
+      template: template || null,
+      event_id: eventId || null,
+      subject,
+      title: title || null,
+      body_html: bodyHtml || null,
+      image_url: imageBase64 || null,
+      button_text: buttonText || null,
+      button_url: buttonUrl || null,
+      coupon_code: couponCode || null,
+      coupon_description: couponDescription || null,
+      audiences: audiences || [],
+      recipients: emails.length,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (campaignError || !campaign) {
+    return NextResponse.json(
+      { error: `No se pudo guardar la campaña: ${campaignError?.message ?? 'desconocido'}` },
+      { status: 500 }
+    );
+  }
+  const campaignId = campaign.id as string;
+
+  // En dev las URLs del correo apuntan al server local (localhost:3600) para poder
+  // probar el tracking; en prod, al dominio real. Reescribimos solo los links a
+  // NUESTRO dominio (los externos, p. ej. una ticketera, quedan intactos).
+  const appOrigin = process.env.NODE_ENV === 'development' ? 'http://localhost:3600' : BASE_URL;
+  const localButtonUrl = (buttonUrl || '').replace(BASE_URL, appOrigin);
+
+  // Cada destinatario tiene un id (uuid) que viaja en el link (?ct=<id>) y en el
+  // pixel de apertura → medimos con NUESTRO tracking (no GA) quién abrió y quién
+  // clickeó. El id es la PK de su fila: sin token ni columna extra.
+  const withCt = (base: string, recId: string) => {
+    if (!base) return '';
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}ct=${recId}&utm_source=email&utm_campaign=${campaignId}`;
+  };
+  const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
+
+  // 2) Enviamos por lotes (Resend: máx 100 por llamada), un html por destinatario
+  //    (link + pixel con su id), y registramos el resend_id para los webhooks (Fase B).
   const BATCH_SIZE = 100;
   const results: { sent: number; failed: number; errors: string[] } = { sent: 0, failed: 0, errors: [] };
+  const recipientRows: { id: string; campaign_id: string; email: string; resend_id: string | null; status: string }[] = [];
 
   for (let i = 0; i < emails.length; i += BATCH_SIZE) {
     const batch = emails.slice(i, i + BATCH_SIZE);
-    const batchPayload = batch.map(to => ({
+    const recIds = batch.map(() => crypto.randomUUID());
+    const batchPayload = batch.map((to, j) => ({
       from: fromEmail,
       to,
       subject,
-      html,
+      html: buildEmailHtml({
+        title,
+        body: bodyHtml,
+        imageBase64,
+        buttonText,
+        buttonUrl: withCt(localButtonUrl, recIds[j]) || undefined,
+        trackingPixelUrl: pixelUrl(recIds[j]),
+      }),
     }));
 
     try {
@@ -210,17 +303,37 @@ export async function POST(request: NextRequest) {
       if (error) {
         results.failed += batch.length;
         results.errors.push(error.message);
+        batch.forEach((email, j) =>
+          recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: null, status: 'failed' })
+        );
       } else {
-        results.sent += data?.data?.length ?? batch.length;
+        const ids = data?.data ?? [];
+        results.sent += ids.length || batch.length;
+        batch.forEach((email, j) =>
+          recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: ids[j]?.id ?? null, status: 'sent' })
+        );
       }
     } catch (err) {
       results.failed += batch.length;
       results.errors.push(err instanceof Error ? err.message : 'Error desconocido');
+      batch.forEach((email, j) =>
+        recipientRows.push({ id: recIds[j], campaign_id: campaignId, email, resend_id: null, status: 'failed' })
+      );
     }
   }
 
+  // 3) Guardamos los destinatarios (en trozos) y actualizamos los conteos.
+  for (let i = 0; i < recipientRows.length; i += 500) {
+    await supabase.from('campaign_recipients').insert(recipientRows.slice(i, i + 500));
+  }
+  await supabase
+    .from('campaigns')
+    .update({ sent_count: results.sent, failed_count: results.failed })
+    .eq('id', campaignId);
+
   return NextResponse.json({
     success: results.failed === 0,
+    campaignId,
     sent: results.sent,
     failed: results.failed,
     total: emails.length,

@@ -10,6 +10,7 @@ import TicketButton from '@/src/components/TicketButton';
 import ProximityBadge from '@/src/components/ProximityBadge';
 import BigButton from '@/src/components/BigButton';
 import TrackOnMount from '@/src/components/TrackOnMount';
+import CampaignVisitBeacon from '@/src/components/CampaignVisitBeacon';
 
 // Landing pública de un evento (por id). Es el destino de los correos de campaña
 // (para medir la visita en GA de forma confiable) y también sirve para compartir
@@ -45,6 +46,7 @@ export default async function EventoLandingPage({ params }: PageProps) {
   return (
     <main className="grow">
       <TrackOnMount name="landing_evento_view" params={{ event_id: ev.id, event_title: ev.title }} />
+      <CampaignVisitBeacon />
 
       {/* Evento */}
       <section className="border-b-4 border-black">
@@ -125,9 +127,6 @@ export default async function EventoLandingPage({ params }: PageProps) {
           </BigButton>
           <BigButton variant="whatsapp" className="flex-1 text-lg py-6" href={WHATSAPP_LINK}>
             <RiWhatsappLine /> Grupo de WhatsApp
-          </BigButton>
-          <BigButton variant="club" className="flex-1 text-lg py-6" href="/pk">
-            ¿Eres DJ? Crea tu presskit
           </BigButton>
         </div>
       </section>

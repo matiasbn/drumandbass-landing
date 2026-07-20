@@ -8,6 +8,7 @@ import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
 import dayjs from '@/src/lib/date';
+import { BASE_URL } from '@/src/constants';
 
 type AudienceKey = 'ravers' | 'registered' | 'pks' | 'junglists';
 
@@ -46,6 +47,29 @@ const STEPS = [
   { num: 2, label: 'Correo', desc: 'Arma el correo' },
   { num: 3, label: 'Destinatarios', desc: 'A quién le llega' },
 ];
+
+// --- Historial de campañas ---
+interface CampaignSummary {
+  id: string;
+  name: string | null;
+  template: string | null;
+  subject: string;
+  audiences: string[];
+  recipients: number;
+  sent_count: number;
+  failed_count: number;
+  status: string;
+  sent_at: string | null;
+  created_at: string;
+}
+
+interface CampaignRecipient {
+  email: string;
+  status: string;
+  opened_at: string | null;
+  visited_at: string | null;
+  visit_count: number;
+}
 
 function Stepper({ current }: { current: number }) {
   return (
@@ -133,6 +157,14 @@ export default function CampaignsClient() {
   const [events, setEvents] = useState<EventLite[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [chosenEventId, setChosenEventId] = useState<string | null>(null);
+
+  // Vista: componer una campaña nueva o revisar el historial.
+  const [view, setView] = useState<'nueva' | 'historial'>('nueva');
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [openCampaign, setOpenCampaign] = useState<CampaignSummary | null>(null);
+  const [recipients, setRecipients] = useState<CampaignRecipient[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -240,6 +272,40 @@ export default function CampaignsClient() {
     }
   }, []);
 
+  // --- Historial ---
+  const fetchCampaigns = useCallback(async () => {
+    setCampaignsLoading(true);
+    try {
+      const res = await fetch('/api/admin/campaigns?list=1');
+      const data = await res.json();
+      setCampaigns(data.campaigns || []);
+    } catch {
+      // ignore
+    } finally {
+      setCampaignsLoading(false);
+    }
+  }, []);
+
+  const openCampaignDetail = async (c: CampaignSummary) => {
+    setOpenCampaign(c);
+    setRecipients([]);
+    setRecipientsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/campaigns?campaign=${c.id}`);
+      const data = await res.json();
+      setRecipients(data.recipients || []);
+    } catch {
+      // ignore
+    } finally {
+      setRecipientsLoading(false);
+    }
+  };
+
+  // Carga el historial al entrar a esa vista.
+  useEffect(() => {
+    if (view === 'historial') fetchCampaigns();
+  }, [view, fetchCampaigns]);
+
   const chooseTemplate = (key: TemplateKey | 'custom') => {
     setTemplate(key);
     setChosenEventId(null);
@@ -261,8 +327,10 @@ export default function CampaignsClient() {
     setTitle(ev.title);
     setImageFile(null);
     setImagePreview(ev.flyer_url || null);
-    setButtonText(ev.tickets ? 'Comprar tickets' : 'Ver evento');
-    setButtonUrl(ev.tickets || '');
+    // El botón apunta a la landing del evento (no directo a tickets): así el ?ct
+    // registra la visita en nuestra DB y el asistente ve tickets + CTAs de comunidad.
+    setButtonText('Ver evento');
+    setButtonUrl(`${BASE_URL}/evento/${ev.id}`);
     setBodyHtml(body);
     editor?.commands.setContent(body);
   };
@@ -326,6 +394,9 @@ export default function CampaignsClient() {
         body: JSON.stringify({
           audiences: Array.from(selected),
           extraEmails: Array.from(extraEmails),
+          name: campaignName || undefined,
+          template: template || undefined,
+          eventId: template === 'evento' ? chosenEventId : null,
           subject,
           title,
           bodyHtml,
@@ -371,10 +442,26 @@ export default function CampaignsClient() {
         </Link>
       </div>
 
-      <Stepper current={step} />
+      {/* Toggle Nueva / Historial */}
+      <div className="flex gap-2 mb-6">
+        {(['nueva', 'historial'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`brutalist-border px-4 py-2 font-bold uppercase text-sm transition-colors cursor-pointer ${
+              view === v ? 'bg-[#ff0055] text-white' : 'bg-white hover:bg-gray-50'
+            }`}
+          >
+            {v === 'nueva' ? 'Nueva campaña' : 'Historial'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'nueva' && <Stepper current={step} />}
 
       {/* Step 1: Plantilla */}
-      {step === 1 && (
+      {view === 'nueva' && step === 1 && (
         <div className="brutalist-border bg-white p-6 brutalist-shadow max-w-2xl mx-auto">
           <h2 className="text-xl font-black uppercase mb-1">Elige una plantilla</h2>
           <p className="mono text-xs text-gray-500 mb-5">
@@ -466,7 +553,7 @@ export default function CampaignsClient() {
       )}
 
       {/* Step 2: Configuration */}
-      {step === 2 && (
+      {view === 'nueva' && step === 2 && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Form */}
           <div className="lg:col-span-3 brutalist-border bg-white p-6 brutalist-shadow">
@@ -616,7 +703,7 @@ export default function CampaignsClient() {
       )}
 
       {/* Step 3: Destinatarios (audiencia + envío) */}
-      {step === 3 && (
+      {view === 'nueva' && step === 3 && (
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Audiencia */}
           <div className="brutalist-border bg-white p-6 brutalist-shadow">
@@ -782,6 +869,99 @@ export default function CampaignsClient() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Historial: campañas enviadas + su tracking de aperturas/visitas */}
+      {view === 'historial' && (
+        <div className="brutalist-border bg-white p-6 brutalist-shadow">
+          {campaignsLoading ? (
+            <p className="mono text-sm text-gray-500">Cargando campañas…</p>
+          ) : campaigns.length === 0 ? (
+            <p className="mono text-sm text-gray-500">Todavía no hay campañas enviadas.</p>
+          ) : (
+            <div className="space-y-3">
+              {campaigns.map((c) => {
+                const isOpen = openCampaign?.id === c.id;
+                return (
+                  <div key={c.id} className="brutalist-border">
+                    <button
+                      type="button"
+                      onClick={() => (isOpen ? setOpenCampaign(null) : openCampaignDetail(c))}
+                      className="w-full text-left p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-black uppercase truncate">{c.name || c.subject}</p>
+                        <p className="mono text-[11px] text-gray-500 truncate">
+                          {c.subject}
+                          {c.template ? ` · ${c.template}` : ''}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="mono text-xs font-bold">
+                          {c.sent_count} enviados
+                          {c.failed_count > 0 ? ` · ${c.failed_count} fallidos` : ''}
+                        </p>
+                        <p className="mono text-[11px] text-gray-500">
+                          {dayjs(c.sent_at || c.created_at).format('DD MMM YYYY HH:mm')}
+                        </p>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t-4 border-black p-4 bg-gray-50">
+                        {recipientsLoading ? (
+                          <p className="mono text-sm text-gray-500">Cargando destinatarios…</p>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
+                              <span className="brutalist-border px-2 py-1 bg-white">
+                                Destinatarios: {recipients.length}
+                              </span>
+                              <span className="brutalist-border px-2 py-1 bg-white">
+                                Abrieron: {recipients.filter((r) => r.opened_at).length}
+                              </span>
+                              <span className="brutalist-border px-2 py-1 bg-white">
+                                Visitaron: {recipients.filter((r) => r.visited_at).length}
+                              </span>
+                            </div>
+                            <p className="mono text-[10px] text-gray-500 mb-2">
+                              Aperturas poco fiables (los clientes de correo precargan imágenes); la
+                              visita a la landing es la señal firme.
+                            </p>
+                            <div className="max-h-80 overflow-auto brutalist-border bg-white">
+                              <table className="w-full mono text-[11px]">
+                                <thead className="bg-black text-white sticky top-0">
+                                  <tr>
+                                    <th className="text-left p-2">Email</th>
+                                    <th className="text-left p-2">Estado</th>
+                                    <th className="text-center p-2">Abrió</th>
+                                    <th className="text-center p-2">Visitó</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {recipients.map((r) => (
+                                    <tr key={r.email} className="border-b border-gray-200">
+                                      <td className="p-2 truncate max-w-[220px]">{r.email}</td>
+                                      <td className="p-2">{r.status}</td>
+                                      <td className="p-2 text-center">{r.opened_at ? '✓' : '—'}</td>
+                                      <td className="p-2 text-center">
+                                        {r.visited_at ? `✓${r.visit_count > 1 ? ` (${r.visit_count})` : ''}` : '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
