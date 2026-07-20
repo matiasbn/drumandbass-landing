@@ -62,6 +62,21 @@ export default function JunglistClient() {
     welcomeRef.current?.focus();
   }, [view]);
 
+  // El form del perfil refleja lo guardado: cuando hay junglist (carga o tras
+  // guardar), sincronizamos los campos. Así "Guardar cambios" sabe si hubo cambios
+  // y el usuario puede vaciar un campo. No aplica al alta (junglist aún no existe).
+  useEffect(() => {
+    if (!junglist) return;
+    setForm({ name: junglist.name, last_name: junglist.last_name, instagram: junglist.instagram });
+  }, [junglist]);
+
+  // ¿El perfil tiene cambios sin guardar?
+  const dirty =
+    !!junglist &&
+    (form.name !== junglist.name ||
+      form.last_name !== junglist.last_name ||
+      form.instagram !== junglist.instagram);
+
   const load = useCallback(async () => {
     let user;
     try {
@@ -320,15 +335,15 @@ export default function JunglistClient() {
             <div className="flex flex-col gap-4">
               <div>
                 <label className={labelCls}>Nombre</label>
-                <input className={inputCls} value={form.name || junglist.name} onChange={update('name')} />
+                <input className={inputCls} value={form.name} onChange={update('name')} />
               </div>
               <div>
                 <label className={labelCls}>Apellido</label>
-                <input className={inputCls} value={form.last_name || junglist.last_name} onChange={update('last_name')} />
+                <input className={inputCls} value={form.last_name} onChange={update('last_name')} />
               </div>
               <div>
                 <label className={labelCls}>Instagram</label>
-                <input className={inputCls} value={form.instagram || junglist.instagram} onChange={update('instagram')} />
+                <input className={inputCls} value={form.instagram} onChange={update('instagram')} />
               </div>
               <div>
                 <label className={labelCls}>Correo</label>
@@ -342,18 +357,10 @@ export default function JunglistClient() {
               <BrutalistButton
                 variant="blue"
                 className="flex-1 text-lg py-5"
-                onClick={() => {
-                  // asegura que los inputs tengan valores antes de guardar
-                  setForm((f) => ({
-                    name: f.name || junglist.name,
-                    last_name: f.last_name || junglist.last_name,
-                    instagram: f.instagram || junglist.instagram,
-                  }));
-                  save('PUT');
-                }}
-                disabled={submitting}
+                onClick={() => save('PUT')}
+                disabled={submitting || !dirty}
               >
-                {submitting ? 'Guardando…' : 'Guardar cambios'}
+                {submitting ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Sin cambios'}
               </BrutalistButton>
               <BrutalistButton variant="primary" className="text-lg py-5" onClick={signOut} disabled={submitting}>
                 Cerrar sesión
