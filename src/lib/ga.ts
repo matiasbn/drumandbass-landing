@@ -63,11 +63,24 @@ export interface AnalyticsOverview {
   // dimensions "event_title" y "event_date" en GA4.
   ticketClicks: TicketClick[];
   ticketClicksAvailable: boolean;
+  // Filas crudas (título × día del clic). El route las cruza con las ocurrencias
+  // del CMS para atribuir cada clic al evento correcto. Opcional: la vista mensual
+  // no la usa.
+  ticketClickRows?: TicketClickRow[];
 }
 
 export interface TicketClick {
   title: string;
   date: string; // YYYY-MM-DD
+  value: number;
+}
+
+// Fila cruda de clics a "Tickets": título del evento × día en que ocurrió el clic
+// (dimensión nativa `date`). El route la asigna a la próxima ocurrencia de ese
+// título — no hace falta la custom dimension event_date.
+export interface TicketClickRow {
+  title: string;
+  day: string; // YYYYMMDD (día del clic)
   value: number;
 }
 
@@ -204,16 +217,19 @@ export async function getAnalyticsOverview(
 
     const s = summaryRes[0].rows?.[0]?.metricValues ?? [];
 
-    // Clics a tickets por evento, identificado por TÍTULO + FECHA (event_title y
-    // event_date). Requiere las custom dimensions "event_title" y "event_date" en
-    // GA4; si faltan, la API falla y devolvemos vacío sin romper el resto.
-    let ticketClicks: TicketClick[] = [];
+    // Clics a "Tickets" por TÍTULO del evento y por el DÍA en que ocurrió el clic
+    // (dimensión nativa `date`). Solo necesita la custom dimension "event_title";
+    // NO usa event_date. El route asigna cada clic a la próxima ocurrencia de ese
+    // título según el día del clic (los eventos homónimos siempre tienen fechas
+    // distintas). Si "event_title" no está registrada, la API falla y devolvemos
+    // vacío sin romper el resto.
+    let ticketClickRows: TicketClickRow[] = [];
     let ticketClicksAvailable = false;
     try {
       const tc = await client.runReport({
         property,
         dateRanges,
-        dimensions: [{ name: 'customEvent:event_title' }, { name: 'customEvent:event_date' }],
+        dimensions: [{ name: 'customEvent:event_title' }, { name: 'date' }],
         metrics: [{ name: 'eventCount' }],
         dimensionFilter: {
           filter: {
@@ -221,19 +237,18 @@ export async function getAnalyticsOverview(
             stringFilter: { value: 'event_link_click' },
           },
         },
-        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-        limit: 50,
+        limit: 1000,
       });
-      ticketClicks = (tc[0].rows ?? [])
+      ticketClickRows = (tc[0].rows ?? [])
         .map((r) => ({
           title: r.dimensionValues?.[0]?.value ?? '',
-          date: r.dimensionValues?.[1]?.value ?? '',
+          day: r.dimensionValues?.[1]?.value ?? '',
           value: num(r.metricValues?.[0]?.value),
         }))
         .filter((r) => r.title && r.title !== '(not set)');
       ticketClicksAvailable = true;
     } catch {
-      // custom dimensions "event_title"/"event_date" no registradas aún
+      // custom dimension "event_title" no registrada aún
     }
 
     // Pivot país × canal: total de usuarios por país + desglose por origen.
@@ -258,8 +273,9 @@ export async function getAnalyticsOverview(
     return {
       configured: true,
       days,
-      ticketClicks,
+      ticketClicks: [], // el route lo llena cruzando ticketClickRows con el CMS
       ticketClicksAvailable,
+      ticketClickRows,
       summary: {
         activeUsers: num(s[0]?.value),
         newUsers: num(s[1]?.value),

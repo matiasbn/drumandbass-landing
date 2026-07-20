@@ -360,7 +360,7 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
 
       <BarList
         title="Clics a tickets por evento"
-        titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Necesita la custom dimension "event_title" en GA4 para contar por evento.'
+        titleTip='Cuántas personas hicieron clic en el botón "Tickets" de cada evento vigente. Cada clic se atribuye a la próxima ocurrencia de ese título según el día del clic. Necesita la custom dimension "event_title" en GA4.'
         subtitle={
           data.ticketClicksAvailable
             ? 'Eventos vigentes hoy · clics a "Tickets"'
@@ -369,7 +369,7 @@ function Panels({ data, zeroNote }: { data: AnalyticsOverview; zeroNote?: boolea
         rows={data.ticketClicks.map((t) => ({
           label: t.date ? `${t.title} · ${fmtDay(t.date.replace(/-/g, ''))}` : t.title,
           value: t.value,
-          tip: 'Clics al botón "Tickets" de este evento (identificado por título + fecha).',
+          tip: 'Clics al botón "Tickets" atribuidos a este evento (por título y por el día del clic, a la próxima ocurrencia).',
         }))}
         empty="No hay eventos vigentes en este momento."
         showPercent

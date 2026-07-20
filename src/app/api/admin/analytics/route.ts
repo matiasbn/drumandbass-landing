@@ -65,28 +65,49 @@ export async function GET(request: NextRequest) {
   try {
     const data = await getAnalyticsOverview(days, range);
 
-    // Cruza los clics de GA con los eventos ACTUALES de Contentful: así la lista
-    // muestra cada evento vigente hoy (aunque tenga 0 clics), no solo los que
-    // GA registró. Se matchea por título (mismo `event_title` que envía TicketButton).
+    // Atribuimos cada clic a "Tickets" al EVENTO correcto usando solo el título
+    // (event_title) + el DÍA del clic. La gente clickea tickets ANTES del evento,
+    // así que cada clic pertenece a la PRÓXIMA ocurrencia de ese título a partir de
+    // ese día. Como dos eventos homónimos siempre tienen fechas distintas, esto los
+    // separa sin ambigüedad. Solo mostramos eventos vigentes → los pasados nunca
+    // aparecen y sus clics (de una ventana anterior) no cuentan para el actual.
     try {
-      const events = await getEvents();
+      const events = await getEvents(); // pasados + futuros, orden asc por fecha
       const now = dayjs();
+
+      // Ocurrencias por título (ordenadas asc), para encontrar la próxima tras el clic.
+      const occByTitle = new Map<string, { id: string; dateKey: string }[]>();
+      for (const e of events) {
+        const list = occByTitle.get(e.title) ?? [];
+        list.push({ id: e.id, dateKey: dayjs(e.date).format('YYYY-MM-DD') });
+        occByTitle.set(e.title, list);
+      }
+
+      // Tally por evento: cada clic → primera ocurrencia con fecha >= día del clic.
+      const tally = new Map<string, number>();
+      for (const row of data.ticketClickRows ?? []) {
+        if (!/^\d{8}$/.test(row.day)) continue;
+        const clickKey = `${row.day.slice(0, 4)}-${row.day.slice(4, 6)}-${row.day.slice(6, 8)}`;
+        const occ = (occByTitle.get(row.title) ?? []).find((o) => o.dateKey >= clickKey);
+        if (occ) tally.set(occ.id, (tally.get(occ.id) ?? 0) + row.value);
+      }
+
+      // La lista muestra los eventos vigentes hoy (aunque tengan 0 clics).
       const upcoming = events.filter((e) => {
         const start = dayjs(e.date);
         const end = e.endDate ? dayjs(e.endDate) : start;
         const effectiveEnd = end.isAfter(start) ? end : start;
         return effectiveEnd.isAfter(now);
       });
-      // Identificamos el evento por TÍTULO + FECHA (la URL puede cambiar).
-      const clickByKey = new Map(data.ticketClicks.map((t) => [`${t.title}||${t.date}`, t.value]));
       data.ticketClicks = upcoming
-        .map((e) => {
-          const dateKey = dayjs(e.date).format('YYYY-MM-DD');
-          return { title: e.title, date: dateKey, value: clickByKey.get(`${e.title}||${dateKey}`) ?? 0 };
-        })
+        .map((e) => ({
+          title: e.title,
+          date: dayjs(e.date).format('YYYY-MM-DD'),
+          value: tally.get(e.id) ?? 0,
+        }))
         .sort((a, b) => b.value - a.value);
     } catch {
-      // si Contentful falla, dejamos los clics tal cual vienen de GA
+      // si el CMS falla, dejamos ticketClicks vacío
     }
 
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
