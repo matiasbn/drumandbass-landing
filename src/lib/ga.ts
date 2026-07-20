@@ -99,6 +99,7 @@ export const SITE_EVENT_NAMES = [
   'enter_club',
   'login',
   'button_click',
+  'landing_evento_view',
 ];
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

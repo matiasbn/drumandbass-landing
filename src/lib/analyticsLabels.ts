@@ -31,6 +31,7 @@ export const EVENT_LABELS: Record<string, string> = {
   whatsapp_click: 'Clic a WhatsApp',
   logo_download: 'Descargas de logos (ZIP)',
   enter_club: 'Entradas al club 3D',
+  landing_evento_view: 'Vistas de landing de evento',
 };
 export const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
 
@@ -60,6 +61,7 @@ export const EVENT_TIPS: Record<string, string> = {
   whatsapp_click: 'Clic a un enlace de WhatsApp (grupo o contacto).',
   logo_download: 'Descarga del ZIP de logos de un DJ.',
   enter_club: 'Alguien entró al club 3D.',
+  landing_evento_view: 'Alguien abrió la landing de un evento (/evento/[id]).',
 };
 export const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
@@ -87,4 +89,5 @@ export const HIDDEN_ACTIONS = [
   'presskit_saved',
   'presskit_publish',
   'logo_download',
+  'landing_evento_view',
 ];

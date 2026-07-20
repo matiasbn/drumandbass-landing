@@ -90,6 +90,19 @@ export async function getEvents(): Promise<CmsEvent[]> {
   return (data as CmsEventRow[]).map(mapEventRow);
 }
 
+// Un evento por id (para la landing /evento/[id]). Devuelve null si no existe o
+// el id no es válido.
+export async function getEventById(id: string): Promise<CmsEvent | null> {
+  const { data, error } = await supabase
+    .from('cms_events')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapEventRow(data as CmsEventRow);
+}
+
 export async function getStreamings(): Promise<CmsStreaming[]> {
   const { data, error } = await supabase
     .from('cms_streamings')
