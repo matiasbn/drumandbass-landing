@@ -90,6 +90,10 @@ export default function EventosClient() {
   // null = solo lista · 'new' = creando · CmsEventRow = editando ese evento
   const [editing, setEditing] = useState<CmsEventRow | 'new' | null>(null);
   const [form, setForm] = useState<FormFields>(EMPTY_FORM);
+  // Todas las URLs de venta del evento (form.tickets es la activa). Se conservan
+  // todas para que Analytics no pierda clics al cambiar el link.
+  const [ticketLinks, setTicketLinks] = useState<string[]>([]);
+  const [newLink, setNewLink] = useState('');
   const [flyer, setFlyer] = useState<Flyer | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -128,8 +132,10 @@ export default function EventosClient() {
   const openForm = (ev: CmsEventRow | 'new') => {
     setMessage('');
     setEditing(ev);
+    setNewLink('');
     if (ev === 'new') {
       setForm(EMPTY_FORM);
+      setTicketLinks([]);
       setFlyer(null);
       editor?.commands.setContent('');
     } else {
@@ -142,6 +148,13 @@ export default function EventosClient() {
         tickets: ev.tickets ?? '',
         info: ev.info ?? '',
       });
+      setTicketLinks(
+        ev.ticket_links && ev.ticket_links.length
+          ? ev.ticket_links
+          : ev.tickets
+            ? [ev.tickets]
+            : []
+      );
       setFlyer(
         ev.flyer_url
           ? { url: ev.flyer_url, width: ev.flyer_width ?? 0, height: ev.flyer_height ?? 0 }
@@ -154,12 +167,24 @@ export default function EventosClient() {
   const closeForm = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setTicketLinks([]);
+    setNewLink('');
     setFlyer(null);
     setMessage('');
   };
 
   const set = (key: keyof FormFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  // Agrega una URL de venta nueva y la deja como activa (sin borrar las anteriores).
+  const addTicketLink = () => {
+    const url = newLink.trim();
+    if (!url) return;
+    setTicketLinks((prev) => (prev.includes(url) ? prev : [...prev, url]));
+    setForm((prev) => ({ ...prev, tickets: url }));
+    setNewLink('');
+  };
+  const setActiveTicket = (url: string) => setForm((prev) => ({ ...prev, tickets: url }));
 
   const removeStoredFlyer = async (url: string) => {
     const path = flyerStoragePath(url);
@@ -227,6 +252,7 @@ export default function EventosClient() {
     const payload = {
       ...(editing !== 'new' && editing ? { id: editing.id } : {}),
       ...form,
+      ticket_links: ticketLinks,
       description_html: html === '<p></p>' ? '' : html,
       flyer_url: flyer?.url ?? '',
       flyer_width: flyer?.width ?? null,
@@ -339,9 +365,64 @@ export default function EventosClient() {
               <label className={labelCls}>Término</label>
               <input type="datetime-local" value={form.end_date} onChange={set('end_date')} className={inputCls} />
             </div>
-            <div>
-              <label className={labelCls}>Link de tickets</label>
-              <input value={form.tickets} onChange={set('tickets')} className={inputCls} placeholder="https://…" />
+            <div className="sm:col-span-2">
+              <label className={labelCls}>
+                Links de tickets
+                <span
+                  className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-[10px] text-gray-500 cursor-help align-middle"
+                  title="Guarda TODAS las URLs de venta que usa el evento, aunque cambies el link. La marcada como ACTIVA es la única que ve el público en el botón TICKETS. Las anteriores se conservan (no se borran) para que Analytics no pierda los clics hechos a las URLs previas."
+                >
+                  ?
+                </span>
+              </label>
+              <p className="mono text-[11px] text-gray-500 mb-2 leading-tight">
+                La URL <b>activa</b> es la que ve el público. Al agregar una nueva queda activa;
+                las anteriores se conservan para no perder los clics en Analytics.
+              </p>
+
+              {ticketLinks.length > 0 && (
+                <ul className="flex flex-col gap-1 mb-2">
+                  {ticketLinks.map((url) => (
+                    <li key={url} className="flex items-center gap-2 border-2 border-black p-2">
+                      <input
+                        type="radio"
+                        name="active-ticket"
+                        checked={form.tickets === url}
+                        onChange={() => setActiveTicket(url)}
+                        className="shrink-0"
+                      />
+                      <span className="mono text-xs break-all flex-1">{url}</span>
+                      {form.tickets === url && (
+                        <span className="mono text-[10px] font-black uppercase bg-black text-white px-2 py-0.5 shrink-0">
+                          activa
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  value={newLink}
+                  onChange={(e) => setNewLink(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTicketLink();
+                    }
+                  }}
+                  className={inputCls}
+                  placeholder="https://… (nueva URL de venta)"
+                />
+                <button
+                  type="button"
+                  onClick={addTicketLink}
+                  className="shrink-0 border-4 border-black bg-black text-white mono text-xs font-black uppercase px-4 hover:bg-gray-800"
+                >
+                  Agregar
+                </button>
+              </div>
             </div>
             <div>
               <label className={labelCls}>Info extra</label>

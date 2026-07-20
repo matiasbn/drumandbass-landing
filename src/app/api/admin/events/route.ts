@@ -29,6 +29,18 @@ type EventPayload = Partial<Omit<CmsEventRow, 'id' | 'created_at' | 'updated_at'
 function eventFieldsFromBody(body: Record<string, unknown>): EventPayload {
   const str = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  const active = str(body.tickets);
+  // ticket_links: lista de URLs (historial). Nunca se pierde ninguna; la activa
+  // siempre queda incluida. Deduplicamos preservando el orden.
+  const rawLinks = Array.isArray(body.ticket_links) ? body.ticket_links : [];
+  const links: string[] = [];
+  for (const v of rawLinks) {
+    const s = str(v);
+    if (s && !links.includes(s)) links.push(s);
+  }
+  if (active && !links.includes(active)) links.push(active);
+
   return {
     title: str(body.title) ?? undefined,
     venue: str(body.venue),
@@ -36,7 +48,8 @@ function eventFieldsFromBody(body: Record<string, unknown>): EventPayload {
     date: str(body.date) ?? undefined,
     end_date: str(body.end_date),
     description_html: str(body.description_html),
-    tickets: str(body.tickets),
+    tickets: active,
+    ticket_links: links,
     info: str(body.info),
     flyer_url: str(body.flyer_url),
     flyer_width: num(body.flyer_width),
