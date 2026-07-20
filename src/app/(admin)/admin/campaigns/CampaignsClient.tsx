@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
+import dayjs from '@/src/lib/date';
 
 type AudienceKey = 'ravers' | 'registered' | 'pks' | 'junglists';
 
@@ -17,10 +18,33 @@ const AUDIENCES: { key: AudienceKey; label: string }[] = [
   { key: 'junglists', label: 'Junglists (registro voluntario)' },
 ];
 
+// Plantillas de correo. La primera rellena los campos desde un evento publicado;
+// se irán agregando más (p. ej. "Nuevo capítulo de El Sótano").
+type TemplateKey = 'evento';
+const TEMPLATES: { key: TemplateKey; name: string; desc: string }[] = [
+  {
+    key: 'evento',
+    name: 'Evento',
+    desc: 'Anuncia un evento publicado: rellena flyer, fecha, lugar, lineup y link de tickets.',
+  },
+];
+
+// Evento (subconjunto de cms_events que trae /api/admin/events) para el picker.
+interface EventLite {
+  id: string;
+  title: string;
+  date: string;
+  venue: string | null;
+  address: string | null;
+  flyer_url: string | null;
+  tickets: string | null;
+  description_html: string | null;
+}
+
 const STEPS = [
-  { num: 1, label: 'Audiencia', desc: 'Selecciona la audiencia' },
-  { num: 2, label: 'Configuracion', desc: 'Configura la campaña' },
-  { num: 3, label: 'Verificacion', desc: 'Revisa y confirma' },
+  { num: 1, label: 'Plantilla', desc: 'Elige una plantilla' },
+  { num: 2, label: 'Correo', desc: 'Arma el correo' },
+  { num: 3, label: 'Destinatarios', desc: 'A quién le llega' },
 ];
 
 function Stepper({ current }: { current: number }) {
@@ -103,6 +127,13 @@ export default function CampaignsClient() {
   const [bodyHtml, setBodyHtml] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; sent: number; failed: number; errors: string[] } | null>(null);
+
+  // Paso 1: plantilla + picker de evento.
+  const [template, setTemplate] = useState<TemplateKey | 'custom' | null>(null);
+  const [events, setEvents] = useState<EventLite[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [chosenEventId, setChosenEventId] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -193,8 +224,58 @@ export default function CampaignsClient() {
 
   const hasAudience = selected.size > 0 || extraEmails.size > 0;
 
-  const handleNextFromAudience = async () => {
-    await fetchCounts();
+  // --- Paso 1: plantillas ---
+  const fetchEvents = useCallback(async () => {
+    setEventsLoading(true);
+    try {
+      const res = await fetch('/api/admin/events');
+      const data = await res.json();
+      const now = dayjs();
+      const upcoming = (data.events || []).filter((e: EventLite) => dayjs(e.date).isAfter(now));
+      setEvents(upcoming);
+    } catch {
+      // ignore
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  const chooseTemplate = (key: TemplateKey | 'custom') => {
+    setTemplate(key);
+    setChosenEventId(null);
+    if (key === 'evento' && events.length === 0) fetchEvents();
+  };
+
+  // Rellena los campos del correo desde un evento publicado.
+  const applyEventTemplate = (ev: EventLite) => {
+    const fecha = dayjs(ev.date).format('dddd D [de] MMMM, HH:mm');
+    const lugar = ev.venue ? `${ev.venue}${ev.address ? ` — ${ev.address}` : ''}` : '';
+    const body = [
+      `<p><strong>${fecha}</strong></p>`,
+      lugar ? `<p>${lugar}</p>` : '',
+      ev.description_html ? ev.description_html : '',
+    ]
+      .filter(Boolean)
+      .join('');
+    setCampaignName(ev.title);
+    setSubject(`${ev.title} · ${dayjs(ev.date).format('D MMM')}`);
+    setTitle(ev.title);
+    setImageFile(null);
+    setImagePreview(ev.flyer_url || null);
+    setButtonText(ev.tickets ? 'Comprar tickets' : 'Ver evento');
+    setButtonUrl(ev.tickets || '');
+    setBodyHtml(body);
+    editor?.commands.setContent(body);
+  };
+
+  const step1Valid = template === 'custom' || (template === 'evento' && !!chosenEventId);
+
+  const continueFromTemplate = () => {
+    if (template === 'evento') {
+      const ev = events.find((e) => e.id === chosenEventId);
+      if (!ev) return;
+      applyEventTemplate(ev);
+    }
     setStep(2);
   };
 
@@ -293,97 +374,93 @@ export default function CampaignsClient() {
 
       <Stepper current={step} />
 
-      {/* Step 1: Audience */}
+      {/* Step 1: Plantilla */}
       {step === 1 && (
         <div className="brutalist-border bg-white p-6 brutalist-shadow max-w-2xl mx-auto">
-          <h2 className="text-xl font-black uppercase mb-4">Seleccionar Audiencia</h2>
-          <div className="space-y-3 mb-6">
-            {AUDIENCES.map(({ key, label }) => (
-              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
-                <span className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(key)}
-                    onChange={() => toggleAudience(key)}
-                    className="w-5 h-5 accent-black cursor-pointer"
-                  />
-                  <span className="font-bold uppercase text-sm">{label}</span>
-                </span>
-                {selected.has(key) && (
-                  <span className="mono text-xs text-gray-500">
-                    {loadingCounts ? '…' : `${counts[key] ?? 0}`}
-                  </span>
-                )}
-              </label>
+          <h2 className="text-xl font-black uppercase mb-1">Elige una plantilla</h2>
+          <p className="mono text-xs text-gray-500 mb-5">
+            Parte desde una plantilla o arma una campaña desde cero.
+          </p>
+
+          <div className="space-y-3">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => chooseTemplate(t.key)}
+                className={`w-full text-left brutalist-border p-4 transition-colors cursor-pointer ${
+                  template === t.key ? 'bg-black text-white' : 'bg-white hover:bg-gray-50'
+                }`}
+              >
+                <p className="font-black uppercase">{t.name}</p>
+                <p className={`mono text-xs mt-1 ${template === t.key ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {t.desc}
+                </p>
+              </button>
             ))}
+
+            {/* Campaña personalizada, al final */}
+            <button
+              type="button"
+              onClick={() => chooseTemplate('custom')}
+              className={`w-full text-left brutalist-border border-dashed p-4 transition-colors cursor-pointer ${
+                template === 'custom' ? 'bg-black text-white' : 'bg-white hover:bg-gray-50'
+              }`}
+            >
+              <p className="font-black uppercase">Campaña personalizada</p>
+              <p className={`mono text-xs mt-1 ${template === 'custom' ? 'text-gray-300' : 'text-gray-500'}`}>
+                Correo en blanco, lo armas todo tú.
+              </p>
+            </button>
           </div>
 
-          {/* Total de correos únicos (se actualiza al marcar audiencias) */}
-          <div className="brutalist-border bg-black text-white px-4 py-3 mb-6 flex items-center justify-between">
-            <span className="mono text-xs font-bold uppercase">Total correos únicos</span>
-            <span className="mono text-lg font-black">
-              {loadingCounts ? '…' : totalUnique + extraEmails.size}
-            </span>
-          </div>
-          {/* Individual email search */}
-          <div className="mt-6 pt-6 border-t-4 border-black">
-            <h3 className="font-black uppercase text-sm mb-3">Agregar emails individuales</h3>
-            <div className="relative">
-              <input
-                type="text"
-                value={emailSearch}
-                onChange={e => handleSearchEmail(e.target.value)}
-                placeholder="Buscar por email..."
-                className="w-full brutalist-border px-4 py-2 mono text-sm focus:outline-none"
-              />
-              {searchLoading && (
-                <div className="absolute right-3 top-2.5">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-r-transparent" />
-                </div>
-              )}
-              {searchResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 brutalist-border bg-white max-h-[200px] overflow-y-auto">
-                  {searchResults.map(email => (
+          {/* Picker de evento cuando la plantilla es "Evento" */}
+          {template === 'evento' && (
+            <div className="mt-6 pt-6 border-t-4 border-black">
+              <h3 className="font-black uppercase text-sm mb-3">Elige el evento</h3>
+              {eventsLoading ? (
+                <p className="mono text-sm text-gray-500">Cargando eventos…</p>
+              ) : events.length === 0 ? (
+                <p className="mono text-sm text-gray-500">No hay eventos vigentes publicados.</p>
+              ) : (
+                <div className="space-y-2 max-h-[340px] overflow-y-auto">
+                  {events.map((ev) => (
                     <button
-                      key={email}
-                      onClick={() => addExtraEmail(email)}
-                      disabled={extraEmails.has(email)}
-                      className="w-full text-left px-4 py-2 mono text-sm hover:bg-gray-100 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed border-b border-gray-200 last:border-b-0"
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setChosenEventId(ev.id)}
+                      className={`w-full flex items-center gap-3 brutalist-border p-2 text-left transition-colors cursor-pointer ${
+                        chosenEventId === ev.id ? 'bg-[#ff0055] text-white' : 'bg-white hover:bg-gray-50'
+                      }`}
                     >
-                      {email} {extraEmails.has(email) && '(agregado)'}
+                      {ev.flyer_url ? (
+                        <img src={ev.flyer_url} alt="" className="w-14 h-14 object-cover border-2 border-black shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 border-2 border-black shrink-0 flex items-center justify-center mono text-[9px] text-center">
+                          SIN FLYER
+                        </div>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block font-black uppercase truncate">{ev.title}</span>
+                        <span className={`block mono text-[11px] ${chosenEventId === ev.id ? 'text-white' : 'text-gray-500'}`}>
+                          {dayjs(ev.date).format('ddd D MMM · HH:mm')}
+                          {ev.venue ? ` · ${ev.venue}` : ''}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-
-            {extraEmails.size > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {Array.from(extraEmails).map(email => (
-                  <span
-                    key={email}
-                    className="brutalist-border px-3 py-1 mono text-xs bg-gray-50 flex items-center gap-2"
-                  >
-                    {email}
-                    <button
-                      onClick={() => removeExtraEmail(email)}
-                      className="font-bold hover:text-red-600 cursor-pointer"
-                    >
-                      x
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
           <div className="flex justify-end mt-6">
             <button
-              onClick={handleNextFromAudience}
-              disabled={!hasAudience}
+              onClick={continueFromTemplate}
+              disabled={!step1Valid}
               className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Siguiente →
+              Continuar →
             </button>
           </div>
         </div>
@@ -539,11 +616,95 @@ export default function CampaignsClient() {
         </div>
       )}
 
-      {/* Step 3: Verification */}
+      {/* Step 3: Destinatarios (audiencia + envío) */}
       {step === 3 && (
         <div className="max-w-2xl mx-auto space-y-6">
+          {/* Audiencia */}
           <div className="brutalist-border bg-white p-6 brutalist-shadow">
-            <h2 className="text-xl font-black uppercase mb-4">Verificacion</h2>
+            <h2 className="text-xl font-black uppercase mb-4">A quién le llega</h2>
+            <div className="space-y-3 mb-6">
+              {AUDIENCES.map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(key)}
+                      onChange={() => toggleAudience(key)}
+                      className="w-5 h-5 accent-black cursor-pointer"
+                    />
+                    <span className="font-bold uppercase text-sm">{label}</span>
+                  </span>
+                  {selected.has(key) && (
+                    <span className="mono text-xs text-gray-500">
+                      {loadingCounts ? '…' : `${counts[key] ?? 0}`}
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+
+            <div className="brutalist-border bg-black text-white px-4 py-3 flex items-center justify-between">
+              <span className="mono text-xs font-bold uppercase">Total correos únicos</span>
+              <span className="mono text-lg font-black">
+                {loadingCounts ? '…' : totalUnique + extraEmails.size}
+              </span>
+            </div>
+
+            {/* Emails individuales */}
+            <div className="mt-6 pt-6 border-t-4 border-black">
+              <h3 className="font-black uppercase text-sm mb-3">Agregar emails individuales</h3>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={emailSearch}
+                  onChange={e => handleSearchEmail(e.target.value)}
+                  placeholder="Buscar por email..."
+                  className="w-full brutalist-border px-4 py-2 mono text-sm focus:outline-none"
+                />
+                {searchLoading && (
+                  <div className="absolute right-3 top-2.5">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-r-transparent" />
+                  </div>
+                )}
+                {searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 brutalist-border bg-white max-h-[200px] overflow-y-auto">
+                    {searchResults.map(email => (
+                      <button
+                        key={email}
+                        onClick={() => addExtraEmail(email)}
+                        disabled={extraEmails.has(email)}
+                        className="w-full text-left px-4 py-2 mono text-sm hover:bg-gray-100 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed border-b border-gray-200 last:border-b-0"
+                      >
+                        {email} {extraEmails.has(email) && '(agregado)'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {extraEmails.size > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {Array.from(extraEmails).map(email => (
+                    <span
+                      key={email}
+                      className="brutalist-border px-3 py-1 mono text-xs bg-gray-50 flex items-center gap-2"
+                    >
+                      {email}
+                      <button
+                        onClick={() => removeExtraEmail(email)}
+                        className="font-bold hover:text-red-600 cursor-pointer"
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Revisar y enviar */}
+          <div className="brutalist-border bg-white p-6 brutalist-shadow">
+            <h2 className="text-xl font-black uppercase mb-4">Revisar y enviar</h2>
 
             <div className="space-y-3 mono text-sm">
               <div className="flex justify-between brutalist-border p-3">
@@ -556,7 +717,7 @@ export default function CampaignsClient() {
               </div>
               <div className="flex justify-between brutalist-border p-3">
                 <span className="font-bold">Imagen:</span>
-                <span>{imageFile ? imageFile.name : 'Sin imagen'}</span>
+                <span>{imageFile ? imageFile.name : imagePreview ? 'Flyer del evento' : 'Sin imagen'}</span>
               </div>
               <div className="flex justify-between brutalist-border p-3">
                 <span className="font-bold">Boton:</span>
@@ -615,7 +776,7 @@ export default function CampaignsClient() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={sending || sendResult?.success === true}
+                disabled={sending || sendResult?.success === true || !hasAudience}
                 className="brutalist-border bg-[#ff0055] text-white px-6 py-3 font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {sending ? 'Enviando...' : sendResult?.success ? 'Enviado' : 'Enviar Campaña'}
