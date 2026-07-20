@@ -381,7 +381,19 @@ export default function CampaignsClient() {
     reader.readAsDataURL(file);
   };
 
-  const isStep2Valid = subject.trim() && title.trim();
+  // Un código vacío haría que el correo no mencione descuento, contradiciendo lo
+  // que el admin acaba de configurar: se bloquea antes de enviar.
+  const missingCouponCode =
+    couponEnabled &&
+    (couponTarget === 'new_only'
+      ? !couponNewCode.trim()
+      : couponTarget === 'existing_only'
+        ? !couponExistingCode.trim()
+        : couponSameForAll
+          ? !couponNewCode.trim()
+          : !couponNewCode.trim() || !couponExistingCode.trim());
+
+  const isStep2Valid = subject.trim() && title.trim() && !missingCouponCode;
 
   const resizeIframe = useCallback(() => {
     const iframe = iframeRef.current;
@@ -783,8 +795,44 @@ export default function CampaignsClient() {
                               ? 'Todos reciben el mismo código y un correo que anuncia el descuento.'
                               : 'Dos códigos distintos; ambos segmentos reciben un correo que anuncia su descuento.'}
                       </p>
+
+                      {missingCouponCode && (
+                        <p className="brutalist-border bg-red-50 text-red-800 px-3 py-2 mono text-[10px] font-bold uppercase">
+                          Falta el código de descuento — sin él el correo no lo mencionaría.
+                        </p>
+                      )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Entre la configuración y el resto: qué correo se está viendo.
+                  Solo aparece cuando el descuento genera correos distintos. */}
+              {previews.length > 1 && (
+                <div className="brutalist-border p-4 bg-white">
+                  <p className="font-bold text-xs uppercase mb-1">
+                    Se enviarán {previews.length} correos distintos
+                  </p>
+                  <p className="mono text-[10px] text-gray-500 mb-3">
+                    Elige cuál revisar en la vista previa.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {previews.map((p, i) => (
+                      <button
+                        key={p.segment}
+                        type="button"
+                        onClick={() => setPreviewIndex(i)}
+                        className={`flex-1 brutalist-border px-3 py-2 mono text-[11px] font-bold uppercase transition-colors cursor-pointer ${
+                          i === previewIndex ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+                        }`}
+                      >
+                        {p.label}
+                        <span className="block text-[9px] font-normal opacity-70">
+                          {p.hasCoupon ? 'con descuento' : 'sin descuento'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -867,31 +915,11 @@ export default function CampaignsClient() {
           <div className="lg:col-span-2 brutalist-border bg-white p-6 brutalist-shadow h-fit lg:sticky lg:top-6">
             <h3 className="font-black uppercase text-sm mb-4">Vista previa</h3>
 
-            {/* Con descuento parcial salen DOS correos distintos: se navegan acá
-                para revisar qué le llega exactamente a cada segmento. */}
+            {/* Qué correo se está viendo. Se elige en la configuración. */}
             {previews.length > 1 && (
-              <div className="mb-3">
-                <div className="flex gap-2">
-                  {previews.map((p, i) => (
-                    <button
-                      key={p.segment}
-                      type="button"
-                      onClick={() => setPreviewIndex(i)}
-                      className={`flex-1 brutalist-border px-3 py-2 mono text-[11px] font-bold uppercase transition-colors cursor-pointer ${
-                        i === previewIndex ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-                      }`}
-                    >
-                      {p.label}
-                      <span className="block text-[9px] font-normal opacity-70">
-                        {p.hasCoupon ? 'con descuento' : 'sin descuento'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mono text-[10px] text-gray-500 mt-2">
-                  Se enviarán {previews.length} correos distintos según el estado de registro.
-                </p>
-              </div>
+              <p className="mono text-[11px] font-bold uppercase mb-3 brutalist-border bg-gray-50 px-3 py-2">
+                {activePreview.label} · {activePreview.hasCoupon ? 'con descuento' : 'sin descuento'}
+              </p>
             )}
 
             <div className="brutalist-border overflow-hidden">
