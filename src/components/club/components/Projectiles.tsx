@@ -80,7 +80,7 @@ const ExplosionPool: React.FC<{ count: number; pointsRefs: React.MutableRefObjec
   return (
     <>
       {Array.from({ length: count }, (_, i) => (
-        <points key={`exp-${i}`} ref={el => { pointsRefs.current[i] = el; velocitiesStore.current[i] = null; }} position={[0, -100, 0]} visible={false}>
+        <points key={`exp-${i}`} ref={(el: THREE.Points | null) => { pointsRefs.current[i] = el; velocitiesStore.current[i] = null; }} position={[0, -100, 0]} visible={false}>
           <bufferGeometry>
             <bufferAttribute attach="attributes-position" args={[posArrays[i], 3]} />
             <bufferAttribute attach="attributes-color" args={[colorArrays[i], 3]} />
