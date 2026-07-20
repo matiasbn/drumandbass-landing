@@ -246,17 +246,16 @@ export default function CampaignsClient() {
     if (key === 'evento' && events.length === 0) fetchEvents();
   };
 
-  // Rellena los campos del correo desde un evento publicado.
+  // Rellena los campos del correo desde un evento publicado. El cuerpo va redactado
+  // como invitación (sin lineup — ese ya va en el flyer) y sin lenguaje de urgencia.
   const applyEventTemplate = (ev: EventLite) => {
-    const fecha = dayjs(ev.date).format('dddd D [de] MMMM, HH:mm');
-    const lugar = ev.venue ? `${ev.venue}${ev.address ? ` — ${ev.address}` : ''}` : '';
+    const fecha = dayjs(ev.date).format('dddd D [de] MMMM [desde las] HH:mm');
+    const lugar = ev.venue ? `${ev.venue}${ev.address ? ` · ${ev.address}` : ''}` : '';
     const body = [
-      `<p><strong>${fecha}</strong></p>`,
-      lugar ? `<p>${lugar}</p>` : '',
-      ev.description_html ? ev.description_html : '',
-    ]
-      .filter(Boolean)
-      .join('');
+      `<p><strong>Llegó la fecha: ${ev.title} ya es oficial y te queremos en la pista.</strong></p>`,
+      `<p>Nos juntamos el <strong>${fecha}</strong>${lugar ? ` en <strong>${lugar}</strong>` : ''}. Junta a tu crew y prepárate para una noche de puro Drum and Bass.</p>`,
+      `<p>Abajo encuentras el link del evento. Nos vemos en la pista.</p>`,
+    ].join('');
     setCampaignName(ev.title);
     setSubject(`${ev.title} · ${dayjs(ev.date).format('D MMM')}`);
     setTitle(ev.title);
