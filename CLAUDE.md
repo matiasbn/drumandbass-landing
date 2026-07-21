@@ -95,6 +95,10 @@ Junglist registration (`src/app/api/junglist/route.ts`, `Junglist` type in `src/
 
 **Schema is applied manually** in the Supabase SQL Editor (no CLI/service-role in the repo). Migrations live in `supabase/migrations/` and are mirrored into the consolidated `supabase-schema.sql`; add new tables to both.
 
+**RLS gotcha — per-command policies are easy to miss.** Because the schema is applied by hand, a table can end up with a SELECT/INSERT/UPDATE policy but **no DELETE policy** (or vice-versa). With RLS enabled, a missing policy means the command is **silently denied**: the client call returns **success with zero rows affected and no error**, so the UI looks like it worked but the DB never changed (rows "reappear" on reload). This bit us on `newsletter_subscribers` deletes (the "Admins can delete" policy was missing in the live DB). **Debugging rule: when a Supabase mutation succeeds but nothing changes, add `.delete()/.update()...select()` and check the affected-row count first — 0 rows + no error = a missing/blocking RLS policy.** Fix it by creating the missing `FOR DELETE/UPDATE ... USING (...)` policy (root fix), not a `SECURITY DEFINER` workaround. Related: admin mutations run through the cookie client, which is subject to RLS — `verifyAdmin` passing (a SELECT) does **not** guarantee a DELETE/UPDATE policy exists.
+
+Also, native `window.confirm`/`alert` is unreliable (Brave and the browser's "prevent additional dialogs" suppress it, so a `confirm()`-gated fetch never fires) — use inline two-step confirmation for destructive actions, the repo convention.
+
 ### Junglist registration UI & session states
 
 The junglist join flow lives in the home **community zone** and the dedicated `/junglist` view — both are **session-aware** and decide what to show by querying the current user's state:
