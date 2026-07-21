@@ -287,43 +287,30 @@ export default function EventCouponBlock({
         </h2>
         <p className="mono text-sm lg:text-base font-bold uppercase mb-8 leading-tight">
           {!couponForNew
-            ? 'El descuento es para Junglists ya registrados. Inicia sesión para ver el tuyo.'
-            : state.kind === 'anon'
-              ? 'Ser Junglist es gratis y te toma un minuto. Inscríbete o inicia sesión para ver tu descuento.'
-              : 'Completa tu registro gratis para ver tu descuento.'}
+            ? 'El descuento es para Junglists ya registrados. Inicia sesión para ver si tienes.'
+            : 'Ser Junglist es gratis. Inscríbete o inicia sesión para ver si tienes descuento.'}
         </p>
 
-        {/* Los dos caminos al descuento: inscribirse o iniciar sesión. */}
         <div className="flex flex-col gap-4">
-          {couponForNew && (
-            <BigButton
-              variant="blue"
-              className="w-full text-lg py-6"
-              href={`/junglist?next=/evento/${eventId}`}
-            >
-              {state.kind === 'anon' ? 'Inscríbete y obtén tu descuento' : 'Completa tu registro'}
-            </BigButton>
-          )}
-          {state.kind === 'anon' && (
-            <button
-              type="button"
-              onClick={login}
-              className="w-full brutalist-border bg-black text-white text-lg py-6 px-6 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer"
-            >
-              Ya soy Junglist, iniciar sesión
-            </button>
-          )}
-        </div>
+          {/* Un solo camino al descuento: /junglist unifica inscribirse e iniciar
+              sesión (y devuelve al evento después). */}
+          <BigButton
+            variant="blue"
+            className="w-full text-lg py-6"
+            href={`/junglist?next=/evento/${eventId}`}
+          >
+            {couponForNew ? 'Inscríbete o inicia sesión' : 'Inicia sesión para ver tu descuento'}
+          </BigButton>
 
-        {/* Opt-out claro: solo quiere ver el evento, sin el descuento. Botón real
-            (blanco) pero visualmente por debajo de los dos de arriba. */}
-        <button
-          type="button"
-          onClick={dismiss}
-          className="w-full brutalist-border bg-white text-black mt-4 py-4 px-6 font-bold uppercase text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-        >
-          No quiero descuento, llévame al evento
-        </button>
+          {/* Opt-out: solo quiere ver el evento, sin el descuento. */}
+          <button
+            type="button"
+            onClick={dismiss}
+            className="w-full brutalist-border bg-white text-black py-4 px-6 font-bold uppercase text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            No quiero descuento, llévame al evento
+          </button>
+        </div>
       </div>
     </div>
   );
