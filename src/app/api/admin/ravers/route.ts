@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdmin } from '@/src/lib/authz';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -25,18 +26,6 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
   );
 }
 
-async function verifyAdmin(supabase: ReturnType<typeof createSupabaseServer>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, isAdmin: false };
-
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-
-  return { user, isAdmin: adminProfile?.is_admin === true };
-}
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -104,11 +93,17 @@ export async function POST(request: NextRequest) {
 
   const results: RowResult[] = [];
 
-  // Listas disjuntas: los correos que ya son junglists (registro voluntario) no se
-  // importan a la lista manual de ravers.
-  const { data: junglistRows } = await supabase.from('junglists').select('email');
+  // Listas disjuntas: los correos que ya son junglists o DJs (pk_profiles) no se
+  // importan a la lista de correos — se ignoran y se reportan como ya registrados.
+  const [junglistRows, pkRows] = await Promise.all([
+    supabase.from('junglists').select('email'),
+    supabase.from('pk_profiles').select('email'),
+  ]);
   const junglistEmails = new Set(
-    (junglistRows || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+    (junglistRows.data || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+  );
+  const djEmails = new Set(
+    (pkRows.data || []).map((p) => p.email?.toLowerCase()).filter(Boolean)
   );
 
   for (const row of rows) {
@@ -120,6 +115,10 @@ export async function POST(request: NextRequest) {
 
     if (junglistEmails.has(email)) {
       results.push({ email, status: 'skipped', error: 'Ya es junglist' });
+      continue;
+    }
+    if (djEmails.has(email)) {
+      results.push({ email, status: 'skipped', error: 'Ya es DJ' });
       continue;
     }
 

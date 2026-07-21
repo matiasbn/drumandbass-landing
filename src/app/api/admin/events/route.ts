@@ -3,19 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import type { CmsEventRow } from '@/src/lib/cms';
+import { verifyAdmin as verifyAdminCore } from '@/src/lib/authz';
 
 // CRUD de eventos del CMS propio (tabla cms_events). Solo admins: además del
 // chequeo aquí, la RLS de la tabla exige profiles.is_admin para escribir.
 
 async function verifyAdmin(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return false;
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-  return adminProfile?.is_admin === true;
+  return (await verifyAdminCore(supabase)).isAdmin;
 }
 
 // La home es ISR (1h): tras cualquier mutación se revalida al tiro para que
@@ -29,6 +23,18 @@ type EventPayload = Partial<Omit<CmsEventRow, 'id' | 'created_at' | 'updated_at'
 function eventFieldsFromBody(body: Record<string, unknown>): EventPayload {
   const str = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  const active = str(body.tickets);
+  // ticket_links: lista de URLs (historial). Nunca se pierde ninguna; la activa
+  // siempre queda incluida. Deduplicamos preservando el orden.
+  const rawLinks = Array.isArray(body.ticket_links) ? body.ticket_links : [];
+  const links: string[] = [];
+  for (const v of rawLinks) {
+    const s = str(v);
+    if (s && !links.includes(s)) links.push(s);
+  }
+  if (active && !links.includes(active)) links.push(active);
+
   return {
     title: str(body.title) ?? undefined,
     venue: str(body.venue),
@@ -36,7 +42,8 @@ function eventFieldsFromBody(body: Record<string, unknown>): EventPayload {
     date: str(body.date) ?? undefined,
     end_date: str(body.end_date),
     description_html: str(body.description_html),
-    tickets: str(body.tickets),
+    tickets: active,
+    ticket_links: links,
     info: str(body.info),
     flyer_url: str(body.flyer_url),
     flyer_width: num(body.flyer_width),

@@ -1,10 +1,27 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 
 export default function AdminClient() {
   const { user, profile, loading, isAdmin, signInWithGoogle, signOut } = useAdminAuth();
+  // Indicador: correos de campañas que quedaron sin enviar (para reenviar otro día).
+  const [pendingResend, setPendingResend] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch('/api/admin/campaigns?list=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const total = (d?.campaigns || []).reduce(
+          (acc: number, c: { failed_count?: number }) => acc + (c.failed_count || 0),
+          0
+        );
+        setPendingResend(total);
+      })
+      .catch(() => {});
+  }, [isAdmin]);
 
   if (loading) {
     return (
@@ -64,8 +81,8 @@ export default function AdminClient() {
       href: '/admin/users',
     },
     {
-      title: 'Ravers',
-      description: 'Importar y ver ravers registrados',
+      title: 'Importar correos',
+      description: 'Importar y ver correos',
       href: '/admin/ravers',
     },
     {
@@ -116,7 +133,14 @@ export default function AdminClient() {
             href={item.href}
             className="brutalist-border bg-white p-6 brutalist-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
           >
-            <h2 className="text-xl font-black uppercase mb-2">{item.title}</h2>
+            <h2 className="text-xl font-black uppercase mb-2 flex items-center gap-2 flex-wrap">
+              {item.title}
+              {item.href === '/admin/campaigns' && pendingResend > 0 && (
+                <span className="mono text-[10px] font-bold uppercase bg-[#ff0055] text-white px-2 py-0.5">
+                  ⚠ {pendingResend} sin enviar
+                </span>
+              )}
+            </h2>
             <p className="mono text-sm text-gray-600">{item.description}</p>
           </Link>
         ))}

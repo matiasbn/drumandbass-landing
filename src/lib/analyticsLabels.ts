@@ -17,6 +17,7 @@ export const EVENT_LABELS: Record<string, string> = {
   event_link_click: 'Clic a tickets de evento',
   button_click: 'Clics en botones',
   ui_click: 'Clics en la interfaz',
+  logout: 'Cierres de sesión',
   login: 'Inicios de sesión',
   junglist_signup: 'Registros de junglist',
   junglist_unsubscribe: 'Bajas de junglist',
@@ -45,6 +46,10 @@ export const EVENT_LABELS: Record<string, string> = {
   club_shake_toggle: 'Toggle de vibración de cámara (club)',
   club_round_start: 'Rounds iniciados (club)',
   club_round_end: 'Rounds terminados (club)',
+  landing_evento_view: 'Vistas de landing de evento',
+  junglist_coupon_view: 'Cupones Junglist revelados',
+  junglist_coupon_copy: 'Cupones Junglist copiados',
+  junglist_coupon_dismiss: 'Descartaron el descuento Junglist',
 };
 export const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
 
@@ -61,6 +66,7 @@ export const EVENT_TIPS: Record<string, string> = {
   button_click: 'Clic en un botón rastreado del home.',
   ui_click: 'Clic en cualquier botón o enlace del sitio (auto-tracking).',
   login: 'Inicio de sesión con Google (presskit).',
+  logout: 'Alguien cerró sesión desde el indicador de sesión del header.',
   junglist_signup: 'Un usuario completó su registro como junglist.',
   junglist_unsubscribe: 'Un junglist se dio de baja.',
   presskit_created: 'Un DJ creó su presskit por primera vez.',
@@ -88,6 +94,10 @@ export const EVENT_TIPS: Record<string, string> = {
   club_shake_toggle: 'Un jugador activó/desactivó la vibración de cámara (param enabled).',
   club_round_start: 'Empezó un round de 3 min (durante el stream en vivo).',
   club_round_end: 'Terminó un round (params: winner, my_score, placement, players).',
+  landing_evento_view: 'Alguien abrió la landing de un evento (/evento/[id]).',
+  junglist_coupon_view: 'Un junglist con sesión iniciada vio su código de descuento en la landing de un evento.',
+  junglist_coupon_copy: 'Alguien copió su código de descuento Junglist al portapapeles.',
+  junglist_coupon_dismiss: 'Alguien eligió seguir al evento sin inscribirse como Junglist. Mide cuánta gente prefiere no registrarse.',
 };
 export const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
@@ -112,6 +122,7 @@ export const CORE_ACTIONS = [
 // siguen registrando en GA por si algún día se quieren mirar allá.
 export const HIDDEN_ACTIONS = [
   'login',
+  'logout',
   'release_publish',
   'presskit_view',
   'presskit_created',
@@ -130,4 +141,8 @@ export const HIDDEN_ACTIONS = [
   'club_sound_toggle',
   'club_shake_toggle',
   'club_round_start',
+  'landing_evento_view',
+  'junglist_coupon_view',
+  'junglist_coupon_copy',
+  'junglist_coupon_dismiss',
 ];

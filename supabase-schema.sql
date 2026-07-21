@@ -225,7 +225,11 @@ CREATE TABLE IF NOT EXISTS cms_events (
   date TEXT NOT NULL,
   end_date TEXT,
   description_html TEXT,
+  -- URL de venta ACTIVA (la que muestra el sitio en el botón TICKETS).
   tickets TEXT,
+  -- Historial de TODAS las URLs de venta que usó el evento (incluida la activa).
+  -- Se guardan todas para que analytics nunca pierda clics al cambiar el link.
+  ticket_links TEXT[] NOT NULL DEFAULT '{}',
   info TEXT,
   flyer_url TEXT,
   flyer_width INTEGER,
@@ -297,3 +301,202 @@ DROP TRIGGER IF EXISTS cms_streamings_updated_at ON cms_streamings;
 CREATE TRIGGER cms_streamings_updated_at
   BEFORE UPDATE ON cms_streamings
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- CAMPAÑAS DE EMAIL (migración 20260722000000)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Campañas de email (persistencia + destinatarios) para poder revisarlas y medir
+-- su eficiencia. El id de la campaña sirve además como campaign_id (utm) para el
+-- tracking en GA, y como ancla del cupón de descuento.
+--
+-- campaign_recipients guarda una fila por correo enviado → así se ve A QUIÉNES se
+-- envió y (con el webhook de Resend, Fase B) quién abrió/clickeó.
+--
+-- Aplicar manualmente en el SQL Editor de Supabase.
+
+-- ── Campañas ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS campaigns (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT,
+  template TEXT,                 -- 'evento' | 'custom'
+  event_id UUID REFERENCES cms_events(id) ON DELETE SET NULL,
+  subject TEXT NOT NULL,
+  title TEXT,
+  body_html TEXT,
+  image_url TEXT,                -- URL o data-uri de la imagen del correo
+  button_text TEXT,
+  button_url TEXT,
+  coupon_code TEXT,             -- cupón de descuento ligado a la campaña
+  coupon_description TEXT,
+  audiences TEXT[],             -- audiencias enviadas (ravers, registered, pks, junglists)
+  recipients INTEGER DEFAULT 0,  -- total de destinatarios
+  sent_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'sent',    -- 'draft' | 'sent'
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  sent_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS campaigns_created_idx ON campaigns(created_at DESC);
+
+-- ── Destinatarios ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS campaign_recipients (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE NOT NULL,
+  email TEXT NOT NULL,
+  resend_id TEXT,               -- id del envío en Resend (para casar los webhooks)
+  status TEXT DEFAULT 'sent',    -- sent | delivered | opened | clicked | bounced
+  opened_at TIMESTAMPTZ,
+  clicked_at TIMESTAMPTZ,
+  -- El id (uuid aleatorio) de esta fila viaja en el link del correo (?ct=<id>).
+  -- Al aterrizar, /api/campaign-visit lo marca → sabemos QUIÉN visitó, en tiempo
+  -- real y sin columna extra ni exponer el correo.
+  visited_at TIMESTAMPTZ,       -- PRIMERA visita a la landing desde su link
+  visit_count INTEGER DEFAULT 0, -- TOTAL de clics/visitas de ese destinatario
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS campaign_recipients_campaign_idx ON campaign_recipients(campaign_id);
+CREATE INDEX IF NOT EXISTS campaign_recipients_resend_idx ON campaign_recipients(resend_id);
+
+-- ── RLS: solo admins ────────────────────────────────────────────────────────
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_recipients ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage campaigns" ON campaigns
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = auth.uid() AND profiles.is_admin = true))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = auth.uid() AND profiles.is_admin = true));
+
+CREATE POLICY "Admins manage campaign_recipients" ON campaign_recipients
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = auth.uid() AND profiles.is_admin = true))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = auth.uid() AND profiles.is_admin = true));
+
+-- ── Marcar visita (público, sin exponer datos) ──────────────────────────────
+-- La landing llama a esta función con el id del destinatario (el uuid de la fila,
+-- que viajó en el link). Corre como SECURITY DEFINER (salta el RLS) y solo setea
+-- visited_at/visit_count de esa fila; no lee ni devuelve nada. Así no hace falta
+-- service-role, ni columna token, ni exponer el email en la URL.
+CREATE OR REPLACE FUNCTION mark_campaign_visit(p_id UUID)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE campaign_recipients
+  SET visited_at = COALESCE(visited_at, NOW()),
+      visit_count = visit_count + 1,
+      status = CASE WHEN status IN ('sent', 'delivered', 'opened') THEN 'clicked' ELSE status END
+  WHERE id = p_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION mark_campaign_visit(UUID) TO anon, authenticated;
+
+-- Marca la apertura (pixel del correo). Igual que la visita pero para opened_at.
+-- Ojo: las aperturas por pixel son poco fiables (pre-carga/bloqueo de imágenes).
+CREATE OR REPLACE FUNCTION mark_campaign_open(p_id UUID)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE campaign_recipients
+  SET opened_at = COALESCE(opened_at, NOW()),
+      status = CASE WHEN status IN ('sent', 'delivered') THEN 'opened' ELSE status END
+  WHERE id = p_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION mark_campaign_open(UUID) TO anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- DESCUENTOS JUNGLIST (migración 20260723000000)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Descuentos Junglist por evento.
+--
+-- Los cupones viven en el EVENTO (no en la campaña) porque la landing
+-- /evento/[id] los tiene que servir, sobreviven a más de una campaña y también
+-- valen para quien llega orgánico. La campaña guarda solo un snapshot de qué
+-- mandó, para el historial.
+--
+-- El código NUNCA viaja en el correo: si viajara, se reenvía y cualquiera lo usa
+-- sin inscribirse. El correo solo promete el descuento y linkea a la landing,
+-- donde se revela contra sesión + estado de junglist.
+--
+-- Aplicar manualmente en el SQL Editor de Supabase.
+
+-- ── Cupones del evento ──────────────────────────────────────────────────────
+ALTER TABLE cms_events
+  ADD COLUMN IF NOT EXISTS coupon_junglist_new TEXT,   -- para quien se inscribe a partir de la campaña
+  ADD COLUMN IF NOT EXISTS coupon_junglist     TEXT,   -- para quien ya era junglist
+  -- Momento en que se fijaron los cupones (= envío de la campaña). Es el corte
+  -- nuevo/antiguo: junglists.created_at > coupon_set_at ⇒ junglist nuevo.
+  ADD COLUMN IF NOT EXISTS coupon_set_at TIMESTAMPTZ;
+
+-- ── Snapshot en la campaña (para el historial) ──────────────────────────────
+ALTER TABLE campaigns
+  ADD COLUMN IF NOT EXISTS coupon_mode TEXT,           -- 'none' | 'single' | 'split'
+  ADD COLUMN IF NOT EXISTS coupon_new_code TEXT,
+  ADD COLUMN IF NOT EXISTS coupon_existing_code TEXT;
+
+-- Segmento al que se le envió cada correo: define qué copy recibió.
+ALTER TABLE campaign_recipients
+  ADD COLUMN IF NOT EXISTS segment TEXT;               -- 'junglist' | 'no_junglist'
+
+-- ── Cupón del evento para el junglist autenticado ───────────────────────────
+-- Devuelve el código que le corresponde al usuario actual, o NULL si no aplica.
+-- SECURITY DEFINER para poder leer junglists/pk_profiles sin abrir RLS, pero
+-- decide TODO en base a auth.uid(): el llamador no puede pedir el cupón de otro
+-- ni saber cuál es el otro código. Un no-junglist recibe NULL.
+CREATE OR REPLACE FUNCTION get_event_coupon(p_event_id UUID)
+RETURNS TABLE (code TEXT, kind TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_new TEXT;
+  v_existing TEXT;
+  v_cutoff TIMESTAMPTZ;
+  v_since TIMESTAMPTZ;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT coupon_junglist_new, coupon_junglist, coupon_set_at
+    INTO v_new, v_existing, v_cutoff
+  FROM cms_events WHERE id = p_event_id;
+
+  IF COALESCE(v_new, v_existing) IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Un DJ es siempre junglist: vale el registro más antiguo de cualquiera de las
+  -- dos tablas. Si no está en ninguna, no es junglist y no hay cupón.
+  SELECT MIN(created_at) INTO v_since FROM (
+    SELECT created_at FROM junglists   WHERE user_id = v_uid
+    UNION ALL
+    SELECT created_at FROM pk_profiles WHERE user_id = v_uid
+  ) t;
+
+  IF v_since IS NULL THEN
+    RETURN;
+  END IF;
+
+  IF v_cutoff IS NOT NULL AND v_since > v_cutoff THEN
+    -- Junglist nuevo: su código, con fallback al general si no se definió uno
+    -- exclusivo para nuevos.
+    IF COALESCE(v_new, v_existing) IS NULL THEN RETURN; END IF;
+    RETURN QUERY SELECT COALESCE(v_new, v_existing), 'new'::TEXT;
+  ELSE
+    -- Ya era junglist: SOLO el código general. Si el descuento se configuró
+    -- exclusivo para junglists nuevos, a este usuario no le corresponde nada.
+    IF v_existing IS NULL THEN RETURN; END IF;
+    RETURN QUERY SELECT v_existing, 'existing'::TEXT;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_event_coupon(UUID) TO authenticated;

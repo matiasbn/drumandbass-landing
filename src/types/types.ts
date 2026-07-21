@@ -11,13 +11,24 @@ export interface CmsEvent {
   date: string;
   endDate?: string;
   description?: string;
+  /** URL de venta activa (la que muestra el botón TICKETS). */
   tickets?: string;
+  /** Todas las URLs de venta que usó el evento (incluida la activa). Para analytics. */
+  ticketLinks?: string[];
   info?: string;
   flyer?: {
     url: string;
     width: number;
     height: number;
   };
+  /**
+   * A qué perfil le sirve el descuento Junglist del evento. Solo booleanos: el
+   * código jamás se expone acá porque este tipo viaja al HTML público (ISR); se
+   * pide a /api/evento/[id]/coupon, contra sesión. Sirven para no ofrecerle un
+   * descuento a quien no podría canjearlo.
+   */
+  couponForNew?: boolean;
+  couponForExisting?: boolean;
 }
 
 export interface CmsStreaming {

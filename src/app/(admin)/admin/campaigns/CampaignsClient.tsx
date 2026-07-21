@@ -6,48 +6,202 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExtension from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
+import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { buildEmailHtml } from '@/src/lib/emailTemplate';
+import {
+  resolveCoupon,
+  segmentBody,
+  segmentSubject,
+  segmentHasCoupon,
+  buildEventBody,
+  SEGMENT_LABELS,
+  type Segment,
+} from '@/src/lib/campaignCopy';
+import dayjs from '@/src/lib/date';
+import { BASE_URL } from '@/src/constants';
 
 type AudienceKey = 'ravers' | 'registered' | 'pks' | 'junglists';
 
 const AUDIENCES: { key: AudienceKey; label: string }[] = [
-  { key: 'ravers', label: 'Ravers (Newsletter)' },
+  { key: 'ravers', label: 'No registrados (correos)' },
   { key: 'registered', label: 'Usuarios Registrados' },
   { key: 'pks', label: 'DJs (Press Kit)' },
   { key: 'junglists', label: 'Junglists (registro voluntario)' },
 ];
 
-const STEPS = [
-  { num: 1, label: 'Audiencia', desc: 'Selecciona la audiencia' },
-  { num: 2, label: 'Configuracion', desc: 'Configura la campaña' },
-  { num: 3, label: 'Verificacion', desc: 'Revisa y confirma' },
+// Plantillas de correo. La primera rellena los campos desde un evento publicado;
+// se irán agregando más (p. ej. "Nuevo capítulo de El Sótano").
+type TemplateKey = 'evento';
+const TEMPLATES: { key: TemplateKey; name: string; desc: string }[] = [
+  {
+    key: 'evento',
+    name: 'Evento',
+    desc: 'Invita a un evento publicado: rellena flyer, fecha y lugar. Opcionalmente con descuento Junglist.',
+  },
 ];
 
-function Stepper({ current }: { current: number }) {
+// Evento (subconjunto de cms_events que trae /api/admin/events) para el picker.
+interface EventLite {
+  id: string;
+  title: string;
+  date: string;
+  venue: string | null;
+  address: string | null;
+  flyer_url: string | null;
+  tickets: string | null;
+  description_html: string | null;
+}
+
+// Borradores editados de los correos segmentados (sobreviven a recargas).
+const DRAFT_PREFIX = 'dnb:campaign-draft:';
+
+const COUPON_MODE_LABELS: Record<string, string> = {
+  none: 'Sin descuento',
+  both_same: 'Mismo código para todos',
+  both_split: 'Códigos separados por segmento',
+  new_only: 'Solo junglists nuevos',
+  existing_only: 'Solo junglists ya registrados',
+};
+
+// Estados de un destinatario. `bar` = color sólido (barra de embudo + punto de
+// leyenda); `chip` = tinte claro para el badge de la tabla; `tip` = tooltip.
+// Dos ejes en un solo campo, en orden de embudo:
+//   Entrega (dato duro): Falló → Enviado → Entregado   (Resend, salvo Falló)
+//   Interacción (nuestro token ?ct=): Visitó            (el único real)
+// NO existe "Abierto": el pixel de apertura se retiró (no es dato duro).
+type RecipientStatus =
+  | 'sent'
+  | 'delivered'
+  | 'clicked'
+  | 'bounced'
+  | 'complained'
+  | 'failed';
+
+const STATUS_ORDER: RecipientStatus[] = [
+  'failed',
+  'sent',
+  'delivered',
+  'clicked',
+  'bounced',
+  'complained',
+];
+
+const STATUS_META: Record<RecipientStatus, { label: string; bar: string; chip: string; tip: string }> = {
+  failed: {
+    label: 'Sin enviar',
+    bar: 'bg-red-700',
+    chip: 'bg-red-100 text-red-800',
+    tip: 'No salió (te topaste con la cuota diaria de Resend). Nunca se envió; reenviálo con el botón "Enviar los que faltan".',
+  },
+  sent: {
+    label: 'Enviado',
+    bar: 'bg-gray-400',
+    chip: 'bg-gray-100 text-gray-700',
+    tip: 'Salió por Resend, pero aún sin confirmación de entrega. Actualizá desde Resend para saber si llegó.',
+  },
+  delivered: {
+    label: 'Entregado',
+    bar: 'bg-green-500',
+    chip: 'bg-green-100 text-green-800',
+    tip: 'Resend confirma que llegó al servidor del destinatario (dato duro, no pixel).',
+  },
+  clicked: {
+    label: 'Visitó',
+    bar: 'bg-[#0000ff]',
+    chip: 'bg-blue-200 text-blue-900',
+    tip: 'Clickeó el botón del correo y entró a la landing (nuestro token único). La única señal real de que se enganchó.',
+  },
+  bounced: {
+    label: 'Rebotó',
+    bar: 'bg-red-500',
+    chip: 'bg-red-200 text-red-900',
+    tip: 'La dirección no existe o rechazó el correo. No llegó. Conviene sacarla de la lista. (De Resend.)',
+  },
+  complained: {
+    label: 'Spam',
+    bar: 'bg-orange-400',
+    chip: 'bg-orange-100 text-orange-800',
+    tip: 'El destinatario lo marcó como spam. Conviene sacarlo. (De Resend.)',
+  },
+};
+
+// Normaliza estados históricos: el viejo pixel marcaba 'opened', que ya no
+// usamos (no es dato duro) → se muestra como 'Enviado'.
+function normalizeStatus(s: string): RecipientStatus {
+  if (s === 'opened') return 'sent';
+  return (STATUS_ORDER as string[]).includes(s) ? (s as RecipientStatus) : 'sent';
+}
+
+const STEPS = [
+  { num: 1, label: 'Plantilla', desc: 'Elige una plantilla' },
+  { num: 2, label: 'Correo', desc: 'Arma el correo' },
+  { num: 3, label: 'Destinatarios', desc: 'A quién le llega' },
+];
+
+// --- Historial de campañas ---
+interface CampaignSummary {
+  id: string;
+  name: string | null;
+  template: string | null;
+  event_id: string | null;
+  subject: string;
+  coupon_mode: string | null;
+  coupon_new_code: string | null;
+  coupon_existing_code: string | null;
+  audiences: string[];
+  recipients: number;
+  sent_count: number;
+  failed_count: number;
+  status: string;
+  sent_at: string | null;
+  created_at: string;
+}
+
+interface CampaignRecipient {
+  email: string;
+  status: string;
+  segment: string | null;
+  opened_at: string | null;
+  visited_at: string | null;
+  visit_count: number;
+}
+
+function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
-      {STEPS.map((s, i) => (
-        <div key={s.num} className="flex items-center">
-          <div className="flex flex-col items-center">
-            <div
-              className={`w-8 h-8 flex items-center justify-center font-black text-sm brutalist-border ${
-                current >= s.num ? 'bg-black text-white' : 'bg-white text-black'
-              }`}
+      {STEPS.map((s, i) => {
+        // Se puede volver a cualquier paso ya alcanzado; avanzar sigue siendo por
+        // los botones (que validan). El estado se conserva entre pasos.
+        const reachable = s.num <= current;
+        return (
+          <div key={s.num} className="flex items-center">
+            <button
+              type="button"
+              onClick={() => reachable && onGo(s.num)}
+              disabled={!reachable}
+              className={`flex flex-col items-center ${reachable && s.num < current ? 'cursor-pointer group' : 'cursor-default'}`}
+              title={reachable && s.num < current ? `Volver a ${s.label}` : undefined}
             >
-              {s.num}
-            </div>
-            <p className="font-bold uppercase text-xs mt-1">{s.label}</p>
-            <p className="mono text-[10px] text-gray-500">{s.desc}</p>
+              <span
+                className={`w-8 h-8 flex items-center justify-center font-black text-sm brutalist-border transition-colors ${
+                  current >= s.num ? 'bg-black text-white' : 'bg-white text-black'
+                } ${reachable && s.num < current ? 'group-hover:bg-[#ff0055]' : ''}`}
+              >
+                {s.num}
+              </span>
+              <span className="font-bold uppercase text-xs mt-1">{s.label}</span>
+              <span className="mono text-[10px] text-gray-500">{s.desc}</span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <div
+                className={`w-12 sm:w-20 h-1 mx-2 mb-6 ${
+                  current > s.num ? 'bg-black' : 'bg-gray-300'
+                }`}
+              />
+            )}
           </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`w-12 sm:w-20 h-1 mx-2 mb-6 ${
-                current > s.num ? 'bg-black' : 'bg-gray-300'
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -82,6 +236,7 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> | null }) {
 }
 
 export default function CampaignsClient() {
+  const { loading: authLoading, isAdmin, user, signInWithGoogle } = useAdminAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selected, setSelected] = useState<Set<AudienceKey>>(new Set());
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -103,8 +258,50 @@ export default function CampaignsClient() {
   const [bodyHtml, setBodyHtml] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; sent: number; failed: number; errors: string[] } | null>(null);
+
+  // Paso 1: plantilla + picker de evento.
+  const [template, setTemplate] = useState<TemplateKey | 'custom' | null>(null);
+  const [events, setEvents] = useState<EventLite[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [chosenEventId, setChosenEventId] = useState<string | null>(null);
+
+  // Descuento Junglist (solo plantilla Evento): los cupones se guardan en el
+  // evento y la landing los revela contra sesión. Si no hay código para junglist
+  // ya registrado, a ese segmento le llega el correo normal (sin descuento).
+  const [couponEnabled, setCouponEnabled] = useState(false);
+  const [couponTarget, setCouponTarget] = useState<'both' | 'new_only' | 'existing_only'>('both');
+  const [couponSameForAll, setCouponSameForAll] = useState(true);
+  const [couponNewCode, setCouponNewCode] = useState('');
+  const [couponExistingCode, setCouponExistingCode] = useState('');
+  const [previewIndex, setPreviewIndex] = useState(0);
+  // Cuando el descuento genera dos correos distintos, cada uno se edita por
+  // separado: el selector cambia qué correo estás editando y previsualizando.
+  const [segBodies, setSegBodies] = useState<Record<Segment, string>>({ junglist: '', no_junglist: '' });
+  const [segSubjects, setSegSubjects] = useState<Record<Segment, string>>({ junglist: '', no_junglist: '' });
+  // Se incrementa al aplicar una plantilla, para regenerar los borradores.
+  const [draftSeed, setDraftSeed] = useState(0);
+
+  // Vista: componer una campaña nueva o revisar el historial.
+  const [view, setView] = useState<'nueva' | 'historial'>('nueva');
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [openCampaign, setOpenCampaign] = useState<CampaignSummary | null>(null);
+  const [recipients, setRecipients] = useState<CampaignRecipient[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  // Borrado con confirmación en dos pasos (window.confirm es poco fiable).
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  // Auto-lectura de Resend al abrir la campaña (silenciosa, sin alertas).
+  const [syncingLive, setSyncingLive] = useState(false);
+  // Filtro de la tabla de destinatarios por estado ('all' = todos).
+  const [recipientFilter, setRecipientFilter] = useState<'all' | RecipientStatus>('all');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Leído dentro de onUpdate del editor (que se crea una sola vez).
+  const editModeRef = useRef<{ segmented: boolean; seg: Segment }>({ segmented: false, seg: 'no_junglist' });
 
   const editor = useEditor({
     extensions: [
@@ -114,7 +311,12 @@ export default function CampaignsClient() {
     ],
     content: '',
     immediatelyRender: false,
-    onUpdate: ({ editor }) => setBodyHtml(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      const { segmented, seg } = editModeRef.current;
+      if (segmented) setSegBodies(prev => ({ ...prev, [seg]: html }));
+      else setBodyHtml(html);
+    },
     onCreate: ({ editor }) => setBodyHtml(editor.getHTML()),
     editorProps: {
       attributes: {
@@ -193,8 +395,198 @@ export default function CampaignsClient() {
 
   const hasAudience = selected.size > 0 || extraEmails.size > 0;
 
-  const handleNextFromAudience = async () => {
-    await fetchCounts();
+  // --- Paso 1: plantillas ---
+  const fetchEvents = useCallback(async () => {
+    setEventsLoading(true);
+    try {
+      const res = await fetch('/api/admin/events');
+      const data = await res.json();
+      const now = dayjs();
+      // Vigentes, con el más próximo primero: es el que normalmente se difunde.
+      const upcoming = (data.events || [])
+        .filter((e: EventLite) => dayjs(e.date).isAfter(now))
+        .sort((a: EventLite, b: EventLite) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
+      setEvents(upcoming);
+    } catch {
+      // ignore
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  // --- Historial ---
+  const fetchCampaigns = useCallback(async () => {
+    setCampaignsLoading(true);
+    try {
+      const res = await fetch('/api/admin/campaigns?list=1');
+      const data = await res.json();
+      setCampaigns(data.campaigns || []);
+    } catch {
+      // ignore
+    } finally {
+      setCampaignsLoading(false);
+    }
+  }, []);
+
+  // Trae los destinatarios de una campaña desde NUESTRA base (sin tocar Resend).
+  const fetchRecipients = async (id: string) => {
+    const res = await fetch(`/api/admin/campaigns?campaign=${id}`);
+    const data = await res.json();
+    setRecipients(data.recipients || []);
+  };
+
+  // Núcleo del sync: consulta Resend en vivo (no envía) y actualiza estados de
+  // entrega. El backend resuelve toda la campaña por llamada; un par de rondas
+  // por si quedan pendientes que Resend aún reporta como 'sent'. Devuelve cuántos
+  // se actualizaron. No hace alertas ni refetch (de eso se encargan los callers).
+  const runSync = async (id: string): Promise<number> => {
+    let total = 0;
+    for (let round = 0; round < 3; round++) {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncCampaignId: id }),
+      });
+      const data = await res.json();
+      if (!data.success) break;
+      total += data.synced || 0;
+      if ((data.synced || 0) === 0 || (data.remaining || 0) === 0) break;
+    }
+    return total;
+  };
+
+  const openCampaignDetail = async (c: CampaignSummary) => {
+    setOpenCampaign(c);
+    setRecipients([]);
+    setRecipientFilter('all');
+    setRecipientsLoading(true);
+    try {
+      await fetchRecipients(c.id);
+    } catch {
+      // ignore
+    } finally {
+      setRecipientsLoading(false);
+    }
+    // Al abrir, leemos Resend EN VIVO para reflejar la entrega real (silencioso).
+    setSyncingLive(true);
+    try {
+      const n = await runSync(c.id);
+      if (n > 0) await fetchRecipients(c.id);
+    } catch {
+      // silencioso: si Resend falla, se ve lo que hay en nuestra base
+    } finally {
+      setSyncingLive(false);
+    }
+  };
+
+  // Botón manual "Actualizar desde Resend": mismo sync, con feedback explícito.
+  const syncFromResend = async (id: string) => {
+    setSyncing(true);
+    try {
+      const total = await runSync(id);
+      await fetchRecipients(id);
+      await fetchCampaigns();
+      window.alert(`Estados de entrega actualizados desde Resend: ${total}.`);
+    } catch (e) {
+      window.alert(`Error de red: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Reenvía a los destinatarios que fallaron (cuota de Resend). Un click manda
+  // hasta 100; volver otro día para el resto.
+  const resendFailed = async (id: string) => {
+    setResending(true);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resendCampaignId: id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.alert(`Reenviados: ${data.resent}. Quedan por reenviar: ${data.stillFailed}.`);
+        await fetchCampaigns();
+        if (openCampaign?.id === id) await openCampaignDetail(openCampaign);
+      } else {
+        window.alert(`No se pudo reenviar: ${data.error || ''}`);
+      }
+    } catch (e) {
+      window.alert(`Error de red al reenviar: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/campaigns?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setCampaigns((prev) => prev.filter((c) => c.id !== id));
+        if (openCampaign?.id === id) setOpenCampaign(null);
+        setConfirmDeleteId(null);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Carga el historial al entrar a esa vista.
+  useEffect(() => {
+    if (view === 'historial' && isAdmin) fetchCampaigns();
+  }, [view, isAdmin, fetchCampaigns]);
+
+  const chooseTemplate = (key: TemplateKey | 'custom') => {
+    setTemplate(key);
+    setChosenEventId(null);
+    if (key === 'evento' && events.length === 0) fetchEvents();
+  };
+
+  // Rellena los campos del correo desde un evento publicado. El cuerpo va redactado
+  // como invitación (sin lineup — ese ya va en el flyer) y sin lenguaje de urgencia.
+  const applyEventTemplate = (ev: EventLite) => {
+    const body = buildEventBody({
+      title: ev.title,
+      dateLabel: dayjs(ev.date).format('dddd D [de] MMMM [desde las] HH:mm'),
+      venueLabel: ev.venue ? `${ev.venue}${ev.address ? ` · ${ev.address}` : ''}` : undefined,
+      segment: 'no_junglist',
+      hasCoupon: false,
+    });
+    setCampaignName(ev.title);
+    setSubject(`Nos vemos en ${ev.title}`);
+    setTitle(ev.title);
+    setImageFile(null);
+    setImagePreview(ev.flyer_url || null);
+    // El botón apunta a la landing del evento (no directo a tickets): así el ?ct
+    // registra la visita en nuestra DB y el asistente ve tickets + CTAs de comunidad.
+    setButtonText('Ver evento');
+    setButtonUrl(`${BASE_URL}/evento/${ev.id}`);
+    setBodyHtml(body);
+    editor?.commands.setContent(body, { emitUpdate: false });
+    // Aplicar la plantilla descarta los borradores editados de ese evento.
+    try {
+      const prefix = `${DRAFT_PREFIX}${ev.id}:`;
+      Object.keys(localStorage)
+        .filter(k => k.startsWith(prefix))
+        .forEach(k => localStorage.removeItem(k));
+    } catch {
+      // sin localStorage no hay nada que limpiar
+    }
+    setDraftSeed(n => n + 1);
+  };
+
+  const step1Valid = template === 'custom' || (template === 'evento' && !!chosenEventId);
+
+  const continueFromTemplate = () => {
+    if (template === 'evento') {
+      const ev = events.find((e) => e.id === chosenEventId);
+      if (!ev) return;
+      applyEventTemplate(ev);
+    }
     setStep(2);
   };
 
@@ -211,7 +603,19 @@ export default function CampaignsClient() {
     reader.readAsDataURL(file);
   };
 
-  const isStep2Valid = subject.trim() && title.trim();
+  // Un código vacío haría que el correo no mencione descuento, contradiciendo lo
+  // que el admin acaba de configurar: se bloquea antes de enviar.
+  const missingCouponCode =
+    couponEnabled &&
+    (couponTarget === 'new_only'
+      ? !couponNewCode.trim()
+      : couponTarget === 'existing_only'
+        ? !couponExistingCode.trim()
+        : couponSameForAll
+          ? !couponNewCode.trim()
+          : !couponNewCode.trim() || !couponExistingCode.trim());
+
+  const isStep2Valid = subject.trim() && title.trim() && !missingCouponCode;
 
   const resizeIframe = useCallback(() => {
     const iframe = iframeRef.current;
@@ -220,19 +624,140 @@ export default function CampaignsClient() {
     }
   }, []);
 
+  // ¿El descuento genera dos correos distintos? Con cupón, el párrafo que se
+  // agrega difiere por segmento, así que basta con que alguno lleve descuento.
+  const segHasCoupon = useMemo(() => {
+    const codes = resolveCoupon({
+      enabled: couponEnabled,
+      target: couponTarget,
+      sameForAll: couponSameForAll,
+      newCode: couponNewCode,
+      existingCode: couponExistingCode,
+    });
+    return {
+      junglist: segmentHasCoupon('junglist', codes),
+      no_junglist: segmentHasCoupon('no_junglist', codes),
+    };
+  }, [couponEnabled, couponTarget, couponSameForAll, couponNewCode, couponExistingCode]);
+
+  const segmented = couponEnabled && (segHasCoupon.junglist || segHasCoupon.no_junglist);
+  const activeSegment: Segment = segmented && previewIndex === 0 ? 'junglist' : 'no_junglist';
+
+  useEffect(() => {
+    editModeRef.current = { segmented, seg: activeSegment };
+  }, [segmented, activeSegment]);
+
+  const chosenEvent = events.find(e => e.id === chosenEventId);
+  const draftKey = `${DRAFT_PREFIX}${chosenEventId ?? 'custom'}:${segHasCoupon.junglist}|${segHasCoupon.no_junglist}`;
+
+  // Al cambiar la forma de la segmentación (o al aplicar una plantilla) se
+  // regeneran ambos borradores: cada caso tiene su propio texto de plantilla.
+  // Editar el contenido NO dispara esto, así que los cambios se conservan.
+  const shapeKey = `${segmented}|${draftKey}|${draftSeed}`;
+  useEffect(() => {
+    if (!segmented) return;
+
+    // Si ya editaste esta misma combinación antes, se restaura lo tuyo.
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.bodies?.junglist !== undefined && parsed?.subjects) {
+          setSegBodies(parsed.bodies);
+          setSegSubjects(parsed.subjects);
+          return;
+        }
+      }
+    } catch {
+      // localStorage no disponible o JSON inválido: se usan los textos por defecto.
+    }
+
+    const make = (segment: Segment) =>
+      chosenEvent
+        ? buildEventBody({
+            title: chosenEvent.title,
+            dateLabel: dayjs(chosenEvent.date).format('dddd D [de] MMMM [desde las] HH:mm'),
+            venueLabel: chosenEvent.venue
+              ? `${chosenEvent.venue}${chosenEvent.address ? ` · ${chosenEvent.address}` : ''}`
+              : undefined,
+            segment,
+            hasCoupon: segHasCoupon[segment],
+          })
+        : segmentBody(bodyHtml, segment, segHasCoupon[segment]);
+
+    setSegBodies({ junglist: make('junglist'), no_junglist: make('no_junglist') });
+    setSegSubjects({
+      junglist: segmentSubject(subject, title, segHasCoupon.junglist),
+      no_junglist: segmentSubject(subject, title, segHasCoupon.no_junglist),
+    });
+    // Solo shapeKey: incluir bodyHtml/subject regeneraría en cada tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeKey]);
+
+  // Guardar lo editado, para que no se pierda al recargar o cambiar de vista.
+  useEffect(() => {
+    if (!segmented) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ bodies: segBodies, subjects: segSubjects }));
+    } catch {
+      // sin localStorage el borrador igual vive en memoria durante la sesión
+    }
+  }, [segmented, draftKey, segBodies, segSubjects]);
+
+  // Cargar en el editor el cuerpo del correo que se está editando. emitUpdate:false
+  // es imprescindible: en tiptap v3 setContent dispara onUpdate por defecto, y eso
+  // reescribiría el borrador con el contenido que estamos reemplazando.
+  useEffect(() => {
+    if (!editor) return;
+    const target = segmented ? segBodies[activeSegment] : bodyHtml;
+    if (target !== undefined && editor.getHTML() !== target) {
+      editor.commands.setContent(target, { emitUpdate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSegment, segmented, segBodies, editor]);
+
+  const previews = useMemo(() => {
+    const safeTitle = title || 'Titulo del correo';
+    const placeholder = '<p style="color:#666;">Contenido del correo...</p>';
+
+    const build = (segment: Segment) => {
+      const hasCoupon = segHasCoupon[segment];
+      const body = segmented
+        ? segBodies[segment] || placeholder
+        : segmentBody(bodyHtml || placeholder, segment, hasCoupon);
+      const subj = segmented ? segSubjects[segment] : subject;
+      return {
+        segment,
+        label: SEGMENT_LABELS[segment],
+        hasCoupon,
+        subject: subj || '(sin asunto)',
+        html: buildEmailHtml({
+          title: safeTitle,
+          body,
+          imageBase64: imagePreview || undefined,
+          buttonText: buttonText || undefined,
+          buttonUrl: buttonUrl || undefined,
+        }),
+      };
+    };
+
+    const junglist = build('junglist');
+    const noJunglist = build('no_junglist');
+    // Sin segmentación sale un solo correo: no hay nada que elegir.
+    return segmented ? [junglist, noJunglist] : [noJunglist];
+  }, [
+    title, bodyHtml, imagePreview, buttonText, buttonUrl, subject,
+    segmented, segBodies, segSubjects, segHasCoupon,
+  ]);
+
+  const activePreview = previews[Math.min(previewIndex, previews.length - 1)];
+  const previewHtml = activePreview.html;
+
   useEffect(() => {
     // Resize after content updates with a small delay for render
     const timer = setTimeout(resizeIframe, 100);
     return () => clearTimeout(timer);
-  }, [title, bodyHtml, imagePreview, buttonText, buttonUrl, resizeIframe]);
-
-  const previewHtml = useMemo(() => buildEmailHtml({
-    title: title || 'Titulo del correo',
-    body: bodyHtml || '<p style="color:#666;">Contenido del correo...</p>',
-    imageBase64: imagePreview || undefined,
-    buttonText: buttonText || undefined,
-    buttonUrl: buttonUrl || undefined,
-  }), [title, bodyHtml, imagePreview, buttonText, buttonUrl]);
+  }, [previewHtml, resizeIframe]);
 
   const handleSend = async () => {
     const totalRecipients = totalUnique + extraEmails.size;
@@ -246,12 +771,24 @@ export default function CampaignsClient() {
         body: JSON.stringify({
           audiences: Array.from(selected),
           extraEmails: Array.from(extraEmails),
+          name: campaignName || undefined,
+          template: template || undefined,
+          eventId: template === 'evento' ? chosenEventId : null,
           subject,
           title,
           bodyHtml,
           imageBase64: imagePreview || undefined,
           buttonText: buttonText || undefined,
           buttonUrl: buttonUrl || undefined,
+          segmentBodies: segmented ? segBodies : undefined,
+          segmentSubjects: segmented ? segSubjects : undefined,
+          coupon: {
+            enabled: couponEnabled,
+            target: couponTarget,
+            sameForAll: couponSameForAll,
+            newCode: couponNewCode,
+            existingCode: couponExistingCode,
+          },
         }),
       });
       const data = await res.json();
@@ -275,6 +812,48 @@ export default function CampaignsClient() {
     </div>
   );
 
+  if (authLoading) {
+    return <p className="mono text-sm text-gray-500">Cargando…</p>;
+  }
+
+  // Decir cuál es el problema y con qué cuenta: un "no hay datos" ante un 403
+  // manda a buscar el error donde no está.
+  if (!isAdmin) {
+    return (
+      <div className="brutalist-border bg-white p-8 brutalist-shadow max-w-lg">
+        <p className="font-black uppercase text-xl mb-2">No tienes acceso</p>
+        <p className="mono text-sm text-gray-600 mb-1">
+          Esta sección es solo para administradores.
+        </p>
+        <p className="mono text-sm text-gray-600 mb-6">
+          {user?.email ? (
+            <>
+              Estás conectado como <strong>{user.email}</strong>.
+            </>
+          ) : (
+            'No has iniciado sesión.'
+          )}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {/* signInWithGoogle ya fuerza prompt: 'select_account', así que sirve
+              tanto para entrar como para cambiarse de cuenta. */}
+          <button
+            onClick={signInWithGoogle}
+            className="brutalist-border bg-[#ff0055] text-white px-4 py-2 font-bold uppercase text-sm hover:bg-[#dd0044] transition-colors cursor-pointer"
+          >
+            {user ? 'Cambiar de cuenta' : 'Iniciar sesión'}
+          </button>
+          <Link
+            href="/admin"
+            className="brutalist-border bg-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-100 transition-colors"
+          >
+            Volver
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-6xl mx-auto">
       {/* Header */}
@@ -291,106 +870,118 @@ export default function CampaignsClient() {
         </Link>
       </div>
 
-      <Stepper current={step} />
+      {/* Toggle Nueva / Historial */}
+      <div className="flex gap-2 mb-6">
+        {(['nueva', 'historial'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`brutalist-border px-4 py-2 font-bold uppercase text-sm transition-colors cursor-pointer ${
+              view === v ? 'bg-[#ff0055] text-white' : 'bg-white hover:bg-gray-50'
+            }`}
+          >
+            {v === 'nueva' ? 'Nueva campaña' : 'Historial'}
+          </button>
+        ))}
+      </div>
 
-      {/* Step 1: Audience */}
-      {step === 1 && (
+      {view === 'nueva' && <Stepper current={step} onGo={(n) => setStep(n as 1 | 2 | 3)} />}
+
+      {/* Step 1: Plantilla */}
+      {view === 'nueva' && step === 1 && (
         <div className="brutalist-border bg-white p-6 brutalist-shadow max-w-2xl mx-auto">
-          <h2 className="text-xl font-black uppercase mb-4">Seleccionar Audiencia</h2>
-          <div className="space-y-3 mb-6">
-            {AUDIENCES.map(({ key, label }) => (
-              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
-                <span className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(key)}
-                    onChange={() => toggleAudience(key)}
-                    className="w-5 h-5 accent-black cursor-pointer"
-                  />
-                  <span className="font-bold uppercase text-sm">{label}</span>
-                </span>
-                {selected.has(key) && (
-                  <span className="mono text-xs text-gray-500">
-                    {loadingCounts ? '…' : `${counts[key] ?? 0}`}
-                  </span>
-                )}
-              </label>
+          <h2 className="text-xl font-black uppercase mb-1">Elige una plantilla</h2>
+          <p className="mono text-xs text-gray-500 mb-5">
+            Parte desde una plantilla o arma una campaña desde cero.
+          </p>
+
+          <div className="space-y-3">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => chooseTemplate(t.key)}
+                className={`w-full text-left brutalist-border p-4 transition-colors cursor-pointer ${
+                  template === t.key ? 'bg-black text-white' : 'bg-white hover:bg-gray-50'
+                }`}
+              >
+                <p className="font-black uppercase">{t.name}</p>
+                <p className={`mono text-xs mt-1 ${template === t.key ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {t.desc}
+                </p>
+              </button>
             ))}
+
+            {/* Campaña personalizada, al final */}
+            <button
+              type="button"
+              onClick={() => chooseTemplate('custom')}
+              className={`w-full text-left brutalist-border border-dashed p-4 transition-colors cursor-pointer ${
+                template === 'custom' ? 'bg-black text-white' : 'bg-white hover:bg-gray-50'
+              }`}
+            >
+              <p className="font-black uppercase">Campaña personalizada</p>
+              <p className={`mono text-xs mt-1 ${template === 'custom' ? 'text-gray-300' : 'text-gray-500'}`}>
+                Correo en blanco, lo armas todo tú.
+              </p>
+            </button>
           </div>
 
-          {/* Total de correos únicos (se actualiza al marcar audiencias) */}
-          <div className="brutalist-border bg-black text-white px-4 py-3 mb-6 flex items-center justify-between">
-            <span className="mono text-xs font-bold uppercase">Total correos únicos</span>
-            <span className="mono text-lg font-black">
-              {loadingCounts ? '…' : totalUnique + extraEmails.size}
-            </span>
-          </div>
-          {/* Individual email search */}
-          <div className="mt-6 pt-6 border-t-4 border-black">
-            <h3 className="font-black uppercase text-sm mb-3">Agregar emails individuales</h3>
-            <div className="relative">
-              <input
-                type="text"
-                value={emailSearch}
-                onChange={e => handleSearchEmail(e.target.value)}
-                placeholder="Buscar por email..."
-                className="w-full brutalist-border px-4 py-2 mono text-sm focus:outline-none"
-              />
-              {searchLoading && (
-                <div className="absolute right-3 top-2.5">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-r-transparent" />
-                </div>
-              )}
-              {searchResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 brutalist-border bg-white max-h-[200px] overflow-y-auto">
-                  {searchResults.map(email => (
+          {/* Picker de evento cuando la plantilla es "Evento" */}
+          {template === 'evento' && (
+            <div className="mt-6 pt-6 border-t-4 border-black">
+              <h3 className="font-black uppercase text-sm mb-3">Elige el evento</h3>
+              {eventsLoading ? (
+                <p className="mono text-sm text-gray-500">Cargando eventos…</p>
+              ) : events.length === 0 ? (
+                <p className="mono text-sm text-gray-500">No hay eventos vigentes publicados.</p>
+              ) : (
+                <div className="space-y-2 max-h-[340px] overflow-y-auto">
+                  {events.map((ev) => (
                     <button
-                      key={email}
-                      onClick={() => addExtraEmail(email)}
-                      disabled={extraEmails.has(email)}
-                      className="w-full text-left px-4 py-2 mono text-sm hover:bg-gray-100 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed border-b border-gray-200 last:border-b-0"
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setChosenEventId(ev.id)}
+                      className={`w-full flex items-center gap-3 brutalist-border p-2 text-left transition-colors cursor-pointer ${
+                        chosenEventId === ev.id ? 'bg-[#ff0055] text-white' : 'bg-white hover:bg-gray-50'
+                      }`}
                     >
-                      {email} {extraEmails.has(email) && '(agregado)'}
+                      {ev.flyer_url ? (
+                        <img src={ev.flyer_url} alt="" className="w-14 h-14 object-cover border-2 border-black shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 border-2 border-black shrink-0 flex items-center justify-center mono text-[9px] text-center">
+                          SIN FLYER
+                        </div>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block font-black uppercase truncate">{ev.title}</span>
+                        <span className={`block mono text-[11px] ${chosenEventId === ev.id ? 'text-white' : 'text-gray-500'}`}>
+                          {dayjs(ev.date).format('ddd D MMM · HH:mm')}
+                          {ev.venue ? ` · ${ev.venue}` : ''}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-
-            {extraEmails.size > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {Array.from(extraEmails).map(email => (
-                  <span
-                    key={email}
-                    className="brutalist-border px-3 py-1 mono text-xs bg-gray-50 flex items-center gap-2"
-                  >
-                    {email}
-                    <button
-                      onClick={() => removeExtraEmail(email)}
-                      className="font-bold hover:text-red-600 cursor-pointer"
-                    >
-                      x
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
           <div className="flex justify-end mt-6">
             <button
-              onClick={handleNextFromAudience}
-              disabled={!hasAudience}
+              onClick={continueFromTemplate}
+              disabled={!step1Valid}
               className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Siguiente →
+              Continuar →
             </button>
           </div>
         </div>
       )}
 
       {/* Step 2: Configuration */}
-      {step === 2 && (
+      {view === 'nueva' && step === 2 && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Form */}
           <div className="lg:col-span-3 brutalist-border bg-white p-6 brutalist-shadow">
@@ -431,12 +1022,175 @@ export default function CampaignsClient() {
                 {fieldLabel('Asunto del correo')}
                 <input
                   type="text"
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
+                  value={segmented ? segSubjects[activeSegment] : subject}
+                  onChange={e =>
+                    segmented
+                      ? setSegSubjects(prev => ({ ...prev, [activeSegment]: e.target.value }))
+                      : setSubject(e.target.value)
+                  }
                   placeholder="No te pierdas el evento del año!"
                   className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
                 />
               </div>
+
+              {/* Descuento Junglist — solo tiene sentido con un evento asociado */}
+              {template === 'evento' && (
+                <div className="brutalist-border p-4 bg-gray-50">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={couponEnabled}
+                      onChange={e => setCouponEnabled(e.target.checked)}
+                      className="w-5 h-5 accent-[#ff0055] cursor-pointer"
+                    />
+                    <span className="font-bold text-sm uppercase">Incluir descuento Junglist</span>
+                  </label>
+                  <p className="mono text-[10px] text-gray-500 mt-1 ml-8">
+                    El código no viaja en el correo: se revela en la landing del evento, con sesión
+                    iniciada y solo a junglists.
+                  </p>
+
+                  {couponEnabled && (
+                    <div className="mt-4 ml-8 space-y-3">
+                      {/* A quién le corresponde el descuento */}
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          ['both', 'Ambos'],
+                          ['new_only', 'Solo junglists nuevos'],
+                          ['existing_only', 'Solo junglists ya registrados'],
+                        ] as const).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setCouponTarget(key)}
+                            className={`brutalist-border px-3 py-2 mono text-xs font-bold uppercase transition-colors cursor-pointer ${
+                              couponTarget === key ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {couponTarget === 'both' && (
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={couponSameForAll}
+                            onChange={e => setCouponSameForAll(e.target.checked)}
+                            className="w-5 h-5 accent-[#ff0055] cursor-pointer"
+                          />
+                          <span className="font-bold text-sm">Mismo descuento para todos</span>
+                        </label>
+                      )}
+
+                      {couponTarget === 'new_only' ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código junglist nuevo')}
+                          <input
+                            type="text"
+                            value={couponNewCode}
+                            onChange={e => setCouponNewCode(e.target.value)}
+                            placeholder="BIENVENIDA30"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : couponTarget === 'existing_only' ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código junglist registrado')}
+                          <input
+                            type="text"
+                            value={couponExistingCode}
+                            onChange={e => setCouponExistingCode(e.target.value)}
+                            placeholder="JUNGLIST20"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : couponSameForAll ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          {fieldLabel('Código')}
+                          <input
+                            type="text"
+                            value={couponNewCode}
+                            onChange={e => setCouponNewCode(e.target.value)}
+                            placeholder="DNB2026"
+                            className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            {fieldLabel('Junglist nuevo', 'se inscribe con esta campaña')}
+                            <input
+                              type="text"
+                              value={couponNewCode}
+                              onChange={e => setCouponNewCode(e.target.value)}
+                              placeholder="BIENVENIDA30"
+                              className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                            />
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            {fieldLabel('Junglist ya registrado', 'vacío = no recibe descuento')}
+                            <input
+                              type="text"
+                              value={couponExistingCode}
+                              onChange={e => setCouponExistingCode(e.target.value)}
+                              placeholder="JUNGLIST20"
+                              className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none uppercase"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      <p className="mono text-[10px] text-gray-600 leading-relaxed">
+                        {couponTarget === 'new_only'
+                          ? 'A quienes YA son junglists les llega el correo normal, sin mencionar descuento.'
+                          : couponTarget === 'existing_only'
+                            ? 'A quienes aún no son junglists les llega el correo normal, sin mencionar descuento.'
+                            : couponSameForAll
+                              ? 'Todos reciben el mismo código y un correo que anuncia el descuento.'
+                              : 'Dos códigos distintos; ambos segmentos reciben un correo que anuncia su descuento.'}
+                      </p>
+
+                      {missingCouponCode && (
+                        <p className="brutalist-border bg-red-50 text-red-800 px-3 py-2 mono text-[10px] font-bold uppercase">
+                          Falta el código de descuento — sin él el correo no lo mencionaría.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Entre la configuración y el resto: qué correo se está viendo.
+                  Solo aparece cuando el descuento genera correos distintos. */}
+              {previews.length > 1 && (
+                <div className="brutalist-border p-4 bg-white">
+                  <p className="font-bold text-xs uppercase mb-1">
+                    Se enviarán {previews.length} correos distintos
+                  </p>
+                  <p className="mono text-[10px] text-gray-500 mb-3">
+                    Elige cuál editar y previsualizar. Cada uno tiene su propio asunto y contenido.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {previews.map((p, i) => (
+                      <button
+                        key={p.segment}
+                        type="button"
+                        onClick={() => setPreviewIndex(i)}
+                        className={`flex-1 brutalist-border px-3 py-2 mono text-[11px] font-bold uppercase transition-colors cursor-pointer ${
+                          i === previewIndex ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+                        }`}
+                      >
+                        {p.label}
+                        <span className="block text-[9px] font-normal opacity-70">
+                          {p.hasCoupon ? 'con descuento' : 'sin descuento'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Image */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-start">
@@ -480,8 +1234,17 @@ export default function CampaignsClient() {
 
               {/* Body rich text */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-start">
-                {fieldLabel('Contenido del correo')}
+                {fieldLabel(
+                  'Contenido del correo',
+                  segmented ? 'del correo seleccionado' : undefined
+                )}
                 <div className="flex-1 brutalist-border">
+                  {segmented && (
+                    <div className="bg-[#ff0055] text-white px-3 py-2 mono text-[11px] font-bold uppercase border-b-4 border-black">
+                      Editando: {SEGMENT_LABELS[activeSegment]} ·{' '}
+                      {segHasCoupon[activeSegment] ? 'con descuento' : 'sin descuento'}
+                    </div>
+                  )}
                   <Toolbar editor={editor} />
                   <EditorContent editor={editor} />
                 </div>
@@ -501,14 +1264,37 @@ export default function CampaignsClient() {
 
               {/* Button URL */}
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                {fieldLabel('Enlace del boton')}
-                <input
-                  type="text"
-                  value={buttonUrl}
-                  onChange={e => setButtonUrl(e.target.value)}
-                  placeholder="https://ejemplo.com/evento"
-                  className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
-                />
+                {fieldLabel(
+                  'Enlace del boton',
+                  template === 'evento' ? 'fijo: landing del evento' : undefined
+                )}
+                {template === 'evento' ? (
+                  // Bloqueado a propósito: de esta URL cuelgan el ?ct de cada
+                  // destinatario (quién visitó) y el cupón. Cambiarla rompe el
+                  // tracking y deja al descuento sin dónde canjearse.
+                  <div className="flex-1">
+                    <p className="brutalist-border px-4 py-2 mono text-sm bg-gray-100 break-all">
+                      <span className="text-gray-600">{buttonUrl}</span>
+                      <span className="text-[#ff0055] font-bold">
+                        ?ct=&lt;destinatario&gt;&amp;utm_campaign=&lt;campaña&gt;
+                      </span>
+                    </p>
+                    <p className="mono text-[10px] text-gray-500 mt-1">
+                      En <span className="text-gray-600">gris</span> la landing del evento, que ya
+                      existe. En <span className="text-[#ff0055] font-bold">rojo</span> lo que se
+                      agrega al enviar: un código distinto por destinatario y por campaña, para
+                      saber quién visitó. No es editable.
+                    </p>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={buttonUrl}
+                    onChange={e => setButtonUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/evento"
+                    className="flex-1 brutalist-border px-4 py-2 mono text-sm focus:outline-none"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -516,10 +1302,18 @@ export default function CampaignsClient() {
           {/* Preview */}
           <div className="lg:col-span-2 brutalist-border bg-white p-6 brutalist-shadow h-fit lg:sticky lg:top-6">
             <h3 className="font-black uppercase text-sm mb-4">Vista previa</h3>
+
+            {/* Qué correo se está viendo. Se elige en la configuración. */}
+            {previews.length > 1 && (
+              <p className="mono text-[11px] font-bold uppercase mb-3 brutalist-border bg-gray-50 px-3 py-2">
+                {activePreview.label} · {activePreview.hasCoupon ? 'con descuento' : 'sin descuento'}
+              </p>
+            )}
+
             <div className="brutalist-border overflow-hidden">
               <div className="bg-black px-3 py-2">
                 <p className="text-white font-bold text-xs mono">
-                  Asunto: {subject || '(sin asunto)'}
+                  Asunto: {activePreview.subject}
                 </p>
               </div>
               <iframe
@@ -539,11 +1333,95 @@ export default function CampaignsClient() {
         </div>
       )}
 
-      {/* Step 3: Verification */}
-      {step === 3 && (
+      {/* Step 3: Destinatarios (audiencia + envío) */}
+      {view === 'nueva' && step === 3 && (
         <div className="max-w-2xl mx-auto space-y-6">
+          {/* Audiencia */}
           <div className="brutalist-border bg-white p-6 brutalist-shadow">
-            <h2 className="text-xl font-black uppercase mb-4">Verificacion</h2>
+            <h2 className="text-xl font-black uppercase mb-4">A quién le llega</h2>
+            <div className="space-y-3 mb-6">
+              {AUDIENCES.map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(key)}
+                      onChange={() => toggleAudience(key)}
+                      className="w-5 h-5 accent-black cursor-pointer"
+                    />
+                    <span className="font-bold uppercase text-sm">{label}</span>
+                  </span>
+                  {selected.has(key) && (
+                    <span className="mono text-xs text-gray-500">
+                      {loadingCounts ? '…' : `${counts[key] ?? 0}`}
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+
+            <div className="brutalist-border bg-black text-white px-4 py-3 flex items-center justify-between">
+              <span className="mono text-xs font-bold uppercase">Total correos únicos</span>
+              <span className="mono text-lg font-black">
+                {loadingCounts ? '…' : totalUnique + extraEmails.size}
+              </span>
+            </div>
+
+            {/* Emails individuales */}
+            <div className="mt-6 pt-6 border-t-4 border-black">
+              <h3 className="font-black uppercase text-sm mb-3">Agregar emails individuales</h3>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={emailSearch}
+                  onChange={e => handleSearchEmail(e.target.value)}
+                  placeholder="Buscar por email..."
+                  className="w-full brutalist-border px-4 py-2 mono text-sm focus:outline-none"
+                />
+                {searchLoading && (
+                  <div className="absolute right-3 top-2.5">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-r-transparent" />
+                  </div>
+                )}
+                {searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 brutalist-border bg-white max-h-[200px] overflow-y-auto">
+                    {searchResults.map(email => (
+                      <button
+                        key={email}
+                        onClick={() => addExtraEmail(email)}
+                        disabled={extraEmails.has(email)}
+                        className="w-full text-left px-4 py-2 mono text-sm hover:bg-gray-100 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed border-b border-gray-200 last:border-b-0"
+                      >
+                        {email} {extraEmails.has(email) && '(agregado)'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {extraEmails.size > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {Array.from(extraEmails).map(email => (
+                    <span
+                      key={email}
+                      className="brutalist-border px-3 py-1 mono text-xs bg-gray-50 flex items-center gap-2"
+                    >
+                      {email}
+                      <button
+                        onClick={() => removeExtraEmail(email)}
+                        className="font-bold hover:text-red-600 cursor-pointer"
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Revisar y enviar */}
+          <div className="brutalist-border bg-white p-6 brutalist-shadow">
+            <h2 className="text-xl font-black uppercase mb-4">Revisar y enviar</h2>
 
             <div className="space-y-3 mono text-sm">
               <div className="flex justify-between brutalist-border p-3">
@@ -556,11 +1434,34 @@ export default function CampaignsClient() {
               </div>
               <div className="flex justify-between brutalist-border p-3">
                 <span className="font-bold">Imagen:</span>
-                <span>{imageFile ? imageFile.name : 'Sin imagen'}</span>
+                <span>{imageFile ? imageFile.name : imagePreview ? 'Flyer del evento' : 'Sin imagen'}</span>
               </div>
               <div className="flex justify-between brutalist-border p-3">
                 <span className="font-bold">Boton:</span>
                 <span>{buttonText || 'Sin boton'} {buttonUrl ? `→ ${buttonUrl}` : ''}</span>
+              </div>
+              <div className="brutalist-border p-3">
+                <p className="font-bold mb-1">Descuento Junglist:</p>
+                {!couponEnabled ? (
+                  <p className="text-xs text-gray-600">Sin descuento — a todos les llega el mismo correo.</p>
+                ) : (
+                  <div className="text-xs space-y-1">
+                    {previews.map(p => (
+                      <p key={p.segment}>
+                        {p.label}:{' '}
+                        <strong>
+                          {p.hasCoupon
+                            ? p.segment === 'junglist'
+                              ? couponSameForAll && couponTarget === 'both'
+                                ? couponNewCode
+                                : couponExistingCode
+                              : couponNewCode
+                            : 'sin descuento (correo normal)'}
+                        </strong>
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="brutalist-border p-3">
@@ -615,13 +1516,398 @@ export default function CampaignsClient() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={sending || sendResult?.success === true}
+                disabled={sending || sendResult?.success === true || !hasAudience}
                 className="brutalist-border bg-[#ff0055] text-white px-6 py-3 font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {sending ? 'Enviando...' : sendResult?.success ? 'Enviado' : 'Enviar Campaña'}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Historial: campañas enviadas + su tracking de aperturas/visitas */}
+      {view === 'historial' && (
+        <div className="brutalist-border bg-white p-6 brutalist-shadow">
+          {campaignsLoading ? (
+            <p className="mono text-sm text-gray-500">Cargando campañas…</p>
+          ) : campaigns.length === 0 ? (
+            <p className="mono text-sm text-gray-500">Todavía no hay campañas enviadas.</p>
+          ) : (
+            <div className="space-y-3">
+              {campaigns.map((c) => {
+                const isOpen = openCampaign?.id === c.id;
+                return (
+                  <div key={c.id} className="brutalist-border">
+                    <button
+                      type="button"
+                      onClick={() => (isOpen ? setOpenCampaign(null) : openCampaignDetail(c))}
+                      className="w-full text-left p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-black uppercase truncate">{c.name || c.subject}</p>
+                          {/* Indicador: hay correos sin enviar (reenviar) */}
+                          {c.failed_count > 0 && (
+                            <span className="shrink-0 mono text-[10px] font-bold uppercase bg-[#ff0055] text-white px-2 py-0.5">
+                              ⚠ {c.failed_count} sin enviar
+                            </span>
+                          )}
+                        </div>
+                        <p className="mono text-[11px] text-gray-500 truncate">
+                          {c.subject}
+                          {c.template ? ` · ${c.template}` : ''}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="mono text-xs font-bold">
+                          {c.sent_count} enviados
+                          {c.failed_count > 0 ? ` · ${c.failed_count} fallidos` : ''}
+                        </p>
+                        <p className="mono text-[11px] text-gray-500">
+                          {dayjs(c.sent_at || c.created_at).format('DD MMM YYYY HH:mm')}
+                        </p>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t-4 border-black p-4 bg-gray-50">
+                        {recipientsLoading ? (
+                          <p className="mono text-sm text-gray-500">Cargando destinatarios…</p>
+                        ) : (
+                          <>
+                            {/* Audiencia: tiles con el número protagonista. */}
+                            <div className="grid grid-cols-3 gap-2 mb-3">
+                              {[
+                                { label: 'Destinatarios', value: recipients.length, accent: 'border-l-black' },
+                                {
+                                  label: 'Junglists',
+                                  value: recipients.filter((r) => r.segment === 'junglist').length,
+                                  accent: 'border-l-[#ff0055]',
+                                },
+                                {
+                                  label: 'No junglists',
+                                  value: recipients.filter((r) => r.segment === 'no_junglist').length,
+                                  accent: 'border-l-[#0000ff]',
+                                },
+                              ].map((t) => (
+                                <div
+                                  key={t.label}
+                                  className={`brutalist-border border-l-[6px] ${t.accent} bg-white px-3 py-2`}
+                                >
+                                  <p className="text-2xl font-black leading-none tabular-nums">{t.value}</p>
+                                  <p className="mono text-[10px] uppercase text-gray-500 mt-1 tracking-wide">
+                                    {t.label}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Embudo de entrega: barra proporcional + leyenda con conteos.
+                                Cada destinatario cae en un solo estado → los tramos suman el total. */}
+                            <div className="brutalist-border bg-white p-3 mb-3">
+                              <p className="mono text-[10px] font-bold uppercase text-gray-500 tracking-wide mb-2 flex items-center gap-2">
+                                Estado de entrega
+                                {syncingLive && (
+                                  <span className="inline-flex items-center gap-1 text-[#0000ff] normal-case font-normal">
+                                    <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-[#0000ff] border-r-transparent" />
+                                    leyendo Resend en vivo…
+                                  </span>
+                                )}
+                              </p>
+                              <div
+                                className="flex h-3 w-full border-2 border-black overflow-hidden mb-3"
+                                role="img"
+                                aria-label="Distribución de estados"
+                              >
+                                {STATUS_ORDER.map((s) => {
+                                  const n = recipients.filter((r) => normalizeStatus(r.status) === s).length;
+                                  if (!n || recipients.length === 0) return null;
+                                  return (
+                                    <div
+                                      key={s}
+                                      className={STATUS_META[s].bar}
+                                      style={{ width: `${(n / recipients.length) * 100}%` }}
+                                      title={`${STATUS_META[s].label}: ${n}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mono text-[11px]">
+                                {STATUS_ORDER.map((s) => {
+                                  const n = recipients.filter((r) => normalizeStatus(r.status) === s).length;
+                                  // "Sin enviar" se muestra siempre (aunque sea 0) para saber que
+                                  // no queda nadie por enviar; el resto solo si tiene conteo.
+                                  if (!n && s !== 'failed') return null;
+                                  const muted = n === 0;
+                                  return (
+                                    <span
+                                      key={s}
+                                      className={`flex items-center gap-1.5 cursor-help ${muted ? 'opacity-40' : ''}`}
+                                      title={STATUS_META[s].tip}
+                                    >
+                                      <span className={`inline-block w-2.5 h-2.5 ${STATUS_META[s].bar}`} />
+                                      <strong className="tabular-nums">{n}</strong>
+                                      <span className="text-gray-600">{STATUS_META[s].label}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Traer estados de entrega desde Resend (lee, NO envía). */}
+                            {recipients.some((r) => r.status === 'sent' || r.status === 'opened') && (
+                              <div className="mb-3">
+                                <button
+                                  onClick={() => syncFromResend(c.id)}
+                                  disabled={syncing}
+                                  className="brutalist-border bg-white text-black px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                                >
+                                  {syncing ? 'Consultando Resend…' : 'Actualizar estados desde Resend'}
+                                </button>
+                                <p className="mono text-[10px] text-gray-500 mt-1">
+                                  Consulta (no reenvía) qué pasó con los que dicen &quot;enviado&quot;: entregado, rebotó, etc.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Sin enviar: siempre visible para saber cuántos quedan pendientes.
+                                El reenvío manda el máximo que la cuota de Resend permita hoy; si
+                                quedan más, se vuelve a apretar otro día hasta llegar a 0. */}
+                            {(() => {
+                              const pending = recipients.filter(
+                                (r) => normalizeStatus(r.status) === 'failed'
+                              ).length;
+                              if (pending === 0) {
+                                return (
+                                  <div className="brutalist-border bg-green-50 p-3 mb-3 mono text-[11px] font-bold uppercase text-green-800">
+                                    ✓ Todos enviados — no queda nadie pendiente
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="brutalist-border bg-red-50 p-3 mb-3">
+                                  <p className="mono text-[11px] font-bold uppercase mb-2">
+                                    {pending} aún sin enviar (se toparon con la cuota diaria de Resend)
+                                  </p>
+                                  <button
+                                    onClick={() => resendFailed(c.id)}
+                                    disabled={resending}
+                                    className="brutalist-border bg-black text-white px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    {resending ? 'Enviando…' : `Enviar los que faltan (${pending})`}
+                                  </button>
+                                  <p className="mono text-[10px] text-gray-600 mt-2">
+                                    Un click manda todo lo que la cuota permita hoy (Resend Free:
+                                    3.000/mes, ~100/día). Si quedan, volvé otro día y apretá de
+                                    nuevo hasta 0.
+                                  </p>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Detalle de la campaña */}
+                            <dl className="brutalist-border bg-white p-3 mb-3 mono text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Asunto</dt>
+                                <dd className="break-words">{c.subject}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Enviada</dt>
+                                <dd>{dayjs(c.sent_at || c.created_at).format('DD MMM YYYY · HH:mm')}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Plantilla</dt>
+                                <dd>{c.template === 'evento' ? 'Evento' : c.template || 'Personalizada'}</dd>
+                              </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Audiencias</dt>
+                                <dd>
+                                  {c.audiences?.length
+                                    ? c.audiences
+                                        .map(a => AUDIENCES.find(x => x.key === a)?.label ?? a)
+                                        .join(' · ')
+                                    : 'Solo correos individuales'}
+                                </dd>
+                              </div>
+                              {c.event_id && (
+                                <div className="sm:col-span-2">
+                                  <dt className="font-bold uppercase text-gray-500">Landing</dt>
+                                  <dd>
+                                    <a
+                                      href={`/evento/${c.event_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline break-all hover:text-[#ff0055]"
+                                    >
+                                      /evento/{c.event_id}
+                                    </a>
+                                  </dd>
+                                </div>
+                              )}
+                              <div className="sm:col-span-2 pt-2 border-t-2 border-gray-200">
+                                <dt className="font-bold uppercase text-gray-500">Descuento Junglist</dt>
+                                <dd>
+                                  {!c.coupon_mode || c.coupon_mode === 'none' ? (
+                                    'Sin descuento — a todos les llegó el mismo correo.'
+                                  ) : (
+                                    <>
+                                      <span className="inline-block bg-[#ff0055] text-white font-bold px-2 py-0.5 mb-1">
+                                        {COUPON_MODE_LABELS[c.coupon_mode] ?? c.coupon_mode}
+                                      </span>
+                                      <p>
+                                        Junglist nuevo:{' '}
+                                        <strong>{c.coupon_new_code ? c.coupon_new_code.toUpperCase() : 'sin descuento'}</strong>
+                                      </p>
+                                      <p>
+                                        Junglist ya registrado:{' '}
+                                        <strong>{c.coupon_existing_code ? c.coupon_existing_code.toUpperCase() : 'sin descuento'}</strong>
+                                      </p>
+                                    </>
+                                  )}
+                                </dd>
+                              </div>
+                            </dl>
+                            <p className="mono text-[10px] text-gray-500 mb-2">
+                              &quot;Visitó&quot; = clickeó el botón del correo y entró a la landing
+                              (nuestro token). Es la única señal real de interacción.
+                            </p>
+
+                            {/* Filtro por estado: solo aparecen los estados con conteo. */}
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              <button
+                                onClick={() => setRecipientFilter('all')}
+                                className={`mono text-[10px] font-bold uppercase border-2 border-black px-2 py-0.5 cursor-pointer transition-colors ${
+                                  recipientFilter === 'all'
+                                    ? 'bg-black text-white'
+                                    : 'bg-white text-black hover:bg-gray-100'
+                                }`}
+                              >
+                                Todos ({recipients.length})
+                              </button>
+                              {STATUS_ORDER.map((s) => {
+                                const n = recipients.filter(
+                                  (r) => normalizeStatus(r.status) === s
+                                ).length;
+                                if (!n) return null;
+                                const active = recipientFilter === s;
+                                return (
+                                  <button
+                                    key={s}
+                                    onClick={() => setRecipientFilter(s)}
+                                    className={`mono text-[10px] font-bold uppercase border-2 border-black px-2 py-0.5 cursor-pointer inline-flex items-center gap-1.5 transition-colors ${
+                                      active ? 'bg-black text-white' : `${STATUS_META[s].chip} hover:opacity-80`
+                                    }`}
+                                  >
+                                    <span className={`inline-block w-2 h-2 ${STATUS_META[s].bar}`} />
+                                    {STATUS_META[s].label} ({n})
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div className="max-h-80 overflow-auto brutalist-border bg-white">
+                              <table className="w-full mono text-[11px]">
+                                <thead className="bg-black text-white sticky top-0">
+                                  <tr>
+                                    <th className="text-left p-2">Email</th>
+                                    <th className="text-left p-2">Segmento</th>
+                                    <th className="text-left p-2">Estado</th>
+                                    <th className="text-center p-2">Visitó</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {recipients
+                                    .filter(
+                                      (r) =>
+                                        recipientFilter === 'all' ||
+                                        normalizeStatus(r.status) === recipientFilter
+                                    )
+                                    .map((r) => {
+                                    const meta = STATUS_META[normalizeStatus(r.status)];
+                                    return (
+                                      <tr key={r.email} className="border-b border-gray-200 odd:bg-gray-50">
+                                        <td className="p-2 truncate max-w-[220px]">{r.email}</td>
+                                        <td className="p-2">
+                                          {r.segment === 'junglist' ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="inline-block w-2 h-2 bg-[#ff0055]" />
+                                              Junglist
+                                            </span>
+                                          ) : r.segment === 'no_junglist' ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="inline-block w-2 h-2 bg-[#0000ff]" />
+                                              No junglist
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                        </td>
+                                        <td className="p-2">
+                                          <span
+                                            className={`inline-block border-2 border-black px-1.5 py-0.5 text-[10px] font-bold uppercase ${meta.chip}`}
+                                            title={meta.tip}
+                                          >
+                                            {meta.label}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          {r.visited_at ? (
+                                            <span className="text-[#0000ff] font-bold">
+                                              ✓{r.visit_count > 1 ? ` (${r.visit_count})` : ''}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Borrar campaña (baja también su tracking por CASCADE;
+                                los cupones viven en el evento, no se tocan). */}
+                            <div className="mt-4 pt-4 border-t-2 border-gray-300 flex justify-end">
+                              {confirmDeleteId === c.id ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="mono text-[11px] font-bold uppercase">
+                                    ¿Eliminar esta campaña?
+                                  </span>
+                                  <button
+                                    onClick={() => deleteCampaign(c.id)}
+                                    disabled={deleting}
+                                    className="brutalist-border bg-[#ff0055] text-white px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    disabled={deleting}
+                                    className="brutalist-border bg-white px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteId(c.id)}
+                                  className="brutalist-border bg-white text-[#ff0055] px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-[#ff0055] hover:text-white transition-colors cursor-pointer"
+                                >
+                                  Eliminar campaña
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

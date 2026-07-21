@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdmin } from '@/src/lib/authz';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -26,18 +27,6 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
   );
 }
 
-async function verifyAdmin(supabase: ReturnType<typeof createSupabaseServer>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, isAdmin: false };
-
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-
-  return { user, isAdmin: adminProfile?.is_admin === true };
-}
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -58,16 +47,18 @@ export async function GET() {
     return NextResponse.json({ presskits: [], error: pkError.message }, { status: 500 });
   }
 
-  // Get all pk_profiles to map user_id -> slug
+  // Get all pk_profiles to map user_id -> slug + email
   const { data: profiles } = await supabase
     .from('pk_profiles')
-    .select('user_id, slug');
+    .select('user_id, slug, email');
 
   const slugMap = new Map((profiles || []).map((p) => [p.user_id, p.slug]));
+  const emailMap = new Map((profiles || []).map((p) => [p.user_id, p.email]));
 
   const enriched = (presskits || []).map((pk) => ({
     ...pk,
     slug: slugMap.get(pk.user_id) || null,
+    email: emailMap.get(pk.user_id) || null,
   }));
 
   return NextResponse.json({ presskits: enriched });

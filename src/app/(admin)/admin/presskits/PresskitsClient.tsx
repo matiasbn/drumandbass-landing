@@ -17,6 +17,7 @@ interface PresskitItem {
   photo_url: string | null;
   published: boolean;
   slug: string | null;
+  email: string | null;
   created_at: string;
   mixes: PresskitMix[];
 }
@@ -202,11 +203,10 @@ export default function PresskitsClient() {
           <Link href="/admin" className="mono text-sm text-gray-600 hover:text-black uppercase">
             &larr; Volver al Admin
           </Link>
-          <h1 className="text-3xl font-black uppercase mt-2">Press Kits</h1>
+          <h1 className="text-3xl font-black uppercase mt-2">
+            Press Kits {!loadingData && <span className="text-gray-400">({presskits.length})</span>}
+          </h1>
         </div>
-        <span className="mono text-sm text-gray-600">
-          {loadingData ? '...' : `${presskits.length} press kits`}
-        </span>
       </div>
 
       {/* Table */}
@@ -224,10 +224,9 @@ export default function PresskitsClient() {
                 <tr className="border-b-4 border-black">
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('artist_name')}>Artista{sortArrow('artist_name')}</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('real_name')}>Nombre Real{sortArrow('real_name')}</th>
-                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('city')}>Ciudad{sortArrow('city')}</th>
+                  <th className="text-left py-2 pr-4">Email</th>
                   <th className="text-left py-2 pr-4">Slug</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('published')}>Estado{sortArrow('published')}</th>
-                  <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600 whitespace-nowrap" onClick={() => toggleSort('created_at')}>Fecha{sortArrow('created_at')}</th>
                   <th className="text-left py-2">Acciones</th>
                 </tr>
               </thead>
@@ -257,14 +256,8 @@ export default function PresskitsClient() {
                             placeholder="Nombre real"
                           />
                         </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            value={editForm.city}
-                            onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                            className="w-full border-2 border-black px-2 py-1 text-sm"
-                            placeholder="Ciudad"
-                          />
-                        </td>
+                        {/* Email es de solo lectura (viene de pk_profiles). */}
+                        <td className="py-2 pr-4 text-gray-500">{pk.email || '-'}</td>
                         <td className="py-2 pr-4 text-gray-500">{pk.slug || '-'}</td>
                         <td className="py-2 pr-4">
                           <button
@@ -273,9 +266,6 @@ export default function PresskitsClient() {
                           >
                             {editForm.published ? 'Publicado' : 'Borrador'}
                           </button>
-                        </td>
-                        <td className="py-2 pr-4 text-gray-500 whitespace-nowrap">
-                          {new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="py-2">
                           <div className="flex gap-2">
@@ -299,7 +289,7 @@ export default function PresskitsClient() {
                       <>
                         <td className="py-2 pr-4 font-bold">{pk.artist_name}</td>
                         <td className="py-2 pr-4">{pk.real_name || '-'}</td>
-                        <td className="py-2 pr-4">{pk.city || '-'}</td>
+                        <td className="py-2 pr-4">{pk.email || '-'}</td>
                         <td className="py-2 pr-4">
                           {pk.slug ? (
                             <a href={`/pk/${pk.slug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
@@ -314,9 +304,6 @@ export default function PresskitsClient() {
                           >
                             {pk.published ? 'Publicado' : 'Borrador'}
                           </button>
-                        </td>
-                        <td className="py-2 pr-4 whitespace-nowrap">
-                          {new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="py-2">
                           <div className="flex gap-2">
@@ -339,7 +326,22 @@ export default function PresskitsClient() {
                   </tr>
                   {editingId === pk.id && (
                     <tr className="border-b border-gray-300 bg-gray-50">
-                      <td colSpan={7} className="py-3 px-2">
+                      <td colSpan={6} className="py-3 px-2">
+                        <div className="flex flex-wrap gap-6 mb-4 items-end">
+                          <label className="mono text-xs font-bold uppercase">
+                            Ciudad
+                            <input
+                              value={editForm.city}
+                              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                              className="block mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                              placeholder="Ciudad"
+                            />
+                          </label>
+                          <span className="mono text-xs text-gray-600 uppercase">
+                            Registrado:{' '}
+                            <strong>{new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                          </span>
+                        </div>
                         <p className="mono text-xs font-bold uppercase mb-2">
                           Releases publicados en Releases Nacionales
                         </p>

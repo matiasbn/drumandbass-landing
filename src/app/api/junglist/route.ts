@@ -41,13 +41,16 @@ export async function GET() {
     return NextResponse.json({ junglist: null }, { status: 401 });
   }
 
+  // Una baja se trata como "no registrado": devuelve null para que pueda volver a
+  // inscribirse (y ahí el POST reactiva conservando la fecha original).
   const { data, error } = await supabase
     .from('junglists')
     .select('*')
     .eq('user_id', user.id)
-    .single();
+    .is('unsubscribed_at', null)
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     return NextResponse.json({ junglist: null, error: error.message }, { status: 500 });
   }
 
@@ -71,15 +74,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  // Ya registrado?
+  // ¿Ya existe una fila para este usuario? Si está activa, ya es junglist. Si se
+  // había dado de baja, se REACTIVA conservando created_at (la fecha original),
+  // en vez de crear una nueva.
   const { data: existing } = await supabase
     .from('junglists')
-    .select('id')
+    .select('id, unsubscribed_at')
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
-    return NextResponse.json({ error: 'Ya estás registrado como junglist' }, { status: 409 });
+    if (!existing.unsubscribed_at) {
+      return NextResponse.json({ error: 'Ya estás registrado como junglist' }, { status: 409 });
+    }
+    const { data: reactivated, error: reErr } = await supabase
+      .from('junglists')
+      .update({
+        unsubscribed_at: null,
+        name: parsed.name,
+        last_name: parsed.last_name,
+        instagram: parsed.instagram,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+      .select()
+      .single();
+    if (reErr) return NextResponse.json({ error: reErr.message }, { status: 500 });
+    return NextResponse.json({ junglist: reactivated });
   }
 
   const { data: junglist, error } = await supabase
@@ -137,7 +158,10 @@ export async function PUT(request: Request) {
   return NextResponse.json({ junglist });
 }
 
-// DELETE — baja voluntaria: borra la fila del usuario actual.
+// DELETE — baja voluntaria: NO se borra la fila, se marca como dada de baja. Así
+// se conserva created_at (la fecha importa para el corte de descuento) y nadie
+// puede darse de baja y re-registrarse para resetearla. El borrado definitivo
+// queda solo para el admin.
 export async function DELETE() {
   const supabase = await createSupabaseServer();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -146,9 +170,10 @@ export async function DELETE() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from('junglists')
-    .delete()
+    .update({ unsubscribed_at: now, updated_at: now })
     .eq('user_id', user.id);
 
   if (error) {

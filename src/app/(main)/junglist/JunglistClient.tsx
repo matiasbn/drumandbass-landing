@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { RiWhatsappLine } from '@remixicon/react';
 import type { User } from '@supabase/supabase-js';
@@ -11,7 +11,7 @@ import { event } from '@/src/lib/gtag';
 import { WHATSAPP_LINK } from '@/src/constants';
 import BrutalistButton from '@/src/components/BigButton';
 
-type View = 'loading' | 'anon' | 'form' | 'profile' | 'dj';
+type View = 'loading' | 'anon' | 'form' | 'welcome' | 'redirecting' | 'profile' | 'dj';
 
 interface FormState {
   name: string;
@@ -20,6 +20,17 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', last_name: '', instagram: '' };
+
+/**
+ * Destino al terminar, cuando se llegó desde otra página (p. ej. el descuento de
+ * un evento: /junglist?next=/evento/<id>). Solo rutas internas — un `next`
+ * absoluto o protocol-relative sería un open redirect.
+ */
+function readNext(): string | null {
+  if (typeof window === 'undefined') return null;
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
 
 // Marca Google (G a 4 colores).
 const GoogleG = () => (
@@ -44,6 +55,44 @@ export default function JunglistClient() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmingUnsub, setConfirmingUnsub] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const welcomeRef = useRef<HTMLHeadingElement>(null);
+  // Página desde la que llegó (?next=), para volver ahí al terminar.
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNextUrl(readNext());
+  }, []);
+
+  // El toast (p. ej. "Cambios guardados") se auto-oculta.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Al llegar a la bienvenida, subir al inicio y llevar el foco al titular (que se
+  // lea sí o sí, sobre todo en móvil, y sea accesible por lectores de pantalla).
+  useEffect(() => {
+    if (view !== 'welcome') return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    welcomeRef.current?.focus();
+  }, [view]);
+
+  // El form del perfil refleja lo guardado: cuando hay junglist (carga o tras
+  // guardar), sincronizamos los campos. Así "Guardar cambios" sabe si hubo cambios
+  // y el usuario puede vaciar un campo. No aplica al alta (junglist aún no existe).
+  useEffect(() => {
+    if (!junglist) return;
+    setForm({ name: junglist.name, last_name: junglist.last_name, instagram: junglist.instagram });
+  }, [junglist]);
+
+  // ¿El perfil tiene cambios sin guardar?
+  const dirty =
+    !!junglist &&
+    (form.name !== junglist.name ||
+      form.last_name !== junglist.last_name ||
+      form.instagram !== junglist.instagram);
 
   const load = useCallback(async () => {
     let user;
@@ -67,14 +116,30 @@ export default function JunglistClient() {
     const data = await jRes.json().catch(() => ({}));
     const pkData = await pkRes.json().catch(() => ({}));
 
+    // Si llegó desde un evento (?next=) y YA es junglist/DJ, no tiene nada que
+    // registrar: se le devuelve al evento, donde la landing le dará el feedback
+    // (su código, o que no hay descuento para su perfil). Leemos el param acá
+    // para no depender del estado nextUrl (que se setea en otro efecto).
+    const back = readNext();
+
     // Un DJ ya es junglist (por unión): no se le pide registro junglist.
     if (pkData.profile) {
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('dj');
       return;
     }
 
     if (data.junglist) {
       setJunglist(data.junglist);
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('profile');
     } else {
       // Prellenar nombre/apellido con datos de la propia cuenta de Google (no de nuestra DB).
@@ -95,12 +160,15 @@ export default function JunglistClient() {
 
   const signIn = async () => {
     setSubmitting(true);
-    // El callback prioriza la cookie pk_auth_redirect sobre `next`; la fijamos a
-    // /junglist para no heredar un redirect viejo (p. ej. /pk/edit de un login de DJ).
-    document.cookie = 'pk_auth_redirect=/junglist; path=/; max-age=600; SameSite=Lax';
+    // Si vino desde otra página (?next=), hay que volver ahí y no a /junglist:
+    // quien se inscribe desde el descuento de un evento espera su código, no esta
+    // pantalla. El callback prioriza la cookie sobre `next`, así que se fijan las
+    // dos al mismo destino para no heredar un redirect viejo (p. ej. /pk/edit).
+    const dest = `/junglist${nextUrl ? `?next=${encodeURIComponent(nextUrl)}` : ''}`;
+    document.cookie = `pk_auth_redirect=${dest}; path=/; max-age=600; SameSite=Lax`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/junglist` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(dest)}` },
     });
     if (error) {
       setError('No pudimos iniciar sesión. Intenta de nuevo.');
@@ -132,8 +200,22 @@ export default function JunglistClient() {
       return;
     }
     setJunglist(data.junglist);
-    if (method === 'POST') event('junglist_signup');
-    setView('profile');
+    if (method === 'POST') {
+      event('junglist_signup');
+      // Si vino a buscar algo concreto (el descuento de un evento), se vuelve de
+      // inmediato: la bienvenida sobra cuando hay un destino esperando. Navegación
+      // completa y no router.push porque la sesión acaba de cambiar y la landing
+      // tiene que resolver el cupón con el estado nuevo.
+      if (nextUrl) {
+        setView('redirecting');
+        window.location.assign(nextUrl);
+        return;
+      }
+      setView('welcome'); // momento de bienvenida solo en el alta
+    } else {
+      setToast('Cambios guardados');
+      setView('profile');
+    }
   };
 
   const unsubscribe = async () => {
@@ -248,6 +330,60 @@ export default function JunglistClient() {
           </div>
         )}
 
+        {/* Alta exitosa: bienvenida (solo tras registrarse, no al editar) */}
+        {view === 'redirecting' && (
+          <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
+            <div className="mono text-xs font-black uppercase tracking-widest bg-[#ff0055] text-white px-3 py-1.5 inline-block mb-6">
+              ✔ Inscrito
+            </div>
+            <h2 className="text-4xl lg:text-6xl font-black uppercase italic tracking-tighter leading-none mb-3">
+              ¡Ya eres junglist!
+            </h2>
+            <p className="mono font-bold uppercase text-gray-600 leading-tight">
+              Volviendo al evento para mostrarte tu descuento…
+            </p>
+          </div>
+        )}
+
+        {view === 'welcome' && (
+          <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
+            <div className="mono text-xs font-black uppercase tracking-widest bg-[#ff0055] text-white px-3 py-1.5 inline-block mb-6">
+              ✔ Inscrito
+            </div>
+            <h2
+              ref={welcomeRef}
+              tabIndex={-1}
+              className="animate-stamp origin-left text-4xl lg:text-6xl font-black uppercase italic tracking-tighter leading-none outline-none mb-3"
+            >
+              ¡Ya eres junglist!
+            </h2>
+            <p className="mono font-bold text-lg uppercase leading-tight mb-2">
+              Bienvenido{junglist?.name ? `, ${junglist.name}` : ''}.
+            </p>
+            <p className="mono font-bold uppercase text-gray-600 leading-tight mb-8">
+              Ya estás en la lista: preventas, sorteos y avisos antes que nadie.
+            </p>
+
+            <p className="mono text-sm font-black uppercase mb-3">Ahora sí, ven a saludarnos:</p>
+            <BrutalistButton variant="whatsapp" className="w-full text-xl py-6 mb-6" href={WHATSAPP_LINK}>
+              <RiWhatsappLine /> Únete al grupo de WhatsApp
+            </BrutalistButton>
+
+            <div className="border-t-4 border-black pt-6 flex flex-col gap-3">
+              <BrutalistButton variant="club" className="w-full text-lg py-4" href="/pk">
+                ¿Eres DJ? Crea tu presskit
+              </BrutalistButton>
+              <BrutalistButton
+                variant="primary"
+                className="w-full text-lg py-4"
+                onClick={() => setView('profile')}
+              >
+                Ver o editar mi perfil
+              </BrutalistButton>
+            </div>
+          </div>
+        )}
+
         {/* Logueado con registro: perfil */}
         {view === 'profile' && junglist && (
           <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
@@ -258,15 +394,15 @@ export default function JunglistClient() {
             <div className="flex flex-col gap-4">
               <div>
                 <label className={labelCls}>Nombre</label>
-                <input className={inputCls} value={form.name || junglist.name} onChange={update('name')} />
+                <input className={inputCls} value={form.name} onChange={update('name')} />
               </div>
               <div>
                 <label className={labelCls}>Apellido</label>
-                <input className={inputCls} value={form.last_name || junglist.last_name} onChange={update('last_name')} />
+                <input className={inputCls} value={form.last_name} onChange={update('last_name')} />
               </div>
               <div>
                 <label className={labelCls}>Instagram</label>
-                <input className={inputCls} value={form.instagram || junglist.instagram} onChange={update('instagram')} />
+                <input className={inputCls} value={form.instagram} onChange={update('instagram')} />
               </div>
               <div>
                 <label className={labelCls}>Correo</label>
@@ -280,18 +416,10 @@ export default function JunglistClient() {
               <BrutalistButton
                 variant="blue"
                 className="flex-1 text-lg py-5"
-                onClick={() => {
-                  // asegura que los inputs tengan valores antes de guardar
-                  setForm((f) => ({
-                    name: f.name || junglist.name,
-                    last_name: f.last_name || junglist.last_name,
-                    instagram: f.instagram || junglist.instagram,
-                  }));
-                  save('PUT');
-                }}
-                disabled={submitting}
+                onClick={() => save('PUT')}
+                disabled={submitting || !dirty}
               >
-                {submitting ? 'Guardando…' : 'Guardar cambios'}
+                {submitting ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Sin cambios'}
               </BrutalistButton>
               <BrutalistButton variant="primary" className="text-lg py-5" onClick={signOut} disabled={submitting}>
                 Cerrar sesión
@@ -351,6 +479,17 @@ export default function JunglistClient() {
           </div>
         )}
       </div>
+
+      {/* Toast transitorio (p. ej. al guardar cambios) */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="animate-toast-in fixed bottom-6 left-1/2 -translate-x-1/2 z-50 brutalist-border brutalist-shadow bg-[#0000ff] text-white mono text-sm font-black uppercase tracking-widest px-5 py-3"
+        >
+          ✔ {toast}
+        </div>
+      )}
     </main>
   );
 }
