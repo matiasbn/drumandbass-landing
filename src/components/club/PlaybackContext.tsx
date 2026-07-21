@@ -26,7 +26,7 @@ const PlaybackContext = createContext<PlaybackContextType>({
 export const usePlayback = () => useContext(PlaybackContext);
 
 export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isLive } = useLive();
+  const { isLive, youtubeVideoId } = useLive();
   const [isPlaying, setIsPlayingState] = useState(false);
   const [trackTitle, setTrackTitle] = useState('');
   const isPlayingRef = useRef(false);
@@ -45,12 +45,16 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
     togglePlayRef.current?.();
   }, []);
 
-  // When live, force animations to stay active
+  // La música del club sale de la PANTALLA (el stream en vivo o, si no hay, el
+  // video por defecto), así que mientras haya video las animaciones siguen
+  // corriendo. Antes esto sólo miraba `isLive` y lo marcaba el player de
+  // SoundCloud, que ya no existe: sin video en vivo el club quedaba "en pausa".
   useEffect(() => {
-    if (isLive) {
+    if (isLive || youtubeVideoId) {
       isPlayingRef.current = true;
+      setIsPlayingState(true);
     }
-  }, [isLive]);
+  }, [isLive, youtubeVideoId]);
 
   const contextValue = useMemo(() => ({
     isPlaying, setIsPlaying, isPlayingRef, trackTitle, setTrackTitle, registerTogglePlay, togglePlay,

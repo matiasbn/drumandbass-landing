@@ -519,6 +519,11 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     if (isPlaying) {
       frozenTimeRef.current = clock.getElapsedTime();
     }
+    // `time` congela las ANIMACIONES cuando no suena música; `now` es el reloj
+    // real. Los temporizadores del juego (levitación y giro del CLUB DROP) se
+    // comparan SIEMPRE contra `clockNow`: si usaran el tiempo congelado quedarían
+    // vencidos para siempre y el personaje se quedaba flotando sin bajar.
+    const clockNow = clock.getElapsedTime();
     const time = frozenTimeRef.current;
 
     // Get camera forward/right projected onto the XZ plane
@@ -569,7 +574,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     const isMoving = moveX !== 0 || moveZ !== 0;
 
     // Cierre del CLUB DROP: todos hacen el MISMO movimiento (giro + levitación).
-    if (finaleSpinUntil > time && danceMoveRef.current !== 2) {
+    if (finaleSpinUntil > clockNow && danceMoveRef.current !== 2) {
       danceMoveRef.current = 2; // Spin
       danceStartRef.current = time;
       spinStartRotationRef.current = rotationRef.current;
@@ -729,9 +734,9 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
         });
       }
 
-      // Levitate special effect
-      if (levitateActiveUntil > time) {
-        groupRef.current.position.y += Math.sin(time * 2) * 0.5 + 2.0;
+      // Levitate special effect (contra el reloj real, ver `clockNow` arriba)
+      if (levitateActiveUntil > clockNow) {
+        groupRef.current.position.y += Math.sin(clockNow * 2) * 0.5 + 2.0;
       }
 
       // Sync position to camera context for third-person camera

@@ -8,7 +8,7 @@ import { LiveChat } from './components/LiveChat';
 import { MobileControls } from './components/MobileControls';
 import { SettingsModal } from './components/SettingsModal';
 import { CharacterCustomModal } from './components/CharacterCustomModal';
-import { PlaybackProvider, usePlayback } from './PlaybackContext';
+import { PlaybackProvider } from './PlaybackContext';
 import { MultiplayerProvider } from './MultiplayerContext';
 import { LiveProvider, useLive } from './LiveContext';
 import { ScoreProvider } from './ScoreContext';
@@ -41,15 +41,6 @@ const NightclubSceneInner: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const { profile, signOut } = useAuth();
   const { isLive, liveTitle, youtubeVideoId } = useLive();
-  const { setIsPlaying } = usePlayback();
-
-  // La música del club ahora sale SIEMPRE de la pantalla (stream en vivo o el
-  // video por defecto). Antes este flag lo marcaba el player de SoundCloud, y
-  // de él dependen las animaciones de los bailarines: se activa mientras haya
-  // video en pantalla.
-  useEffect(() => {
-    setIsPlaying(Boolean(youtubeVideoId));
-  }, [youtubeVideoId, setIsPlaying]);
 
   const handleLogout = async () => {
     setMenuOpen(false);
