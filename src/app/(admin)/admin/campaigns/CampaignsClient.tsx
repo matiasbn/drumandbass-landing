@@ -63,6 +63,75 @@ const COUPON_MODE_LABELS: Record<string, string> = {
   existing_only: 'Solo junglists ya registrados',
 };
 
+// Estados de un destinatario. `bar` = color sólido (barra de embudo + punto de
+// leyenda); `chip` = tinte claro para el badge de la tabla; `tip` = tooltip.
+// Dos ejes en un solo campo, en orden de embudo:
+//   Entrega (dato duro): Falló → Enviado → Entregado   (Resend, salvo Falló)
+//   Interacción (nuestro token ?ct=): Visitó            (el único real)
+// NO existe "Abierto": el pixel de apertura se retiró (no es dato duro).
+type RecipientStatus =
+  | 'sent'
+  | 'delivered'
+  | 'clicked'
+  | 'bounced'
+  | 'complained'
+  | 'failed';
+
+const STATUS_ORDER: RecipientStatus[] = [
+  'failed',
+  'sent',
+  'delivered',
+  'clicked',
+  'bounced',
+  'complained',
+];
+
+const STATUS_META: Record<RecipientStatus, { label: string; bar: string; chip: string; tip: string }> = {
+  failed: {
+    label: 'Sin enviar',
+    bar: 'bg-red-700',
+    chip: 'bg-red-100 text-red-800',
+    tip: 'No salió (te topaste con la cuota diaria de Resend). Nunca se envió; reenviálo con el botón "Enviar los que faltan".',
+  },
+  sent: {
+    label: 'Enviado',
+    bar: 'bg-gray-400',
+    chip: 'bg-gray-100 text-gray-700',
+    tip: 'Salió por Resend, pero aún sin confirmación de entrega. Actualizá desde Resend para saber si llegó.',
+  },
+  delivered: {
+    label: 'Entregado',
+    bar: 'bg-green-500',
+    chip: 'bg-green-100 text-green-800',
+    tip: 'Resend confirma que llegó al servidor del destinatario (dato duro, no pixel).',
+  },
+  clicked: {
+    label: 'Visitó',
+    bar: 'bg-[#0000ff]',
+    chip: 'bg-blue-200 text-blue-900',
+    tip: 'Clickeó el botón del correo y entró a la landing (nuestro token único). La única señal real de que se enganchó.',
+  },
+  bounced: {
+    label: 'Rebotó',
+    bar: 'bg-red-500',
+    chip: 'bg-red-200 text-red-900',
+    tip: 'La dirección no existe o rechazó el correo. No llegó. Conviene sacarla de la lista. (De Resend.)',
+  },
+  complained: {
+    label: 'Spam',
+    bar: 'bg-orange-400',
+    chip: 'bg-orange-100 text-orange-800',
+    tip: 'El destinatario lo marcó como spam. Conviene sacarlo. (De Resend.)',
+  },
+};
+
+// Normaliza estados históricos: el viejo pixel marcaba 'opened', que ya no
+// usamos (no es dato duro) → se muestra como 'Enviado'.
+function normalizeStatus(s: string): RecipientStatus {
+  if (s === 'opened') return 'sent';
+  return (STATUS_ORDER as string[]).includes(s) ? (s as RecipientStatus) : 'sent';
+}
+
 const STEPS = [
   { num: 1, label: 'Plantilla', desc: 'Elige una plantilla' },
   { num: 2, label: 'Correo', desc: 'Arma el correo' },
@@ -224,6 +293,10 @@ export default function CampaignsClient() {
   const [deleting, setDeleting] = useState(false);
   const [resending, setResending] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // Auto-lectura de Resend al abrir la campaña (silenciosa, sin alertas).
+  const [syncingLive, setSyncingLive] = useState(false);
+  // Filtro de la tabla de destinatarios por estado ('all' = todos).
+  const [recipientFilter, setRecipientFilter] = useState<'all' | RecipientStatus>('all');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -355,44 +428,65 @@ export default function CampaignsClient() {
     }
   }, []);
 
+  // Trae los destinatarios de una campaña desde NUESTRA base (sin tocar Resend).
+  const fetchRecipients = async (id: string) => {
+    const res = await fetch(`/api/admin/campaigns?campaign=${id}`);
+    const data = await res.json();
+    setRecipients(data.recipients || []);
+  };
+
+  // Núcleo del sync: consulta Resend en vivo (no envía) y actualiza estados de
+  // entrega. El backend resuelve toda la campaña por llamada; un par de rondas
+  // por si quedan pendientes que Resend aún reporta como 'sent'. Devuelve cuántos
+  // se actualizaron. No hace alertas ni refetch (de eso se encargan los callers).
+  const runSync = async (id: string): Promise<number> => {
+    let total = 0;
+    for (let round = 0; round < 3; round++) {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncCampaignId: id }),
+      });
+      const data = await res.json();
+      if (!data.success) break;
+      total += data.synced || 0;
+      if ((data.synced || 0) === 0 || (data.remaining || 0) === 0) break;
+    }
+    return total;
+  };
+
   const openCampaignDetail = async (c: CampaignSummary) => {
     setOpenCampaign(c);
     setRecipients([]);
+    setRecipientFilter('all');
     setRecipientsLoading(true);
     try {
-      const res = await fetch(`/api/admin/campaigns?campaign=${c.id}`);
-      const data = await res.json();
-      setRecipients(data.recipients || []);
+      await fetchRecipients(c.id);
     } catch {
       // ignore
     } finally {
       setRecipientsLoading(false);
     }
+    // Al abrir, leemos Resend EN VIVO para reflejar la entrega real (silencioso).
+    setSyncingLive(true);
+    try {
+      const n = await runSync(c.id);
+      if (n > 0) await fetchRecipients(c.id);
+    } catch {
+      // silencioso: si Resend falla, se ve lo que hay en nuestra base
+    } finally {
+      setSyncingLive(false);
+    }
   };
 
-  // Consulta a Resend el estado de entrega de lo YA enviado (no manda nada).
-  // Corre en tandas hasta que no queden pendientes por sincronizar.
+  // Botón manual "Actualizar desde Resend": mismo sync, con feedback explícito.
   const syncFromResend = async (id: string) => {
     setSyncing(true);
     try {
-      let total = 0;
-      for (let round = 0; round < 60; round++) {
-        const res = await fetch('/api/admin/campaigns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ syncCampaignId: id }),
-        });
-        const data = await res.json();
-        if (!data.success) {
-          window.alert(`Error al sincronizar: ${data.error || ''}`);
-          break;
-        }
-        total += data.synced || 0;
-        if ((data.synced || 0) === 0 || (data.remaining || 0) === 0) break;
-      }
-      window.alert(`Estados de entrega actualizados desde Resend: ${total}.`);
+      const total = await runSync(id);
+      await fetchRecipients(id);
       await fetchCampaigns();
-      if (openCampaign?.id === id) await openCampaignDetail(openCampaign);
+      window.alert(`Estados de entrega actualizados desde Resend: ${total}.`);
     } catch (e) {
       window.alert(`Error de red: ${e instanceof Error ? e.message : ''}`);
     } finally {
@@ -1482,76 +1576,87 @@ export default function CampaignsClient() {
                           <p className="mono text-sm text-gray-500">Cargando destinatarios…</p>
                         ) : (
                           <>
-                            {/* Audiencia */}
-                            <div className="flex flex-wrap gap-2 mb-2 mono text-[11px]">
-                              <span className="brutalist-border px-2 py-1 bg-white">
-                                Destinatarios: {recipients.length}
-                              </span>
-                              <span className="brutalist-border px-2 py-1 bg-white">
-                                Junglists: {recipients.filter((r) => r.segment === 'junglist').length}
-                              </span>
-                              <span className="brutalist-border px-2 py-1 bg-white">
-                                No junglists: {recipients.filter((r) => r.segment === 'no_junglist').length}
-                              </span>
+                            {/* Audiencia: tiles con el número protagonista. */}
+                            <div className="grid grid-cols-3 gap-2 mb-3">
+                              {[
+                                { label: 'Destinatarios', value: recipients.length, accent: 'border-l-black' },
+                                {
+                                  label: 'Junglists',
+                                  value: recipients.filter((r) => r.segment === 'junglist').length,
+                                  accent: 'border-l-[#ff0055]',
+                                },
+                                {
+                                  label: 'No junglists',
+                                  value: recipients.filter((r) => r.segment === 'no_junglist').length,
+                                  accent: 'border-l-[#0000ff]',
+                                },
+                              ].map((t) => (
+                                <div
+                                  key={t.label}
+                                  className={`brutalist-border border-l-[6px] ${t.accent} bg-white px-3 py-2`}
+                                >
+                                  <p className="text-2xl font-black leading-none tabular-nums">{t.value}</p>
+                                  <p className="mono text-[10px] uppercase text-gray-500 mt-1 tracking-wide">
+                                    {t.label}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
 
-                            {/* Estados del correo (mismos valores que la columna Estado, cada
-                                destinatario cuenta en uno solo → suman el total). Tooltip en cada uno. */}
-                            <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
-                              <span
-                                className="brutalist-border px-2 py-1 bg-white cursor-help"
-                                title="Enviado: el correo salió, pero su pixel de apertura no cargó y no visitó la landing. Puede haberlo abierto igual (clientes que bloquean imágenes)."
+                            {/* Embudo de entrega: barra proporcional + leyenda con conteos.
+                                Cada destinatario cae en un solo estado → los tramos suman el total. */}
+                            <div className="brutalist-border bg-white p-3 mb-3">
+                              <p className="mono text-[10px] font-bold uppercase text-gray-500 tracking-wide mb-2 flex items-center gap-2">
+                                Estado de entrega
+                                {syncingLive && (
+                                  <span className="inline-flex items-center gap-1 text-[#0000ff] normal-case font-normal">
+                                    <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-[#0000ff] border-r-transparent" />
+                                    leyendo Resend en vivo…
+                                  </span>
+                                )}
+                              </p>
+                              <div
+                                className="flex h-3 w-full border-2 border-black overflow-hidden mb-3"
+                                role="img"
+                                aria-label="Distribución de estados"
                               >
-                                Enviado: {recipients.filter((r) => r.status === 'sent').length}
-                              </span>
-                              <span
-                                className="brutalist-border px-2 py-1 bg-white cursor-help"
-                                title="Abierto: cargó el pixel de apertura. Poco fiable — Gmail/Apple Mail precargan imágenes (falso positivo) y los clientes que las bloquean no lo marcan (falso negativo)."
-                              >
-                                Abierto: {recipients.filter((r) => r.status === 'opened').length}
-                              </span>
-                              <span
-                                className="brutalist-border px-2 py-1 bg-white cursor-help"
-                                title="Clickeó: hizo click y aterrizó en la landing. Es la señal firme de que la persona se enganchó."
-                              >
-                                Clickeó: {recipients.filter((r) => r.status === 'clicked').length}
-                              </span>
-                              {recipients.some((r) => r.status === 'delivered') && (
-                                <span
-                                  className="brutalist-border px-2 py-1 bg-green-100 cursor-help"
-                                  title="Entregado: Resend confirma que llegó al servidor del destinatario (dato duro, no pixel). Se obtiene con 'Actualizar estados desde Resend'."
-                                >
-                                  Entregado: {recipients.filter((r) => r.status === 'delivered').length}
-                                </span>
-                              )}
-                              {recipients.some((r) => r.status === 'bounced') && (
-                                <span
-                                  className="brutalist-border px-2 py-1 bg-red-200 cursor-help"
-                                  title="Rebotó: la dirección no existe o rechazó el correo. No llegó. (De Resend.)"
-                                >
-                                  Rebotó: {recipients.filter((r) => r.status === 'bounced').length}
-                                </span>
-                              )}
-                              {recipients.some((r) => r.status === 'complained') && (
-                                <span
-                                  className="brutalist-border px-2 py-1 bg-orange-100 cursor-help"
-                                  title="Spam: el destinatario lo marcó como spam. (De Resend.)"
-                                >
-                                  Spam: {recipients.filter((r) => r.status === 'complained').length}
-                                </span>
-                              )}
-                              {recipients.some((r) => r.status === 'failed') && (
-                                <span
-                                  className="brutalist-border px-2 py-1 bg-red-100 cursor-help"
-                                  title="Falló: no se pudo enviar (típicamente la cuota diaria de Resend). Nunca salió; se puede reenviar."
-                                >
-                                  Falló: {recipients.filter((r) => r.status === 'failed').length}
-                                </span>
-                              )}
+                                {STATUS_ORDER.map((s) => {
+                                  const n = recipients.filter((r) => normalizeStatus(r.status) === s).length;
+                                  if (!n || recipients.length === 0) return null;
+                                  return (
+                                    <div
+                                      key={s}
+                                      className={STATUS_META[s].bar}
+                                      style={{ width: `${(n / recipients.length) * 100}%` }}
+                                      title={`${STATUS_META[s].label}: ${n}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mono text-[11px]">
+                                {STATUS_ORDER.map((s) => {
+                                  const n = recipients.filter((r) => normalizeStatus(r.status) === s).length;
+                                  // "Sin enviar" se muestra siempre (aunque sea 0) para saber que
+                                  // no queda nadie por enviar; el resto solo si tiene conteo.
+                                  if (!n && s !== 'failed') return null;
+                                  const muted = n === 0;
+                                  return (
+                                    <span
+                                      key={s}
+                                      className={`flex items-center gap-1.5 cursor-help ${muted ? 'opacity-40' : ''}`}
+                                      title={STATUS_META[s].tip}
+                                    >
+                                      <span className={`inline-block w-2.5 h-2.5 ${STATUS_META[s].bar}`} />
+                                      <strong className="tabular-nums">{n}</strong>
+                                      <span className="text-gray-600">{STATUS_META[s].label}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
 
                             {/* Traer estados de entrega desde Resend (lee, NO envía). */}
-                            {recipients.some((r) => r.status === 'sent') && (
+                            {recipients.some((r) => r.status === 'sent' || r.status === 'opened') && (
                               <div className="mb-3">
                                 <button
                                   onClick={() => syncFromResend(c.id)}
@@ -1566,25 +1671,40 @@ export default function CampaignsClient() {
                               </div>
                             )}
 
-                            {/* Reenviar a los que fallaron (cuota de Resend: 100/día). */}
-                            {recipients.some((r) => r.status === 'failed') && (
-                              <div className="brutalist-border bg-red-50 p-3 mb-3">
-                                <p className="mono text-[11px] font-bold uppercase mb-2">
-                                  {recipients.filter((r) => r.status === 'failed').length} correos no salieron
-                                  (probablemente la cuota diaria de Resend, 100/día).
-                                </p>
-                                <button
-                                  onClick={() => resendFailed(c.id)}
-                                  disabled={resending}
-                                  className="brutalist-border bg-black text-white px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40"
-                                >
-                                  {resending ? 'Reenviando…' : 'Reenviar a los que fallaron'}
-                                </button>
-                                <p className="mono text-[10px] text-gray-600 mt-2">
-                                  Manda hasta 100 por vez. Si quedan más, volvé mañana y apretá de nuevo.
-                                </p>
-                              </div>
-                            )}
+                            {/* Sin enviar: siempre visible para saber cuántos quedan pendientes.
+                                El reenvío manda el máximo que la cuota de Resend permita hoy; si
+                                quedan más, se vuelve a apretar otro día hasta llegar a 0. */}
+                            {(() => {
+                              const pending = recipients.filter(
+                                (r) => normalizeStatus(r.status) === 'failed'
+                              ).length;
+                              if (pending === 0) {
+                                return (
+                                  <div className="brutalist-border bg-green-50 p-3 mb-3 mono text-[11px] font-bold uppercase text-green-800">
+                                    ✓ Todos enviados — no queda nadie pendiente
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="brutalist-border bg-red-50 p-3 mb-3">
+                                  <p className="mono text-[11px] font-bold uppercase mb-2">
+                                    {pending} aún sin enviar (se toparon con la cuota diaria de Resend)
+                                  </p>
+                                  <button
+                                    onClick={() => resendFailed(c.id)}
+                                    disabled={resending}
+                                    className="brutalist-border bg-black text-white px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    {resending ? 'Enviando…' : `Enviar los que faltan (${pending})`}
+                                  </button>
+                                  <p className="mono text-[10px] text-gray-600 mt-2">
+                                    Un click manda todo lo que la cuota permita hoy (Resend Free:
+                                    3.000/mes, ~100/día). Si quedan, volvé otro día y apretá de
+                                    nuevo hasta 0.
+                                  </p>
+                                </div>
+                              );
+                            })()}
 
                             {/* Detalle de la campaña */}
                             <dl className="brutalist-border bg-white p-3 mb-3 mono text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
@@ -1637,11 +1757,11 @@ export default function CampaignsClient() {
                                       </span>
                                       <p>
                                         Junglist nuevo:{' '}
-                                        <strong>{c.coupon_new_code || 'sin descuento'}</strong>
+                                        <strong>{c.coupon_new_code ? c.coupon_new_code.toUpperCase() : 'sin descuento'}</strong>
                                       </p>
                                       <p>
                                         Junglist ya registrado:{' '}
-                                        <strong>{c.coupon_existing_code || 'sin descuento'}</strong>
+                                        <strong>{c.coupon_existing_code ? c.coupon_existing_code.toUpperCase() : 'sin descuento'}</strong>
                                       </p>
                                     </>
                                   )}
@@ -1649,9 +1769,43 @@ export default function CampaignsClient() {
                               </div>
                             </dl>
                             <p className="mono text-[10px] text-gray-500 mb-2">
-                              Aperturas poco fiables (los clientes de correo precargan imágenes); la
-                              visita a la landing es la señal firme.
+                              &quot;Visitó&quot; = clickeó el botón del correo y entró a la landing
+                              (nuestro token). Es la única señal real de interacción.
                             </p>
+
+                            {/* Filtro por estado: solo aparecen los estados con conteo. */}
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              <button
+                                onClick={() => setRecipientFilter('all')}
+                                className={`mono text-[10px] font-bold uppercase border-2 border-black px-2 py-0.5 cursor-pointer transition-colors ${
+                                  recipientFilter === 'all'
+                                    ? 'bg-black text-white'
+                                    : 'bg-white text-black hover:bg-gray-100'
+                                }`}
+                              >
+                                Todos ({recipients.length})
+                              </button>
+                              {STATUS_ORDER.map((s) => {
+                                const n = recipients.filter(
+                                  (r) => normalizeStatus(r.status) === s
+                                ).length;
+                                if (!n) return null;
+                                const active = recipientFilter === s;
+                                return (
+                                  <button
+                                    key={s}
+                                    onClick={() => setRecipientFilter(s)}
+                                    className={`mono text-[10px] font-bold uppercase border-2 border-black px-2 py-0.5 cursor-pointer inline-flex items-center gap-1.5 transition-colors ${
+                                      active ? 'bg-black text-white' : `${STATUS_META[s].chip} hover:opacity-80`
+                                    }`}
+                                  >
+                                    <span className={`inline-block w-2 h-2 ${STATUS_META[s].bar}`} />
+                                    {STATUS_META[s].label} ({n})
+                                  </button>
+                                );
+                              })}
+                            </div>
+
                             <div className="max-h-80 overflow-auto brutalist-border bg-white">
                               <table className="w-full mono text-[11px]">
                                 <thead className="bg-black text-white sticky top-0">
@@ -1659,24 +1813,56 @@ export default function CampaignsClient() {
                                     <th className="text-left p-2">Email</th>
                                     <th className="text-left p-2">Segmento</th>
                                     <th className="text-left p-2">Estado</th>
-                                    <th className="text-center p-2">Abrió</th>
                                     <th className="text-center p-2">Visitó</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {recipients.map((r) => (
-                                    <tr key={r.email} className="border-b border-gray-200">
-                                      <td className="p-2 truncate max-w-[220px]">{r.email}</td>
-                                      <td className="p-2">
-                                        {r.segment === 'junglist' ? 'Junglist' : r.segment === 'no_junglist' ? 'No junglist' : '—'}
-                                      </td>
-                                      <td className="p-2">{r.status}</td>
-                                      <td className="p-2 text-center">{r.opened_at ? '✓' : '—'}</td>
-                                      <td className="p-2 text-center">
-                                        {r.visited_at ? `✓${r.visit_count > 1 ? ` (${r.visit_count})` : ''}` : '—'}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {recipients
+                                    .filter(
+                                      (r) =>
+                                        recipientFilter === 'all' ||
+                                        normalizeStatus(r.status) === recipientFilter
+                                    )
+                                    .map((r) => {
+                                    const meta = STATUS_META[normalizeStatus(r.status)];
+                                    return (
+                                      <tr key={r.email} className="border-b border-gray-200 odd:bg-gray-50">
+                                        <td className="p-2 truncate max-w-[220px]">{r.email}</td>
+                                        <td className="p-2">
+                                          {r.segment === 'junglist' ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="inline-block w-2 h-2 bg-[#ff0055]" />
+                                              Junglist
+                                            </span>
+                                          ) : r.segment === 'no_junglist' ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="inline-block w-2 h-2 bg-[#0000ff]" />
+                                              No junglist
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                        </td>
+                                        <td className="p-2">
+                                          <span
+                                            className={`inline-block border-2 border-black px-1.5 py-0.5 text-[10px] font-bold uppercase ${meta.chip}`}
+                                            title={meta.tip}
+                                          >
+                                            {meta.label}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          {r.visited_at ? (
+                                            <span className="text-[#0000ff] font-bold">
+                                              ✓{r.visit_count > 1 ? ` (${r.visit_count})` : ''}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
