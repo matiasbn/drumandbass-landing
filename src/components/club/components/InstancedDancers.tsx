@@ -37,16 +37,34 @@ const ANIM_OFFSETS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7,
 const ANIM_SPEEDS = [1.1, 0.9, 1.2, 0.85, 1.0, 1.15, 0.95, 1.05, 0.95, 1.1, 0.9, 1.05, 1.15, 0.85, 1.0, 0.9];
 
 // ─── Constants ───────────────────────────────────────────────────────
-const SHOOT_INTERVAL_MIN = 4;
-const SHOOT_INTERVAL_MAX = 10;
+const SHOOT_INTERVAL_MIN = 1.4; // ráfagas más seguidas (feel de bot de shooter)
+const SHOOT_INTERVAL_MAX = 3.8;
 const WANDER_BOUNDS = { minX: -17, maxX: 17, minZ: -17, maxZ: 17 };
-const MOVE_SPEED = 1.15; // más ágiles (antes 0.5)
 const ARRIVAL_THRESHOLD = 0.3;
 const DANCE_COUNT = 4;
-const DANCE_DURATION_MIN = 2;
-const DANCE_DURATION_MAX = 5;
-const IDLE_DURATION_MIN = 0.4; // menos tiempo parados → deambulan más
-const IDLE_DURATION_MAX = 1.6;
+const DANCE_DURATION_MIN = 1.5; // bailan poco: son bots, no estatuas
+const DANCE_DURATION_MAX = 3.5;
+const IDLE_DURATION_MIN = 6; // tiempo EN MOVIMIENTO entre bailes (mucho mayor)
+const IDLE_DURATION_MAX = 13;
+
+// ─── IA de bots estilo shooter (skill game-ai: decidir → steer) ───────
+// Capa de DECISIÓN: una FSM mínima por bot. Capa de MOVIMIENTO: steering por
+// velocidad (seek / orbitar / esquivar) + separación, todo sobre los typed
+// arrays existentes (cero asignaciones por frame).
+const AI_ROAM = 0; // reposicionarse a un punto lejano del mapa
+const AI_ENGAGE = 1; // encarar a un objetivo y orbitarlo (circle-strafe)
+const AI_DODGE = 2; // ráfaga lateral corta (juke), al recibir un impacto
+
+const BOT_SPEED = 2.8; // velocidad base de desplazamiento (u/s)
+const BOT_ACCEL = 8; // suavizado de la velocidad (steering)
+const ENGAGE_RANGE = 11; // radio para buscar objetivo al que encarar
+const PREFERRED_RANGE = 4.5; // distancia que intenta mantener mientras orbita
+const DODGE_SPEED = 6.5; // ráfaga del juke
+const DODGE_TIME = 0.4;
+const SEPARATION_RADIUS = 1.7; // evita que se apelotonen
+const SEPARATION_FORCE = 2.2;
+const STATE_MIN = 1.8; // duración mínima/máxima de un estado de la FSM
+const STATE_MAX = 4.5;
 
 // ─── Hype bar constants ──────────────────────────────────────────────
 const BAR_WIDTH = 0.8;
@@ -101,6 +119,13 @@ interface NpcState {
   scaleVal: Float32Array; // current scale for hype animation
   /** Reloj de animación POR instancia (s): se congela en el hit-stop (M3/juice) */
   animClock: Float32Array;
+  // ── IA de bot de shooter (FSM + steering) ──
+  aiState: Uint8Array; // AI_ROAM | AI_ENGAGE | AI_DODGE
+  aiTimer: Float32Array; // segundos restantes en el estado actual
+  velX: Float32Array; // velocidad actual (steering suavizado, u/s)
+  velZ: Float32Array;
+  strafeSign: Int8Array; // sentido del orbitado (+1/-1)
+  engageTarget: Int8Array; // índice del NPC objetivo, o -1 = el jugador
 }
 
 function createNpcState(): NpcState {
@@ -121,6 +146,12 @@ function createNpcState(): NpcState {
     wasHyped: new Uint8Array(NPC_COUNT),
     scaleVal: new Float32Array(NPC_COUNT),
     animClock: new Float32Array(NPC_COUNT),
+    aiState: new Uint8Array(NPC_COUNT),
+    aiTimer: new Float32Array(NPC_COUNT),
+    velX: new Float32Array(NPC_COUNT),
+    velZ: new Float32Array(NPC_COUNT),
+    strafeSign: new Int8Array(NPC_COUNT),
+    engageTarget: new Int8Array(NPC_COUNT),
   };
 
   for (let i = 0; i < NPC_COUNT; i++) {
@@ -133,6 +164,10 @@ function createNpcState(): NpcState {
     state.danceTimer[i] = IDLE_DURATION_MIN + Math.random() * IDLE_DURATION_MAX;
     state.shootTimer[i] = SHOOT_INTERVAL_MIN + Math.random() * (SHOOT_INTERVAL_MAX - SHOOT_INTERVAL_MIN);
     state.scaleVal[i] = 1;
+    state.aiState[i] = AI_ROAM;
+    state.aiTimer[i] = 1 + Math.random() * 3;
+    state.strafeSign[i] = Math.random() < 0.5 ? -1 : 1;
+    state.engageTarget[i] = -1;
   }
 
   return state;
@@ -366,49 +401,149 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         }
       }
 
-      // ── Wander ──
-      // Velocidad por estado: VIP corre (x2.5), APAGADO arrastra los pies, BAJÓN lento
-      const speedFactor = vip ? TUNING.vip.speedMult : apagado ? 0.5 : bajon ? 0.7 : 1;
+      // ── IA de bot: DECIDIR (FSM) → MOVER (steering) ──
+      // Velocidad por estado: VIP corre, APAGADO arrastra los pies, BAJÓN algo lento
+      const speedFactor = vip ? TUNING.vip.speedMult : apagado ? 0.65 : bajon ? 0.85 : 1;
+
       if (!s.isDancing[i]) {
-        if (s.waitTimer[i] > 0) {
-          s.waitTimer[i] -= dt;
-          if (s.waitTimer[i] <= 0) {
+        // Reacción: si acaba de recibir un impacto, esquiva de lado.
+        if (nowEpoch < h.hitFlashUntil && s.aiState[i] !== AI_DODGE) {
+          s.aiState[i] = AI_DODGE;
+          s.aiTimer[i] = DODGE_TIME;
+          s.strafeSign[i] = Math.random() < 0.5 ? -1 : 1;
+        }
+
+        // Transición de estado al agotarse el temporizador.
+        s.aiTimer[i] -= dt;
+        if (s.aiTimer[i] <= 0) {
+          s.aiTimer[i] = STATE_MIN + Math.random() * (STATE_MAX - STATE_MIN);
+          if (s.aiState[i] === AI_DODGE || Math.random() < 0.62) {
+            // ENGAGE: encara al objetivo más cercano (otro bot o el jugador).
+            s.strafeSign[i] = Math.random() < 0.5 ? -1 : 1;
+            let best = -2;
+            let bestD = ENGAGE_RANGE * ENGAGE_RANGE;
+            const pdx = playerState.position.x - s.posX[i];
+            const pdz = playerState.position.z - s.posZ[i];
+            const pd = pdx * pdx + pdz * pdz;
+            if (pd < bestD) { bestD = pd; best = -1; }
+            for (let j = 0; j < NPC_COUNT; j++) {
+              if (j === i) continue;
+              const jdx = s.posX[j] - s.posX[i];
+              const jdz = s.posZ[j] - s.posZ[i];
+              const jd = jdx * jdx + jdz * jdz;
+              if (jd < bestD) { bestD = jd; best = j; }
+            }
+            if (best === -2) {
+              s.aiState[i] = AI_ROAM; // nadie cerca: reposiciónate
+              const t = pickRandomTarget();
+              s.targetX[i] = t.x;
+              s.targetZ[i] = t.z;
+            } else {
+              s.aiState[i] = AI_ENGAGE;
+              s.engageTarget[i] = best;
+            }
+          } else {
+            s.aiState[i] = AI_ROAM;
             const t = pickRandomTarget();
             s.targetX[i] = t.x;
             s.targetZ[i] = t.z;
           }
+        }
+
+        // Velocidad DESEADA según el estado (capa de steering).
+        let desX = 0;
+        let desZ = 0;
+        const maxSpeed = BOT_SPEED * ANIM_SPEEDS[i] * speedFactor;
+
+        if (s.aiState[i] === AI_ENGAGE) {
+          const tgt = s.engageTarget[i];
+          const tx = tgt === -1 ? playerState.position.x : s.posX[tgt];
+          const tz = tgt === -1 ? playerState.position.z : s.posZ[tgt];
+          let dx = tx - s.posX[i];
+          let dz = tz - s.posZ[i];
+          const d = Math.sqrt(dx * dx + dz * dz) || 1;
+          dx /= d;
+          dz /= d;
+          // Radial: acercarse si está lejos, despegarse si lo tiene encima.
+          const radial = d > PREFERRED_RANGE ? 1 : d < PREFERRED_RANGE * 0.65 ? -1 : 0;
+          // Tangencial: orbitar el objetivo (circle-strafe, la firma del shooter).
+          desX = (-dz * s.strafeSign[i] * 0.85 + dx * radial * 0.9) * maxSpeed;
+          desZ = (dx * s.strafeSign[i] * 0.85 + dz * radial * 0.9) * maxSpeed;
+        } else if (s.aiState[i] === AI_DODGE) {
+          // Juke: ráfaga perpendicular a su rumbo actual.
+          desX = Math.cos(s.rotY[i]) * s.strafeSign[i] * DODGE_SPEED;
+          desZ = -Math.sin(s.rotY[i]) * s.strafeSign[i] * DODGE_SPEED;
         } else {
+          // ROAM: seek al punto; al llegar elige otro al instante (nunca se para).
           const dx = s.targetX[i] - s.posX[i];
           const dz = s.targetZ[i] - s.posZ[i];
-          const dist = Math.sqrt(dx * dx + dz * dz);
-          if (dist < ARRIVAL_THRESHOLD) {
-            s.waitTimer[i] = 0.2 + Math.random() * 0.8; // pausa corta → deambulan más
+          const d = Math.sqrt(dx * dx + dz * dz);
+          if (d < ARRIVAL_THRESHOLD) {
+            const t = pickRandomTarget();
+            s.targetX[i] = t.x;
+            s.targetZ[i] = t.z;
           } else {
-            const speed = MOVE_SPEED * ANIM_SPEEDS[i] * speedFactor * dt;
-            const step = Math.min(speed, dist);
-            s.posX[i] += (dx / dist) * step;
-            s.posZ[i] += (dz / dist) * step;
-            const targetAngle = Math.atan2(dx, dz);
-            let angleDiff = targetAngle - s.rotY[i];
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            s.rotY[i] += angleDiff * Math.min(dt * 3, 1);
+            desX = (dx / d) * maxSpeed;
+            desZ = (dz / d) * maxSpeed;
           }
         }
+
+        // Separación: evita que se apelotonen (flocking básico).
+        for (let j = 0; j < NPC_COUNT; j++) {
+          if (j === i) continue;
+          const sdx = s.posX[i] - s.posX[j];
+          const sdz = s.posZ[i] - s.posZ[j];
+          const sd2 = sdx * sdx + sdz * sdz;
+          if (sd2 > 0.0001 && sd2 < SEPARATION_RADIUS * SEPARATION_RADIUS) {
+            const sd = Math.sqrt(sd2);
+            desX += (sdx / sd) * SEPARATION_FORCE * maxSpeed;
+            desZ += (sdz / sd) * SEPARATION_FORCE * maxSpeed;
+          }
+        }
+
+        // Steering: acelera hacia la velocidad deseada (nada de teletransportes).
+        const k = Math.min(1, BOT_ACCEL * dt);
+        s.velX[i] += (desX - s.velX[i]) * k;
+        s.velZ[i] += (desZ - s.velZ[i]) * k;
+
+        // Integrar y limitar al mapa.
+        s.posX[i] = Math.max(WANDER_BOUNDS.minX, Math.min(WANDER_BOUNDS.maxX, s.posX[i] + s.velX[i] * dt));
+        s.posZ[i] = Math.max(WANDER_BOUNDS.minZ, Math.min(WANDER_BOUNDS.maxZ, s.posZ[i] + s.velZ[i] * dt));
+
+        // Orientación: mira al objetivo mientras orbita (firma del bot de
+        // shooter: se desplaza de lado sin dejar de encarar); si no, mira a dónde va.
+        let faceX = s.velX[i];
+        let faceZ = s.velZ[i];
+        if (s.aiState[i] === AI_ENGAGE) {
+          const tgt = s.engageTarget[i];
+          faceX = (tgt === -1 ? playerState.position.x : s.posX[tgt]) - s.posX[i];
+          faceZ = (tgt === -1 ? playerState.position.z : s.posZ[tgt]) - s.posZ[i];
+        }
+        if (faceX * faceX + faceZ * faceZ > 0.01) {
+          const targetAngle = Math.atan2(faceX, faceZ);
+          let angleDiff = targetAngle - s.rotY[i];
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          s.rotY[i] += angleDiff * Math.min(dt * 7, 1); // giro ágil
+        }
+      } else {
+        // Bailando: frena en seco.
+        s.velX[i] = 0;
+        s.velZ[i] = 0;
       }
 
-      // ── Shooting (cosmético NPC↔NPC) — el apagado está mirando el celular ──
+      // ── Shooting (cosmético) — dispara a QUIEN ESTÁ ENCARANDO mientras lo
+      // orbita, que es lo que hace que se lea como un bot de shooter. Sin
+      // asignaciones: el objetivo ya está resuelto por la FSM.
       if (!s.isDancing[i] && !apagado) {
         s.shootTimer[i] -= dt;
         if (s.shootTimer[i] <= 0) {
-          const targets: { id: string; x: number; z: number }[] = [];
-          npcPositions.current.forEach((pos, id) => {
-            if (id !== npcId) targets.push({ id, x: pos.x, z: pos.z });
-          });
-          if (targets.length > 0) {
-            const target = targets[Math.floor(Math.random() * targets.length)];
-            const dx = target.x - s.posX[i];
-            const dz = target.z - s.posZ[i];
+          const tgt = s.aiState[i] === AI_ENGAGE ? s.engageTarget[i] : -2;
+          if (tgt !== -2) {
+            const tx = tgt === -1 ? playerState.position.x : s.posX[tgt];
+            const tz = tgt === -1 ? playerState.position.z : s.posZ[tgt];
+            const dx = tx - s.posX[i];
+            const dz = tz - s.posZ[i];
             const dist = Math.sqrt(dx * dx + dz * dz);
             if (dist > 1) {
               _shootDir.set(dx / dist, 0, dz / dist);
@@ -496,7 +631,9 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         activeDance = 1;
         danceTime = syncDanceTime;
       }
-      const isMoving = !s.isDancing[i] && s.waitTimer[i] <= 0;
+      // Camina si realmente se está desplazando (la IA usa velocidad, no waitTimer).
+      const speed2 = s.velX[i] * s.velX[i] + s.velZ[i] * s.velZ[i];
+      const isMoving = !s.isDancing[i] && speed2 > 0.09;
 
       // Compute per-part local rotations based on dance
       let headRX = 0, headRZ = 0, headLocalY = 1.5;
