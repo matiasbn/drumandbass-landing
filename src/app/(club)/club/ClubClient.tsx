@@ -11,6 +11,15 @@ const NightclubScene = dynamic(() => import('../../../components/club/NightclubS
   ssr: false,
 });
 
+/**
+ * BETA: el club nuevo (SUBIDÓN) está en pruebas y sólo pueden entrar los
+ * admins (profiles.is_admin). El resto ve la pantalla de "club no disponible"
+ * de siempre, así el público no percibe nada a medio terminar.
+ *
+ * Para abrirlo a todo el mundo basta con poner esto en false.
+ */
+const CLUB_BETA_ADMINS_ONLY = true;
+
 function ClubOfflineScreen() {
   return (
     <div className="w-full h-screen bg-black flex items-center justify-center">
@@ -72,6 +81,7 @@ function ClubOfflineScreen() {
 
 function ClubContent() {
   const { user, profile, loading: authLoading, needsProfile } = useAuth();
+  const isAdmin = profile?.is_admin === true;
   const [subscribeSeen, setSubscribeSeen] = useState(true);
   const [liveStatus, setLiveStatus] = useState<{ isLive: boolean; title?: string } | null>(null);
 
@@ -107,8 +117,15 @@ function ClubContent() {
     );
   }
 
-  // Show offline screen before auth gate
-  if (!liveStatus.isLive) {
+  // BETA (sólo admins): quien ya tiene sesión y NO es admin ve la pantalla de
+  // "no disponible", aunque haya transmisión.
+  if (CLUB_BETA_ADMINS_ONLY && user && !needsProfile && !isAdmin) {
+    return <ClubOfflineScreen />;
+  }
+
+  // Show offline screen before auth gate. Un admin puede entrar aunque no haya
+  // transmisión, para poder probar el club en cualquier momento.
+  if (!liveStatus.isLive && !isAdmin) {
     return <ClubOfflineScreen />;
   }
 
@@ -135,8 +152,9 @@ function ClubContent() {
     );
   }
 
-  // Show YouTube subscribe screen for first-time users
-  if (!subscribeSeen) {
+  // Show YouTube subscribe screen for first-time users (los admins la saltan
+  // para poder entrar a probar sin fricción)
+  if (!subscribeSeen && !isAdmin) {
     return (
       <div className="w-full h-screen bg-black flex items-center justify-center">
         <div className="absolute inset-0 overflow-hidden">
