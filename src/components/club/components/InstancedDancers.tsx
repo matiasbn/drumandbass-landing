@@ -40,13 +40,13 @@ const ANIM_SPEEDS = [1.1, 0.9, 1.2, 0.85, 1.0, 1.15, 0.95, 1.05, 0.95, 1.1, 0.9,
 const SHOOT_INTERVAL_MIN = 4;
 const SHOOT_INTERVAL_MAX = 10;
 const WANDER_BOUNDS = { minX: -13, maxX: 13, minZ: -13, maxZ: 13 };
-const MOVE_SPEED = 0.5;
+const MOVE_SPEED = 1.15; // más ágiles (antes 0.5)
 const ARRIVAL_THRESHOLD = 0.3;
 const DANCE_COUNT = 4;
-const DANCE_DURATION_MIN = 3;
-const DANCE_DURATION_MAX = 6;
-const IDLE_DURATION_MIN = 1;
-const IDLE_DURATION_MAX = 3;
+const DANCE_DURATION_MIN = 2;
+const DANCE_DURATION_MAX = 5;
+const IDLE_DURATION_MIN = 0.4; // menos tiempo parados → deambulan más
+const IDLE_DURATION_MAX = 1.6;
 
 // ─── Hype bar constants ──────────────────────────────────────────────
 const BAR_WIDTH = 0.8;
@@ -208,10 +208,16 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     return arr;
   }, []);
 
+  // Variedad de tonos de piel entre los bots (antes todos el mismo beige).
   const headColors = useMemo(() => {
-    const c = new THREE.Color('#e0c4a8');
+    const SKIN_TONES = [
+      '#f2d3b6', '#e0c4a8', '#c99a70', '#a5734d',
+      '#8a5a3c', '#6f4429', '#d9a679', '#f6c8a0',
+    ];
     const arr = new Float32Array(NPC_COUNT * 3);
+    const c = new THREE.Color();
     for (let i = 0; i < NPC_COUNT; i++) {
+      c.set(SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length]); // desalinea de la paleta de cuerpo
       arr[i * 3] = c.r;
       arr[i * 3 + 1] = c.g;
       arr[i * 3 + 2] = c.b;
@@ -376,7 +382,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
           const dz = s.targetZ[i] - s.posZ[i];
           const dist = Math.sqrt(dx * dx + dz * dz);
           if (dist < ARRIVAL_THRESHOLD) {
-            s.waitTimer[i] = 0.5 + Math.random() * 1.5;
+            s.waitTimer[i] = 0.2 + Math.random() * 0.8; // pausa corta → deambulan más
           } else {
             const speed = MOVE_SPEED * ANIM_SPEEDS[i] * speedFactor * dt;
             const step = Math.min(speed, dist);

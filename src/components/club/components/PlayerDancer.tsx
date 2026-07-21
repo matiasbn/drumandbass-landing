@@ -211,8 +211,12 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
 
   // Jump state
   const jumpVelocityRef = useRef(0);
-  const jumpYRef = useRef(0);
-  const isJumpingRef = useRef(false);
+  // Spawn: cae desde arriba y aterriza en la plataforma del punto de aparición
+  // (antes nacía en Y=0 dentro de la huella del escenario, cuyo tope es 1.5, y
+  // quedaba atrapado bajo el piso). Empieza por encima de esa superficie y la
+  // gravedad lo posa sobre la plataforma cuadrada.
+  const jumpYRef = useRef(getSurfaceHeight(0, 6) + 6);
+  const isJumpingRef = useRef(true);
   const hasDoubleJumpedRef = useRef(false);
   const surfaceYRef = useRef(0);
 
