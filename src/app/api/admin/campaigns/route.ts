@@ -195,6 +195,110 @@ export async function DELETE(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
+// Reenvía SOLO a los destinatarios que fallaron (típicamente por la cuota diaria
+// de Resend: 100/día). Reconstruye el correo desde lo guardado en la campaña +
+// el segmento de cada fila, reusa el mismo id (= ?ct de tracking), y manda por
+// lotes de 100. Como la cuota es 100/día, un click manda hasta 100 y el resto
+// queda 'failed' para el próximo día → así se cubre a todos en varios días.
+async function resendFailedRecipients(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  apiKey: string,
+  campaignId: string
+) {
+  const { data: campaign } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('id', campaignId)
+    .maybeSingle();
+  if (!campaign) return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 });
+
+  const { data: failed } = await supabase
+    .from('campaign_recipients')
+    .select('id, email, segment')
+    .eq('campaign_id', campaignId)
+    .eq('status', 'failed');
+
+  if (!failed || failed.length === 0) {
+    return NextResponse.json({ success: true, resent: 0, stillFailed: 0 });
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
+  const appOrigin = process.env.NODE_ENV === 'development' ? 'http://localhost:3600' : BASE_URL;
+  const localButtonUrl = (campaign.button_url || '').replace(BASE_URL, appOrigin);
+
+  const withCt = (base: string, recId: string) => {
+    if (!base) return '';
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}ct=${recId}&utm_source=email&utm_campaign=${campaignId}`;
+  };
+  const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
+  const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
+
+  const couponEnabled = !!campaign.coupon_mode && campaign.coupon_mode !== 'none';
+  const newCode = campaign.coupon_new_code || '';
+  const existingCode = campaign.coupon_existing_code || '';
+
+  const BATCH_SIZE = 100;
+  let resent = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < failed.length; i += BATCH_SIZE) {
+    const batch = failed.slice(i, i + BATCH_SIZE);
+    const payload = batch.map((rec) => {
+      const seg: 'junglist' | 'no_junglist' = rec.segment === 'junglist' ? 'junglist' : 'no_junglist';
+      const hasCoupon = couponEnabled && (seg === 'junglist' ? !!existingCode : !!newCode);
+      return {
+        from: fromEmail,
+        to: rec.email,
+        subject: segmentSubject(campaign.subject, campaign.title || '', hasCoupon),
+        html: buildEmailHtml({
+          title: campaign.title || campaign.subject,
+          body: segmentBody(campaign.body_html || '', seg, hasCoupon),
+          imageBase64: campaign.image_url || undefined,
+          buttonText: campaign.button_text || undefined,
+          buttonUrl: withCt(localButtonUrl, rec.id) || undefined,
+          trackingPixelUrl: pixelUrl(rec.id),
+          unsubscribeUrl: unsubUrl(rec.email),
+        }),
+      };
+    });
+
+    try {
+      const { data, error } = await resend.batch.send(payload);
+      if (error) {
+        errors.push(error.message);
+      } else {
+        // Los de este lote pasan de 'failed' a 'sent'.
+        await supabase
+          .from('campaign_recipients')
+          .update({ status: 'sent' })
+          .in('id', batch.map((r) => r.id));
+        resent += data?.data?.length || batch.length;
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  }
+
+  // Recalcular los conteos de la campaña con el estado nuevo.
+  const [{ count: okCount }, { count: failCount }] = await Promise.all([
+    supabase.from('campaign_recipients').select('id', { count: 'exact', head: true }).eq('campaign_id', campaignId).neq('status', 'failed'),
+    supabase.from('campaign_recipients').select('id', { count: 'exact', head: true }).eq('campaign_id', campaignId).eq('status', 'failed'),
+  ]);
+  await supabase
+    .from('campaigns')
+    .update({ sent_count: okCount ?? 0, failed_count: failCount ?? 0 })
+    .eq('id', campaignId);
+
+  return NextResponse.json({
+    success: true,
+    resent,
+    stillFailed: (failCount ?? 0),
+    errors: errors.slice(0, 3),
+  });
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);
@@ -210,6 +314,12 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+
+  // Reenvío a los que fallaron (no es una campaña nueva).
+  if (body.resendCampaignId) {
+    return resendFailedRecipients(supabase, apiKey, String(body.resendCampaignId));
+  }
+
   const {
     audiences,
     extraEmails: extraEmailsList,
