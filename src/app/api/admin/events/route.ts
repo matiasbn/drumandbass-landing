@@ -3,19 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import type { CmsEventRow } from '@/src/lib/cms';
+import { verifyAdmin as verifyAdminCore } from '@/src/lib/authz';
 
 // CRUD de eventos del CMS propio (tabla cms_events). Solo admins: además del
 // chequeo aquí, la RLS de la tabla exige profiles.is_admin para escribir.
 
 async function verifyAdmin(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return false;
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-  return adminProfile?.is_admin === true;
+  return (await verifyAdminCore(supabase)).isAdmin;
 }
 
 // La home es ISR (1h): tras cualquier mutación se revalida al tiro para que

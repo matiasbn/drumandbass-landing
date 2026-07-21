@@ -31,6 +31,9 @@ export interface CmsEventRow {
   flyer_url: string | null;
   flyer_width: number | null;
   flyer_height: number | null;
+  coupon_junglist_new: string | null;
+  coupon_junglist: string | null;
+  coupon_set_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +67,9 @@ export function mapEventRow(row: CmsEventRow): CmsEvent {
           height: row.flyer_height ?? 0,
         }
       : undefined,
+    // Solo booleanos — el código se sirve aparte, contra sesión.
+    couponForNew: Boolean(row.coupon_junglist_new),
+    couponForExisting: Boolean(row.coupon_junglist),
   };
 }
 
@@ -88,6 +94,19 @@ export async function getEvents(): Promise<CmsEvent[]> {
     return [];
   }
   return (data as CmsEventRow[]).map(mapEventRow);
+}
+
+// Un evento por id (para la landing /evento/[id]). Devuelve null si no existe o
+// el id no es válido.
+export async function getEventById(id: string): Promise<CmsEvent | null> {
+  const { data, error } = await supabase
+    .from('cms_events')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapEventRow(data as CmsEventRow);
 }
 
 export async function getStreamings(): Promise<CmsStreaming[]> {

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdmin } from '@/src/lib/authz';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -25,18 +26,6 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
   );
 }
 
-async function verifyAdmin(supabase: ReturnType<typeof createSupabaseServer>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, isAdmin: false };
-
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-
-  return { user, isAdmin: adminProfile?.is_admin === true };
-}
 
 export async function GET() {
   const cookieStore = await cookies();

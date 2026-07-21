@@ -128,6 +128,10 @@ Pattern (`src/lib/mockEvents.ts` + `src/app/(main)/page.tsx`):
 
 When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that hits it (relative dates, realistic `venue`/`flyer`/`description` HTML) rather than editing production data. Titles are prefixed `TEST · <state>` so they're obvious on screen. Note: on weekends `ESTA SEMANA` (now+2 days) rolls into `PRÓXIMA SEMANA` — that's correct calendar behavior, not a bug.
 
+### Session indicator in the header
+
+`src/components/SessionMenu.tsx` (mounted inside `HeaderNav`, so it shows on all `(main)` and `pk` pages — the ones with `Header`) tells the user **which account is logged in** and gives a fixed place to log out. The site lets you sign in from several surfaces (junglist, presskit, club), so without this it's easy to lose track of your session. It reads the real Supabase session via the memoized `createClient()` and listens to `onAuthStateChange`, so it's a **production** feature, not a dev tool. When there's no session it renders nothing (login stays contextual — there's no generic "entrar"). Two variants: `desktop` (a square initial chip at the far right of the nav → dropdown with email + "Mi perfil" + logout) and `mobile` (a block at the top of the popover). Logout fires `event('logout', { source: 'header' })` and redirects home. Admin has its own no-access/account UI (`CampaignsClient`), and the dev-only `DevLogout` force-logout button is separate.
+
 ## El Sótano videos (YouTube)
 
 `src/lib/youtube.ts` `getSotanoVideos(n)` lists the channel's latest uploads (@drumandbasschile — uploads playlist `UUa93ljufgJ4Wdryd8FUFZnQ`) and filters by title containing **"El Sótano"** (accent/case-insensitive), cached with ISR (`fetch(..., { next: { revalidate: 3600 } })`) so it costs almost no quota and **updates itself** when a new chapter is uploaded. Rendered on the **home only** (`(main)/page.tsx`) via `src/components/YoutubeVideos.tsx` — 2 videos in one row, thumbnails that link out to `youtube.com/watch?v=…` + a channel button. Uses `YOUTUBE_API_KEY`; returns `[]` (and the section hides) if the key is missing or the API fails. To change the series, edit `TITLE_MATCH`; reads one page (50 uploads) so if the channel ever exceeds that, add pagination.
@@ -153,3 +157,5 @@ Manual release flow (when committing on `develop` directly, as during pair sessi
 ## Environment
 
 `.env.local` keys (not committed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `REVALIDATION_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_GIPHY_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Supabase clients fall back to placeholders if unset (auth/chat silently disabled), so a missing key fails soft, not loud. `CONTENTFUL_SPACE_ID`/`CONTENTFUL_ACCESS_TOKEN` are no longer used by the app — only by the one-shot import script `scripts/contentful-to-sql.mjs`.
+
+**Dev-only flags** (never set in production): `MOCK_EVENTS=1` injects synthetic events on the home (gated on `NODE_ENV === 'development'`).
