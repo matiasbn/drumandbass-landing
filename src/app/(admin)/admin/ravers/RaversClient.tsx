@@ -45,6 +45,9 @@ export default function RaversClient() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; last_name: string; email: string; instagram: string }>({ name: '', last_name: '', email: '', instagram: '' });
   const [saving, setSaving] = useState(false);
+  // Limpiar toda la lista (confirmación en dos pasos, no window.confirm).
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const fetchSubscribers = useCallback(async () => {
     setLoadingSubscribers(true);
@@ -195,7 +198,7 @@ export default function RaversClient() {
   };
 
   const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Eliminar raver ${email}?`)) return;
+    if (!confirm(`Eliminar a ${email}?`)) return;
     try {
       const res = await fetch(`/api/admin/ravers?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -204,6 +207,22 @@ export default function RaversClient() {
       }
     } catch {
       // ignore
+    }
+  };
+
+  const handleConsolidate = async () => {
+    setClearing(true);
+    try {
+      const res = await fetch('/api/admin/ravers?consolidate=1', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await fetchSubscribers();
+        setConfirmingClear(false);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -249,13 +268,13 @@ export default function RaversClient() {
           <Link href="/admin" className="mono text-sm text-gray-600 hover:text-black uppercase">
             &larr; Volver al Admin
           </Link>
-          <h1 className="text-3xl font-black uppercase mt-2">Ravers</h1>
+          <h1 className="text-3xl font-black uppercase mt-2">No registrados</h1>
         </div>
       </div>
 
       {/* Upload Section */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow mb-8">
-        <h2 className="text-xl font-black uppercase mb-4">Importar Ravers</h2>
+        <h2 className="text-xl font-black uppercase mb-4">Importar no registrados</h2>
         <p className="mono text-sm text-gray-600 mb-4">
           Sube un archivo Excel (.xlsx) con columnas: NAME, LAST_NAME, EMAIL, INSTAGRAM
         </p>
@@ -341,16 +360,48 @@ export default function RaversClient() {
 
       {/* Existing Subscribers */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow">
-        <h2 className="text-xl font-black uppercase mb-4">
-          Ravers ({loadingSubscribers ? '...' : subscribers.length})
-        </h2>
+        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <h2 className="text-xl font-black uppercase">
+            No registrados ({loadingSubscribers ? '...' : subscribers.length})
+          </h2>
+          {/* Limpiar toda la lista, con confirmación en dos pasos */}
+          {subscribers.length > 0 && (
+            confirmingClear ? (
+              <div className="flex items-center gap-2">
+                <span className="mono text-xs font-bold uppercase">¿Borrar los que ya son junglists o DJs?</span>
+                <button
+                  onClick={handleConsolidate}
+                  disabled={clearing}
+                  className="brutalist-border bg-[#ff0055] text-white px-3 py-2 mono text-xs font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  {clearing ? 'Consolidando…' : 'Sí, consolidar'}
+                </button>
+                <button
+                  onClick={() => setConfirmingClear(false)}
+                  disabled={clearing}
+                  className="brutalist-border bg-white px-3 py-2 mono text-xs font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmingClear(true)}
+                title="Borra de la lista los correos que ya son junglists o DJs"
+                className="brutalist-border bg-white text-[#ff0055] px-3 py-2 mono text-xs font-bold uppercase hover:bg-[#ff0055] hover:text-white transition-colors cursor-pointer"
+              >
+                Consolidar
+              </button>
+            )
+          )}
+        </div>
 
         {loadingSubscribers ? (
           <div className="text-center py-8">
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-black border-r-transparent" />
           </div>
         ) : subscribers.length === 0 ? (
-          <p className="mono text-sm text-gray-600">No hay ravers aun.</p>
+          <p className="mono text-sm text-gray-600">No hay correos no registrados aún.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full mono text-sm">

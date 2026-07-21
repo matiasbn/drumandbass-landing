@@ -93,11 +93,17 @@ export async function POST(request: NextRequest) {
 
   const results: RowResult[] = [];
 
-  // Listas disjuntas: los correos que ya son junglists (registro voluntario) no se
-  // importan a la lista manual de ravers.
-  const { data: junglistRows } = await supabase.from('junglists').select('email');
+  // Listas disjuntas: los correos que ya son junglists o DJs (pk_profiles) no se
+  // importan a la lista de correos — se ignoran y se reportan como ya registrados.
+  const [junglistRows, pkRows] = await Promise.all([
+    supabase.from('junglists').select('email'),
+    supabase.from('pk_profiles').select('email'),
+  ]);
   const junglistEmails = new Set(
-    (junglistRows || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+    (junglistRows.data || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+  );
+  const djEmails = new Set(
+    (pkRows.data || []).map((p) => p.email?.toLowerCase()).filter(Boolean)
   );
 
   for (const row of rows) {
@@ -109,6 +115,10 @@ export async function POST(request: NextRequest) {
 
     if (junglistEmails.has(email)) {
       results.push({ email, status: 'skipped', error: 'Ya es junglist' });
+      continue;
+    }
+    if (djEmails.has(email)) {
+      results.push({ email, status: 'skipped', error: 'Ya es DJ' });
       continue;
     }
 
@@ -215,6 +225,40 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const consolidate = searchParams.get('consolidate');
+
+  // Consolidar: borra de "correos" los que YA son junglists o DJs, para que la
+  // lista quede solo con quienes no están en ninguna de esas categorías (las
+  // listas son disjuntas). Las tres audiencias se cruzan por email.
+  if (consolidate === '1') {
+    const [jungRes, pkRes] = await Promise.all([
+      supabase.from('junglists').select('email'),
+      supabase.from('pk_profiles').select('email'),
+    ]);
+    const taken = new Set<string>();
+    for (const r of [...(jungRes.data || []), ...(pkRes.data || [])]) {
+      if (r.email) taken.add(r.email.toLowerCase());
+    }
+
+    const { data: subs, error: readErr } = await supabase
+      .from('newsletter_subscribers')
+      .select('id, email');
+    if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 });
+
+    const idsToRemove = (subs || [])
+      .filter((s) => s.email && taken.has(s.email.toLowerCase()))
+      .map((s) => s.id);
+
+    if (idsToRemove.length > 0) {
+      const { error } = await supabase
+        .from('newsletter_subscribers')
+        .delete()
+        .in('id', idsToRemove);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, removed: idsToRemove.length });
+  }
 
   if (!id) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
