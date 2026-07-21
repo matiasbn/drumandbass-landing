@@ -232,7 +232,6 @@ async function resendFailedRecipients(
     const sep = base.includes('?') ? '&' : '?';
     return `${base}${sep}ct=${recId}&utm_source=email&utm_campaign=${campaignId}`;
   };
-  const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
   const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
 
   const couponEnabled = !!campaign.coupon_mode && campaign.coupon_mode !== 'none';
@@ -248,17 +247,19 @@ async function resendFailedRecipients(
     const payload = batch.map((rec) => {
       const seg: 'junglist' | 'no_junglist' = rec.segment === 'junglist' ? 'junglist' : 'no_junglist';
       const hasCoupon = couponEnabled && (seg === 'junglist' ? !!existingCode : !!newCode);
+      // Replicamos EXACTO lo que se envió (persistido por segmento). Fallback:
+      // regenerar desde el template (campañas viejas sin segment_content).
+      const saved = (campaign.segment_content as Record<string, { subject: string; body: string }> | null)?.[seg];
       return {
         from: fromEmail,
         to: rec.email,
-        subject: segmentSubject(campaign.subject, campaign.title || '', hasCoupon),
+        subject: saved?.subject ?? segmentSubject(campaign.subject, campaign.title || '', hasCoupon),
         html: buildEmailHtml({
           title: campaign.title || campaign.subject,
-          body: segmentBody(campaign.body_html || '', seg, hasCoupon),
+          body: saved?.body ?? segmentBody(campaign.body_html || '', seg, hasCoupon),
           imageBase64: campaign.image_url || undefined,
           buttonText: campaign.button_text || undefined,
           buttonUrl: withCt(localButtonUrl, rec.id) || undefined,
-          trackingPixelUrl: pixelUrl(rec.id),
           unsubscribeUrl: unsubUrl(rec.email),
         }),
       };
@@ -299,12 +300,13 @@ async function resendFailedRecipients(
   });
 }
 
-// Sincroniza el estado de entrega desde Resend (NO envía nada — solo lee con
-// resend.emails.get por resend_id). Actualiza los que todavía figuran 'sent' a
-// 'delivered' / 'bounced' / 'complained' según lo que diga Resend. No pisa
-// 'opened'/'clicked' (nuestro tracking) ni 'failed' (nunca tuvieron resend_id).
-// Procesa un lote acotado por request (timeout + rate limit); el cliente repite
-// hasta que no queden pendientes.
+// Lee el estado de entrega EN VIVO desde Resend (NO envía nada). Usa el endpoint
+// de LISTA (/emails) paginado: trae `last_event` de a 100 por llamada y cruza por
+// `resend_id`, así toda la campaña se resuelve en pocas requests (antes era una
+// por destinatario → lento). Solo mueve los que están 'sent'/'opened' a
+// 'delivered'/'bounced'/'complained'; nunca pisa 'clicked' (Visitó, nuestro
+// token) ni 'failed'. 'delivery_delayed'/'queued' se dejan como 'sent' (en curso).
+// La lista viene de más nueva a más vieja; se corta al pasar la fecha de la campaña.
 async function syncFromResend(
   supabase: ReturnType<typeof createSupabaseServer>,
   apiKey: string,
@@ -314,37 +316,70 @@ async function syncFromResend(
     .from('campaign_recipients')
     .select('id, resend_id')
     .eq('campaign_id', campaignId)
-    .eq('status', 'sent')
-    .not('resend_id', 'is', null)
-    .limit(60);
+    .in('status', ['sent', 'opened'])
+    .not('resend_id', 'is', null);
 
   if (!recs || recs.length === 0) {
     return NextResponse.json({ success: true, synced: 0, remaining: 0 });
   }
 
-  const resend = new Resend(apiKey);
+  const { data: camp } = await supabase
+    .from('campaigns')
+    .select('sent_at, created_at')
+    .eq('id', campaignId)
+    .maybeSingle();
+  const floorMs =
+    new Date(camp?.sent_at || camp?.created_at || 0).getTime() - 2 * 24 * 3600 * 1000;
+
+  const wanted = new Map<string, string>(); // resend_id -> recipient id
+  for (const r of recs) if (r.resend_id) wanted.set(r.resend_id as string, r.id);
+
+  const eventById = new Map<string, string>(); // resend_id -> last_event
+  let after = '';
+  for (let page = 0; page < 60 && eventById.size < wanted.size; page++) {
+    const url = new URL('https://api.resend.com/emails');
+    url.searchParams.set('limit', '100');
+    if (after) url.searchParams.set('after', after);
+    let json: {
+      data?: Array<{ id: string; last_event?: string; created_at?: string }>;
+      has_more?: boolean;
+    };
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) break;
+      json = await res.json();
+    } catch {
+      break;
+    }
+    const data = json.data ?? [];
+    if (data.length === 0) break;
+    let oldestMs = Infinity;
+    for (const e of data) {
+      if (wanted.has(e.id) && e.last_event) eventById.set(e.id, e.last_event);
+      const t = e.created_at ? new Date(e.created_at.replace(' ', 'T')).getTime() : NaN;
+      if (!Number.isNaN(t) && t < oldestMs) oldestMs = t;
+    }
+    after = data[data.length - 1].id;
+    if (!json.has_more) break;
+    if (oldestMs < floorMs) break;
+  }
+
   const byStatus: Record<'delivered' | 'bounced' | 'complained', string[]> = {
     delivered: [],
     bounced: [],
     complained: [],
   };
-
-  const CONC = 4;
-  for (let i = 0; i < recs.length; i += CONC) {
-    const chunk = recs.slice(i, i + CONC);
-    await Promise.all(
-      chunk.map(async (rec) => {
-        try {
-          const { data } = await resend.emails.get(rec.resend_id as string);
-          const ev = (data as { last_event?: string } | null)?.last_event;
-          if (ev === 'bounced') byStatus.bounced.push(rec.id);
-          else if (ev === 'complained') byStatus.complained.push(rec.id);
-          else if (ev === 'delivered' || ev === 'opened' || ev === 'clicked') byStatus.delivered.push(rec.id);
-        } catch {
-          // rate limit / error puntual: queda 'sent' y se reintenta en otra ronda
-        }
-      })
-    );
+  for (const [resendId, recId] of wanted) {
+    const ev = eventById.get(resendId);
+    if (!ev) continue;
+    // 'opened'/'clicked' de Resend NO son interacción para nosotros (esa la da
+    // nuestro token → 'Visitó'), pero implican que se entregó → cuentan como
+    // 'delivered' (dato duro). Si no, subcontaríamos entregados.
+    if (ev === 'bounced') byStatus.bounced.push(recId);
+    else if (ev === 'complained') byStatus.complained.push(recId);
+    else if (ev === 'delivered' || ev === 'opened' || ev === 'clicked') byStatus.delivered.push(recId);
   }
 
   for (const st of ['delivered', 'bounced', 'complained'] as const) {
@@ -358,7 +393,7 @@ async function syncFromResend(
     .from('campaign_recipients')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', campaignId)
-    .eq('status', 'sent')
+    .in('status', ['sent', 'opened'])
     .not('resend_id', 'is', null);
 
   return NextResponse.json({ success: true, synced, remaining: count ?? 0 });
@@ -458,8 +493,10 @@ export async function POST(request: NextRequest) {
   const couponEnabled = Boolean(coupon?.enabled) && Boolean(eventId);
   const target = coupon?.target ?? 'both';
   const sameForAll = coupon?.sameForAll ?? true;
-  const rawNew = coupon?.newCode?.trim() || '';
-  const rawExisting = coupon?.existingCode?.trim() || '';
+  // Los códigos se normalizan a MAYÚSCULA al guardar/enviar (así se ven en el
+  // correo, la landing y el historial siempre igual, sin importar cómo se tipeó).
+  const rawNew = (coupon?.newCode?.trim() || '').toUpperCase();
+  const rawExisting = (coupon?.existingCode?.trim() || '').toUpperCase();
 
   const { newCode, existingCode } = resolveCoupon({
     enabled: couponEnabled,
@@ -542,14 +579,14 @@ export async function POST(request: NextRequest) {
   const localButtonUrl = (buttonUrl || '').replace(BASE_URL, appOrigin);
 
   // Cada destinatario tiene un id (uuid) que viaja en el link (?ct=<id>) y en el
-  // pixel de apertura → medimos con NUESTRO tracking (no GA) quién abrió y quién
-  // clickeó. El id es la PK de su fila: sin token ni columna extra.
+  // Medimos con NUESTRO tracking (no GA) quién ENTRÓ a la landing (click en el
+  // botón del correo, ?ct=<id de la fila>). Sin pixel de apertura: el open por
+  // imagen no es dato duro, así que no se usa. La entrega la da Resend (sync).
   const withCt = (base: string, recId: string) => {
     if (!base) return '';
     const sep = base.includes('?') ? '&' : '?';
     return `${base}${sep}ct=${recId}&utm_source=email&utm_campaign=${campaignId}`;
   };
-  const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
   // Link de baja: por correo. Marca ese email como dado de baja (no se borra;
   // conserva su fecha).
   const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
@@ -582,6 +619,11 @@ export async function POST(request: NextRequest) {
   const results: { sent: number; failed: number; errors: string[] } = { sent: 0, failed: 0, errors: [] };
   const recipientRows: { id: string; campaign_id: string; email: string; resend_id: string | null; status: string; segment: string }[] = [];
 
+  // Lo que REALMENTE se envió por segmento (asunto + cuerpo ya resueltos, sea el
+  // generado o el editado a mano). Se persiste para que el reenvío replique
+  // verbatim, sin depender de localStorage ni de regenerar desde el template.
+  const segmentContent: Record<string, { subject: string; body: string }> = {};
+
   for (const segment of segments) {
     if (segment.emails.length === 0) continue;
 
@@ -589,6 +631,7 @@ export async function POST(request: NextRequest) {
     // Si el admin editó el correo de este segmento, se usa tal cual.
     const bodyForSegment = segmentBodies?.[segment.key] ?? segmentBody(bodyHtml, segment.key, useCoupon);
     const subjectForSegment = segmentSubjects?.[segment.key] ?? segmentSubject(subject, title, useCoupon);
+    segmentContent[segment.key] = { subject: subjectForSegment, body: bodyForSegment };
 
     for (let i = 0; i < segment.emails.length; i += BATCH_SIZE) {
       const batch = segment.emails.slice(i, i + BATCH_SIZE);
@@ -603,7 +646,6 @@ export async function POST(request: NextRequest) {
           imageBase64,
           buttonText,
           buttonUrl: withCt(localButtonUrl, recIds[j]) || undefined,
-          trackingPixelUrl: pixelUrl(recIds[j]),
           unsubscribeUrl: unsubUrl(to),
         }),
       }));
@@ -645,7 +687,7 @@ export async function POST(request: NextRequest) {
   }
   await supabase
     .from('campaigns')
-    .update({ sent_count: results.sent, failed_count: results.failed })
+    .update({ sent_count: results.sent, failed_count: results.failed, segment_content: segmentContent })
     .eq('id', campaignId);
 
   return NextResponse.json({

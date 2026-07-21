@@ -107,7 +107,8 @@ export default function EventCouponBlock({
         const data = await res.json();
         if (!alive) return;
         if (data.status === 'ok') {
-          setState({ kind: 'ok', code: data.code, isNew: data.kind === 'new' });
+          // Siempre en mayúscula (display y "copiar" coinciden, incluso códigos viejos).
+          setState({ kind: 'ok', code: String(data.code || '').toUpperCase(), isNew: data.kind === 'new' });
           event('junglist_coupon_view', {
             event_id: eventId,
             event_title: eventTitle,
