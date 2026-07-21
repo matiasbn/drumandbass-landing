@@ -3,6 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { RiCloseLine, RiUserLine, RiAtLine } from '@remixicon/react';
 import { useAuth } from '../AuthContext';
+import { Quality, setQuality, useQuality } from '../quality';
+import { setSoundEnabled, isSoundEnabled } from '../sounds';
+import { setShakeEnabled, isShakeEnabled } from '../juice';
+import { event } from '@/src/lib/gtag';
+
+const QUALITY_OPTIONS: { value: Quality; label: string }[] = [
+  { value: 'alta', label: 'ALTA' },
+  { value: 'media', label: 'MEDIA' },
+  { value: 'baja', label: 'BAJA' },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -16,6 +26,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [antialias, setAntialias] = useState(true);
+  const [antialiasChanged, setAntialiasChanged] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [shakeOn, setShakeOn] = useState(true);
+  const quality = useQuality();
+
+  useEffect(() => {
+    if (isOpen) {
+      const stored = localStorage.getItem('dnb_antialias');
+      setAntialias(stored !== '0');
+      setAntialiasChanged(false);
+      setSoundOn(isSoundEnabled());
+      setShakeOn(isShakeEnabled());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && profile) {
@@ -142,6 +167,134 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               {loading ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
             </button>
           </form>
+
+          {/* Graphics section */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <h3 className="text-xs font-mono text-white/50 tracking-wider mb-4">GRÁFICOS</h3>
+
+            {/* Calidad gráfica: Alta (Bloom + dpr 1.5) / Media / Baja (sin Bloom, strobes simples, partículas ÷2, shake off) */}
+            <div className="mb-5">
+              <div className="text-sm font-mono text-white tracking-wider">CALIDAD</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5 mb-2">
+                Baja desactiva Bloom, strobes y vibración de cámara
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {QUALITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setQuality(opt.value);
+                      event('club_quality_change', { quality: opt.value });
+                    }}
+                    className={`py-2 font-mono text-xs tracking-wider border transition-colors ${
+                      quality === opt.value
+                        ? 'bg-[#ff0055] border-[#ff0055] text-white'
+                        : 'bg-black/50 border-white/20 text-white/60 hover:border-white/40 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">ANTIALIASING</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Suaviza los bordes (requiere recargar)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !antialias;
+                  setAntialias(next);
+                  localStorage.setItem('dnb_antialias', next ? '1' : '0');
+                  setAntialiasChanged(true);
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  antialias ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    antialias ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {antialiasChanged && (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-4 w-full py-2 font-mono text-xs tracking-wider bg-[#ff0055]/20 border border-[#ff0055]/50 text-[#ff0055] hover:bg-[#ff0055]/30 transition-colors"
+              >
+                RECARGAR
+              </button>
+            )}
+          </div>
+
+          {/* Sonido y cámara (WS-2/§4): mute del audio sintetizado + trauma-shake */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <h3 className="text-xs font-mono text-white/50 tracking-wider mb-4">SONIDO Y CÁMARA</h3>
+
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">SONIDO DEL JUEGO</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Disparos, hits y drops (no afecta al stream)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !soundOn;
+                  setSoundOn(next);
+                  setSoundEnabled(next);
+                  event('club_sound_toggle', { enabled: next ? 1 : 0 });
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  soundOn ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    soundOn ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-mono text-white tracking-wider">VIBRACIÓN DE CÁMARA</div>
+                <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                  Shake en hits y drops (la calidad BAJA lo apaga)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !shakeOn;
+                  setShakeOn(next);
+                  setShakeEnabled(next);
+                  event('club_shake_toggle', { enabled: next ? 1 : 0 });
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  shakeOn ? 'bg-[#ff0055]' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                    shakeOn ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

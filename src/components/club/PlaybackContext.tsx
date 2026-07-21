@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect, ReactNode, MutableRefObject } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, ReactNode, MutableRefObject } from 'react';
 import { useLive } from './LiveContext';
 
 interface PlaybackContextType {
@@ -32,18 +32,18 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
   const isPlayingRef = useRef(false);
   const togglePlayRef = useRef<(() => void) | null>(null);
 
-  const setIsPlaying = (playing: boolean) => {
+  const setIsPlaying = useCallback((playing: boolean) => {
     isPlayingRef.current = playing;
     setIsPlayingState(playing);
-  };
+  }, []);
 
-  const registerTogglePlay = (fn: () => void) => {
+  const registerTogglePlay = useCallback((fn: () => void) => {
     togglePlayRef.current = fn;
-  };
+  }, []);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     togglePlayRef.current?.();
-  };
+  }, []);
 
   // When live, force animations to stay active
   useEffect(() => {
@@ -52,8 +52,12 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [isLive]);
 
+  const contextValue = useMemo(() => ({
+    isPlaying, setIsPlaying, isPlayingRef, trackTitle, setTrackTitle, registerTogglePlay, togglePlay,
+  }), [isPlaying, setIsPlaying, isPlayingRef, trackTitle, setTrackTitle, registerTogglePlay, togglePlay]);
+
   return (
-    <PlaybackContext.Provider value={{ isPlaying, setIsPlaying, isPlayingRef, trackTitle, setTrackTitle, registerTogglePlay, togglePlay }}>
+    <PlaybackContext.Provider value={contextValue}>
       {children}
     </PlaybackContext.Provider>
   );

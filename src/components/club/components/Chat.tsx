@@ -6,6 +6,21 @@ import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiUserLine } from '@remixico
 import { Facehash } from 'facehash';
 import { useMultiplayer } from '../MultiplayerContext';
 import { useScore } from '../ScoreContext';
+import { clubTitleFor, clubTitleColor } from './SessionSummary';
+
+// Chip de título cosmético (M15) junto al username, según best_club_drops
+// histórico del perfil (≥1 Warm-up, ≥3 Selector, ≥5 Hype Master).
+const TitleChip: React.FC<{ title?: string | null }> = ({ title }) => {
+  if (!title) return null;
+  return (
+    <span
+      className="px-1 py-px text-[8px] font-mono border leading-none uppercase tracking-wide shrink-0"
+      style={{ color: clubTitleColor(title), borderColor: `${clubTitleColor(title)}66` }}
+    >
+      {title}
+    </span>
+  );
+};
 
 export const Chat: React.FC = () => {
   const { username, setUsername } = useMultiplayer();
@@ -19,6 +34,41 @@ export const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
+
+  // Títulos cosméticos por username (M15) — cache incremental, 1 query por
+  // tanda de usernames nuevos. Si la columna best_club_drops aún no está
+  // migrada, se desactiva en silencio.
+  const [titles, setTitles] = useState<Record<string, string | null>>({});
+  const fetchedUsersRef = useRef<Set<string>>(new Set());
+  const titlesUnavailableRef = useRef(false);
+
+  useEffect(() => {
+    if (titlesUnavailableRef.current) return;
+    const names = Array.from(
+      new Set([...(username ? [username] : []), ...messages.map((m) => m.username)])
+    ).filter((n) => !fetchedUsersRef.current.has(n));
+    if (names.length === 0) return;
+    names.forEach((n) => fetchedUsersRef.current.add(n));
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username, best_club_drops')
+        .in('username', names);
+      if (error) {
+        titlesUnavailableRef.current = true; // columna aún no migrada
+        return;
+      }
+      if (!data || data.length === 0) return;
+      setTitles((prev) => {
+        const next = { ...prev };
+        for (const row of data as { username: string; best_club_drops?: number | null }[]) {
+          next[row.username] = clubTitleFor(row.best_club_drops ?? 0);
+        }
+        return next;
+      });
+    })();
+  }, [messages, username]);
 
   useEffect(() => {
     isOpenRef.current = isOpen;
@@ -203,6 +253,7 @@ export const Chat: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <Facehash name={username} size={18} interactive={false} showInitial={false} variant="gradient" intensity3d="subtle" />
                 <span className="font-mono text-xs text-[#00ccff]">{username}</span>
+                <TitleChip title={titles[username]} />
               </div>
             )}
             <RiCloseLine className={`w-4 h-4 text-white/40 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`} />
@@ -236,6 +287,7 @@ export const Chat: React.FC = () => {
                         }`}>
                           {msg.username}
                         </span>
+                        <TitleChip title={titles[msg.username]} />
                         <span className="text-white/30 text-[10px] font-mono">
                           {formatTime(msg.created_at)}
                         </span>

@@ -12,7 +12,7 @@ export const LogoBanner: React.FC = () => {
   const texture = useTexture('/logo.png');
 
   return (
-    <group position={[0, 0, -6]}>
+    <group position={[0, 12, 0]} rotation={[0, 0, 0]}>
       <mesh position={[0, 4.5, 0]}>
         <boxGeometry args={[4.2, 2.2, 0.1]} />
         <meshStandardMaterial color="#0a0a0a" emissive={COLORS.cyberBlue} emissiveIntensity={0.05} />
