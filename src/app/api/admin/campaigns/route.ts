@@ -299,6 +299,71 @@ async function resendFailedRecipients(
   });
 }
 
+// Sincroniza el estado de entrega desde Resend (NO envía nada — solo lee con
+// resend.emails.get por resend_id). Actualiza los que todavía figuran 'sent' a
+// 'delivered' / 'bounced' / 'complained' según lo que diga Resend. No pisa
+// 'opened'/'clicked' (nuestro tracking) ni 'failed' (nunca tuvieron resend_id).
+// Procesa un lote acotado por request (timeout + rate limit); el cliente repite
+// hasta que no queden pendientes.
+async function syncFromResend(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  apiKey: string,
+  campaignId: string
+) {
+  const { data: recs } = await supabase
+    .from('campaign_recipients')
+    .select('id, resend_id')
+    .eq('campaign_id', campaignId)
+    .eq('status', 'sent')
+    .not('resend_id', 'is', null)
+    .limit(60);
+
+  if (!recs || recs.length === 0) {
+    return NextResponse.json({ success: true, synced: 0, remaining: 0 });
+  }
+
+  const resend = new Resend(apiKey);
+  const byStatus: Record<'delivered' | 'bounced' | 'complained', string[]> = {
+    delivered: [],
+    bounced: [],
+    complained: [],
+  };
+
+  const CONC = 4;
+  for (let i = 0; i < recs.length; i += CONC) {
+    const chunk = recs.slice(i, i + CONC);
+    await Promise.all(
+      chunk.map(async (rec) => {
+        try {
+          const { data } = await resend.emails.get(rec.resend_id as string);
+          const ev = (data as { last_event?: string } | null)?.last_event;
+          if (ev === 'bounced') byStatus.bounced.push(rec.id);
+          else if (ev === 'complained') byStatus.complained.push(rec.id);
+          else if (ev === 'delivered' || ev === 'opened' || ev === 'clicked') byStatus.delivered.push(rec.id);
+        } catch {
+          // rate limit / error puntual: queda 'sent' y se reintenta en otra ronda
+        }
+      })
+    );
+  }
+
+  for (const st of ['delivered', 'bounced', 'complained'] as const) {
+    if (byStatus[st].length) {
+      await supabase.from('campaign_recipients').update({ status: st }).in('id', byStatus[st]);
+    }
+  }
+
+  const synced = byStatus.delivered.length + byStatus.bounced.length + byStatus.complained.length;
+  const { count } = await supabase
+    .from('campaign_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', campaignId)
+    .eq('status', 'sent')
+    .not('resend_id', 'is', null);
+
+  return NextResponse.json({ success: true, synced, remaining: count ?? 0 });
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);
@@ -318,6 +383,11 @@ export async function POST(request: NextRequest) {
   // Reenvío a los que fallaron (no es una campaña nueva).
   if (body.resendCampaignId) {
     return resendFailedRecipients(supabase, apiKey, String(body.resendCampaignId));
+  }
+
+  // Sincronizar estados de entrega desde Resend (no envía nada).
+  if (body.syncCampaignId) {
+    return syncFromResend(supabase, apiKey, String(body.syncCampaignId));
   }
 
   const {

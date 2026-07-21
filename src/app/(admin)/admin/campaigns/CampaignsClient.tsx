@@ -223,6 +223,7 @@ export default function CampaignsClient() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -366,6 +367,36 @@ export default function CampaignsClient() {
       // ignore
     } finally {
       setRecipientsLoading(false);
+    }
+  };
+
+  // Consulta a Resend el estado de entrega de lo YA enviado (no manda nada).
+  // Corre en tandas hasta que no queden pendientes por sincronizar.
+  const syncFromResend = async (id: string) => {
+    setSyncing(true);
+    try {
+      let total = 0;
+      for (let round = 0; round < 60; round++) {
+        const res = await fetch('/api/admin/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ syncCampaignId: id }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          window.alert(`Error al sincronizar: ${data.error || ''}`);
+          break;
+        }
+        total += data.synced || 0;
+        if ((data.synced || 0) === 0 || (data.remaining || 0) === 0) break;
+      }
+      window.alert(`Estados de entrega actualizados desde Resend: ${total}.`);
+      await fetchCampaigns();
+      if (openCampaign?.id === id) await openCampaignDetail(openCampaign);
+    } catch (e) {
+      window.alert(`Error de red: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -1485,15 +1516,55 @@ export default function CampaignsClient() {
                               >
                                 Clickeó: {recipients.filter((r) => r.status === 'clicked').length}
                               </span>
+                              {recipients.some((r) => r.status === 'delivered') && (
+                                <span
+                                  className="brutalist-border px-2 py-1 bg-green-100 cursor-help"
+                                  title="Entregado: Resend confirma que llegó al servidor del destinatario (dato duro, no pixel). Se obtiene con 'Actualizar estados desde Resend'."
+                                >
+                                  Entregado: {recipients.filter((r) => r.status === 'delivered').length}
+                                </span>
+                              )}
+                              {recipients.some((r) => r.status === 'bounced') && (
+                                <span
+                                  className="brutalist-border px-2 py-1 bg-red-200 cursor-help"
+                                  title="Rebotó: la dirección no existe o rechazó el correo. No llegó. (De Resend.)"
+                                >
+                                  Rebotó: {recipients.filter((r) => r.status === 'bounced').length}
+                                </span>
+                              )}
+                              {recipients.some((r) => r.status === 'complained') && (
+                                <span
+                                  className="brutalist-border px-2 py-1 bg-orange-100 cursor-help"
+                                  title="Spam: el destinatario lo marcó como spam. (De Resend.)"
+                                >
+                                  Spam: {recipients.filter((r) => r.status === 'complained').length}
+                                </span>
+                              )}
                               {recipients.some((r) => r.status === 'failed') && (
                                 <span
                                   className="brutalist-border px-2 py-1 bg-red-100 cursor-help"
-                                  title="Falló: el envío no se pudo entregar (rebote, dirección inválida, etc.)."
+                                  title="Falló: no se pudo enviar (típicamente la cuota diaria de Resend). Nunca salió; se puede reenviar."
                                 >
                                   Falló: {recipients.filter((r) => r.status === 'failed').length}
                                 </span>
                               )}
                             </div>
+
+                            {/* Traer estados de entrega desde Resend (lee, NO envía). */}
+                            {recipients.some((r) => r.status === 'sent') && (
+                              <div className="mb-3">
+                                <button
+                                  onClick={() => syncFromResend(c.id)}
+                                  disabled={syncing}
+                                  className="brutalist-border bg-white text-black px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                                >
+                                  {syncing ? 'Consultando Resend…' : 'Actualizar estados desde Resend'}
+                                </button>
+                                <p className="mono text-[10px] text-gray-500 mt-1">
+                                  Consulta (no reenvía) qué pasó con los que dicen &quot;enviado&quot;: entregado, rebotó, etc.
+                                </p>
+                              </div>
+                            )}
 
                             {/* Reenviar a los que fallaron (cuota de Resend: 100/día). */}
                             {recipients.some((r) => r.status === 'failed') && (
