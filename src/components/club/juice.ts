@@ -125,6 +125,17 @@ export function sampleJuice(dtS: number): JuiceSample {
 // Bus de HUD — estado caliente que CrosshairHUD lee por rAF
 // ---------------------------------------------------------------------------
 
+/**
+ * Distancia EXTRA de cámara (u). Durante el CLUB DROP se sube para que la
+ * cámara se aleje y se aprecie el espectáculo completo; ThirdPersonCamera
+ * interpola hacia este valor. Se lee por frame, sin re-renders.
+ */
+export const cameraZoom = { extra: 0 };
+
+export function setCameraExtraDistance(d: number): void {
+  cameraZoom.extra = d;
+}
+
 export type HitKind = 'normal' | 'beat' | 'air' | 'bump';
 
 export const hud = {

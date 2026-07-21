@@ -39,7 +39,9 @@ export const DJ: React.FC<DJProps> = ({ isPlayingRef }) => {
   });
 
   return (
-    <group position={[0, 1.5, -0.8]}>
+    // DJ más grande (1.45x): es el protagonista de la cabina y se veía chico
+    // frente al booth y a la pantalla nueva.
+    <group position={[0, 1.5, -0.8]} scale={1.45}>
       <mesh position={[0, 1.4, 0]} castShadow>
         <boxGeometry args={[0.6, 0.8, 0.35]} />
         <meshStandardMaterial color="#1a1a1a" />

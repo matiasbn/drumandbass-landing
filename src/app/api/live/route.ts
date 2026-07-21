@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getStreamings } from '@/src/lib/cms';
+import { DEFAULT_CLUB_VIDEO_ID } from '@/src/lib/clubStream';
 
 function extractYouTubeVideoId(url: string): string | null {
   try {
@@ -47,7 +48,13 @@ export async function GET() {
     });
 
     if (!liveStreaming) {
-      return NextResponse.json({ isLive: false, youtubeVideoId: null, title: null });
+      // Sin transmisión: el club igual reproduce un video por defecto (ambiente).
+      // isLive queda en false a propósito — los rounds siguen atados al stream real.
+      return NextResponse.json({
+        isLive: false,
+        youtubeVideoId: DEFAULT_CLUB_VIDEO_ID,
+        title: null,
+      });
     }
 
     const youtubeVideoId = extractYouTubeVideoId(liveStreaming.youtubeUrl);
@@ -59,6 +66,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching live status:', error);
-    return NextResponse.json({ isLive: false, youtubeVideoId: null, title: null });
+    // Ante un fallo, el club igual tiene su video por defecto.
+    return NextResponse.json({ isLive: false, youtubeVideoId: DEFAULT_CLUB_VIDEO_ID, title: null });
   }
 }

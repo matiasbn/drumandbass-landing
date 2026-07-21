@@ -49,6 +49,9 @@ for (let i = 0; i < LIGHT_COUNT; i++) {
     color: LIGHT_COLORS_CYCLE[i % LIGHT_COLORS_CYCLE.length],
   });
 }
+// La luz cian del índice 4 caía en (-5, 9, -8.7): justo delante de la pantalla
+// del stream, cruzándose en la vista. Se corre a la izquierda del club.
+LIGHT_CONFIGS[4].pos = [-16, 9, -6];
 
 // Offset local de cada cono rotado por el yaw de su caja → posición mundial
 function rotatedOffset(pos: [number, number, number], yaw: number, off: [number, number, number]): [number, number, number] {

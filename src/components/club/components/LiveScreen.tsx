@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { DEFAULT_CLUB_VIDEO_ID, DEFAULT_CLUB_VIDEO_START } from '@/src/lib/clubStream';
 
 interface LiveScreenProps {
   isLive: boolean;
@@ -28,10 +29,11 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
   });
 
   return (
-    // Pantalla ALTA y GRANDE: antes estaba en y=5 con 8.5×4.8, así que su borde
-    // inferior (2.6) quedaba por debajo del nivel de los ojos y tapaba la línea
-    // de visión. Ahora arranca bien por encima de las cabezas.
-    <group position={[0, 9.5, -14]} rotation={[0, 0, 0]}>
+    // Pantalla ALTA y GRANDE, e INCLINADA hacia abajo (como las de un venue):
+    // su borde inferior queda en ~7.5, por encima de quien esté parado en la
+    // plataforma alta (5.5) — nadie choca con ella — y al estar angulada se
+    // sigue leyendo bien desde la pista sin tener que mirar hacia arriba.
+    <group position={[0, 11.5, -14]} rotation={[0.18, 0, 0]}>
       {/* Screen frame */}
       <mesh position={[0, 0, -0.05]}>
         <boxGeometry args={[15.2, 8.7, 0.1]} />
@@ -42,14 +44,14 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
       <mesh ref={glowRef}>
         <planeGeometry args={[14.4, 8.1]} />
         <meshStandardMaterial
-          color={isLive && youtubeVideoId ? '#000000' : isLive ? '#0a0a1a' : '#050508'}
+          color={youtubeVideoId ? '#000000' : '#050508'}
           emissive={isLive && !youtubeVideoId ? '#4444ff' : '#000000'}
           emissiveIntensity={isLive && !youtubeVideoId ? 0.3 : 0}
         />
       </mesh>
 
-      {/* YouTube iframe — autoplay with audio */}
-      {isLive && youtubeVideoId && (
+      {/* YouTube iframe — suena el live si lo hay, y si no el video por defecto */}
+      {youtubeVideoId && (
         <Html
           transform
           position={[0, 0.2, 0.02]}
@@ -64,7 +66,11 @@ export const LiveScreen: React.FC<LiveScreenProps> = ({ isLive, youtubeVideoId }
           <div style={{ position: 'relative', width: 640, height: 360 }}>
             <iframe
               data-testid="youtube-iframe"
-              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=0&rel=0&playsinline=1`}
+              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&mute=0&rel=0&playsinline=1${
+                youtubeVideoId === DEFAULT_CLUB_VIDEO_ID
+                  ? `&start=${DEFAULT_CLUB_VIDEO_START}&loop=1&playlist=${DEFAULT_CLUB_VIDEO_ID}`
+                  : ''
+              }`}
               style={{ width: 640, height: 360, border: 'none' }}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen

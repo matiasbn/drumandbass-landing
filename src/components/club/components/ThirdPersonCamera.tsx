@@ -4,7 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCamera } from '../CameraContext';
-import { sampleJuice } from '../juice';
+import { sampleJuice, cameraZoom } from '../juice';
 
 const CAMERA_DISTANCE = 5;
 const CAMERA_HEIGHT_OFFSET = 2.2;
@@ -24,6 +24,7 @@ export const ThirdPersonCamera: React.FC = () => {
   const { camera, gl } = useThree();
 
   const smoothPosRef = useRef(new THREE.Vector3(0, 0, 6));
+  const extraDistRef = useRef(0); // alejamiento extra durante el CLUB DROP
 
   // Pointer lock + mouse look (desktop)
   useEffect(() => {
@@ -72,10 +73,15 @@ export const ThirdPersonCamera: React.FC = () => {
     // Smooth follow player position
     smoothPosRef.current.lerp(target, CAMERA_LERP);
 
+    // Distancia con el extra del CLUB DROP (la cámara se aleja para dar
+    // perspectiva del espectáculo). Se interpola suave, sin saltos.
+    extraDistRef.current += (cameraZoom.extra - extraDistRef.current) * Math.min(1, delta * 2.2);
+    const dist = CAMERA_DISTANCE + extraDistRef.current;
+
     // Spherical offset from player (behind)
-    const offsetX = Math.sin(yaw) * Math.cos(pitch) * CAMERA_DISTANCE;
-    const offsetY = Math.sin(pitch) * CAMERA_DISTANCE + CAMERA_HEIGHT_OFFSET;
-    const offsetZ = Math.cos(yaw) * Math.cos(pitch) * CAMERA_DISTANCE;
+    const offsetX = Math.sin(yaw) * Math.cos(pitch) * dist;
+    const offsetY = Math.sin(pitch) * dist + CAMERA_HEIGHT_OFFSET + extraDistRef.current * 0.35;
+    const offsetZ = Math.cos(yaw) * Math.cos(pitch) * dist;
 
     // Right-shoulder offset perpendicular to camera direction
     const shoulderX = Math.cos(yaw) * SHOULDER_OFFSET;

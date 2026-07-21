@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { useEnergy } from '../EnergyContext';
 import { setLevitateUntil, setFinaleSpinUntil } from './SpecialEffects';
 import { MAT_BODY, MAT_NEON } from '../materials';
+import { setCameraExtraDistance } from '../juice';
 
 // ═══ CLUB DROP: el momento de "lo logramos" ═══════════════════════════
 // Cuando la Energía del Club llega al máximo tiene que notarse. Esto monta
@@ -19,6 +20,8 @@ import { MAT_BODY, MAT_NEON } from '../materials';
 const FLOOR_SIZE = 48; // cubre toda la pista ampliada (piso ±22)
 const BEAM_COUNT = 10;
 const DROP_BURST_S = 5; // parte intensa (celebración) antes de la GLORIA
+const FINALE_S = 2; // giro + levitación finales: empiezan 2s antes del final
+const CAMERA_PULLBACK = 5.5; // cuánto se aleja la cámara durante el drop
 
 const floorVertex = /* glsl */ `
   varying vec2 vUv;
@@ -81,7 +84,7 @@ const bandFragment = /* glsl */ `
 `;
 
 export const ClubDropSpectacle: React.FC = () => {
-  const { subscribe } = useEnergy();
+  const { subscribe, dropEndsAtRef } = useEnergy();
 
   const groupRef = useRef<THREE.Group>(null);
   const floorMatRef = useRef<THREE.ShaderMaterial>(null);
@@ -91,7 +94,7 @@ export const ClubDropSpectacle: React.FC = () => {
 
   // Estado del espectáculo en refs (cero re-renders)
   const activeRef = useRef(false);
-  const finaleRequestedRef = useRef(false);
+  const finaleDoneRef = useRef(false);
   const startedAtRef = useRef(0);
   const intensityRef = useRef(0); // 0..1 suavizado
 
@@ -129,10 +132,9 @@ export const ClubDropSpectacle: React.FC = () => {
       if (ev.type === 'clubDrop') {
         activeRef.current = true;
         startedAtRef.current = 0; // lo fija el primer frame
+        finaleDoneRef.current = false;
       } else if (ev.type === 'gloriaEnd') {
         activeRef.current = false;
-        // Cierre coreografiado: todos giran y levitan a la vez (3s).
-        finaleRequestedRef.current = true;
       }
     });
     return unsub;
@@ -146,13 +148,19 @@ export const ClubDropSpectacle: React.FC = () => {
     if (activeRef.current && startedAtRef.current === 0) startedAtRef.current = t;
     const since = t - startedAtRef.current;
 
-    // Cierre del drop: todos giran y levitan al unísono durante 3s.
-    if (finaleRequestedRef.current) {
-      finaleRequestedRef.current = false;
-      startedAtRef.current = 0;
-      setFinaleSpinUntil(t + 3);
-      setLevitateUntil(t + 3);
+    // Cierre coreografiado: arranca 2s ANTES del final del drop para que el
+    // giro + levitación terminen justo cuando termina el drop.
+    if (activeRef.current && !finaleDoneRef.current) {
+      const restanteS = (dropEndsAtRef.current - Date.now()) / 1000;
+      if (restanteS <= FINALE_S && restanteS > 0) {
+        finaleDoneRef.current = true;
+        setFinaleSpinUntil(t + restanteS);
+        setLevitateUntil(t + restanteS);
+      }
     }
+
+    // La cámara se aleja mientras dura el drop para ver el espectáculo entero.
+    setCameraExtraDistance(activeRef.current ? CAMERA_PULLBACK : 0);
 
     // Intensidad objetivo: pico en la explosión inicial, sostenida en la GLORIA
     const target = activeRef.current ? (since < DROP_BURST_S ? 1 : 0.62) : 0;
@@ -171,8 +179,8 @@ export const ClubDropSpectacle: React.FC = () => {
       return;
     }
 
-    // Todos levitan mientras dura el espectáculo
-    if (activeRef.current) setLevitateUntil(t + 0.2);
+    // (La levitación ya no dura todo el drop: entra en los últimos 2s junto al
+    // giro, arriba, para que el cierre termine exactamente con el drop.)
 
     // Piso shader
     if (floorMatRef.current) {
