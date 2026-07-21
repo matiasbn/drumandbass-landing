@@ -98,6 +98,7 @@ export const SITE_EVENT_NAMES = [
   'logo_download',
   'enter_club',
   'login',
+  'logout',
   'button_click',
   'landing_evento_view',
   'junglist_coupon_view',

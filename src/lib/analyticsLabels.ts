@@ -17,6 +17,7 @@ export const EVENT_LABELS: Record<string, string> = {
   event_link_click: 'Clic a tickets de evento',
   button_click: 'Clics en botones',
   ui_click: 'Clics en la interfaz',
+  logout: 'Cierres de sesión',
   login: 'Inicios de sesión',
   junglist_signup: 'Registros de junglist',
   junglist_unsubscribe: 'Bajas de junglist',
@@ -51,6 +52,7 @@ export const EVENT_TIPS: Record<string, string> = {
   button_click: 'Clic en un botón rastreado del home.',
   ui_click: 'Clic en cualquier botón o enlace del sitio (auto-tracking).',
   login: 'Inicio de sesión con Google (presskit).',
+  logout: 'Alguien cerró sesión desde el indicador de sesión del header.',
   junglist_signup: 'Un usuario completó su registro como junglist.',
   junglist_unsubscribe: 'Un junglist se dio de baja.',
   presskit_created: 'Un DJ creó su presskit por primera vez.',
@@ -89,6 +91,7 @@ export const CORE_ACTIONS = [
 // siguen registrando en GA por si algún día se quieren mirar allá.
 export const HIDDEN_ACTIONS = [
   'login',
+  'logout',
   'release_publish',
   'presskit_view',
   'presskit_created',
