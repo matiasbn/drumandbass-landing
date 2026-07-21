@@ -1,6 +1,6 @@
 // V2 Map Layout — shared spatial constants
 export const MAP = {
-  floorSize: 16, // 16 tiles of size 2 = 32 units total
+  floorSize: 20, // 20 tiles of size 2 = 40 units total (mapa más grande)
   tileSize: 2,
   djPosition: [0, 1.5, 0] as const,
   djPlatformRadius: 4,
@@ -10,10 +10,10 @@ export const MAP = {
   stageHalfSize: 8, // -8 to 8 in X and Z
 
   bounds: {
-    minX: -14,
-    maxX: 14,
-    minZ: -14,
-    maxZ: 14,
+    minX: -18,
+    maxX: 18,
+    minZ: -18,
+    maxZ: 18,
   },
 
   moveSpeed: 0.14,

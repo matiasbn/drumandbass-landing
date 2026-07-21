@@ -22,6 +22,7 @@ interface Platform {
 const stageH = MAP.djPlatformHeight;
 const stageHalf = MAP.stageHalfSize;
 const deckHeight = 3.0;
+const upperHeight = 5.5; // segundo piso (nivel VIP alto)
 
 // Generate stair steps — each step is a thin slab at its height
 function makeStairsX(
@@ -123,6 +124,18 @@ const PLATFORMS: Platform[] = [
   // Jump pads on stage
   { id: 'pad-n', position: [0, stageH + 0.2, -5], size: [2, 0.4, 2], color: '#12062e', emissive: '#ff8800', emissiveIntensity: 0.6 },
   { id: 'pad-s', position: [0, stageH + 0.2, 5], size: [2, 0.4, 2], color: '#12062e', emissive: '#ff8800', emissiveIntensity: 0.6 },
+
+  // ── Niveles nuevos (mapa ampliado) ──────────────────────────────────
+  // Plataformas de esquina traseras, a la altura de los decks.
+  { id: 'corner-bl', position: [-15, deckHeight / 2, -15], size: [6, deckHeight, 6], color: '#0d1b2a', emissive: '#00ff41', emissiveIntensity: 0.4 },
+  { id: 'corner-br', position: [15, deckHeight / 2, -15], size: [6, deckHeight, 6], color: '#1a0a2e', emissive: '#ff8800', emissiveIntensity: 0.4 },
+  // Plataformas de esquina delanteras.
+  { id: 'corner-fl', position: [-15, deckHeight / 2, 15], size: [6, deckHeight, 6], color: '#1a0a2e', emissive: '#ff00ff', emissiveIntensity: 0.4 },
+  { id: 'corner-fr', position: [15, deckHeight / 2, 15], size: [6, deckHeight, 6], color: '#0d1b2a', emissive: '#00ccff', emissiveIntensity: 0.4 },
+  // Segundo piso: plataforma alta central al fondo (el nivel "VIP" arriba).
+  { id: 'upper-back', position: [0, upperHeight / 2, -15.5], size: [10, upperHeight, 5], color: '#12062e', emissive: '#00ccff', emissiveIntensity: 0.55 },
+  // Escaleras que suben del deck izquierdo al segundo piso.
+  ...makeStairsX('stairs-upper', -12.5, -6, -15.5, 4, deckHeight, upperHeight, 5, '#00ccff'),
 ];
 
 export { PLATFORMS };

@@ -34,10 +34,10 @@ interface PanelConfig {
 }
 
 const PANELS: PanelConfig[] = [
-  { position: [-18, 5, 0], rotation: [0, Math.PI / 2, 0], size: [14, 12], beatOffset: 0 },
-  { position: [18, 5, 0], rotation: [0, -Math.PI / 2, 0], size: [14, 12], beatOffset: 2 },
-  { position: [0, 5.5, -18], rotation: [0.05, 0, 0], size: [14, 12], beatOffset: 1 },
-  { position: [0, 5.5, 18], rotation: [-0.05, Math.PI, 0], size: [14, 12], beatOffset: 3 },
+  { position: [-22, 5, 0], rotation: [0, Math.PI / 2, 0], size: [20, 13], beatOffset: 0 },
+  { position: [22, 5, 0], rotation: [0, -Math.PI / 2, 0], size: [20, 13], beatOffset: 2 },
+  { position: [0, 5.5, -22], rotation: [0.05, 0, 0], size: [20, 13], beatOffset: 1 },
+  { position: [0, 5.5, 22], rotation: [-0.05, Math.PI, 0], size: [20, 13], beatOffset: 3 },
 ];
 
 const strobeVertexShader = `

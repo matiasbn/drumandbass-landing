@@ -39,7 +39,7 @@ const ANIM_SPEEDS = [1.1, 0.9, 1.2, 0.85, 1.0, 1.15, 0.95, 1.05, 0.95, 1.1, 0.9,
 // ─── Constants ───────────────────────────────────────────────────────
 const SHOOT_INTERVAL_MIN = 4;
 const SHOOT_INTERVAL_MAX = 10;
-const WANDER_BOUNDS = { minX: -13, maxX: 13, minZ: -13, maxZ: 13 };
+const WANDER_BOUNDS = { minX: -17, maxX: 17, minZ: -17, maxZ: 17 };
 const MOVE_SPEED = 1.15; // más ágiles (antes 0.5)
 const ARRIVAL_THRESHOLD = 0.3;
 const DANCE_COUNT = 4;
