@@ -222,6 +222,7 @@ export default function CampaignsClient() {
   // Borrado con confirmación en dos pasos (window.confirm es poco fiable).
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -365,6 +366,31 @@ export default function CampaignsClient() {
       // ignore
     } finally {
       setRecipientsLoading(false);
+    }
+  };
+
+  // Reenvía a los destinatarios que fallaron (cuota de Resend). Un click manda
+  // hasta 100; volver otro día para el resto.
+  const resendFailed = async (id: string) => {
+    setResending(true);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resendCampaignId: id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.alert(`Reenviados: ${data.resent}. Quedan por reenviar: ${data.stillFailed}.`);
+        await fetchCampaigns();
+        if (openCampaign?.id === id) await openCampaignDetail(openCampaign);
+      } else {
+        window.alert(`No se pudo reenviar: ${data.error || ''}`);
+      }
+    } catch (e) {
+      window.alert(`Error de red al reenviar: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -1394,7 +1420,15 @@ export default function CampaignsClient() {
                       className="w-full text-left p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50"
                     >
                       <div className="min-w-0">
-                        <p className="font-black uppercase truncate">{c.name || c.subject}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-black uppercase truncate">{c.name || c.subject}</p>
+                          {/* Indicador: hay correos sin enviar (reenviar) */}
+                          {c.failed_count > 0 && (
+                            <span className="shrink-0 mono text-[10px] font-bold uppercase bg-[#ff0055] text-white px-2 py-0.5">
+                              ⚠ {c.failed_count} sin enviar
+                            </span>
+                          )}
+                        </div>
                         <p className="mono text-[11px] text-gray-500 truncate">
                           {c.subject}
                           {c.template ? ` · ${c.template}` : ''}
@@ -1460,6 +1494,26 @@ export default function CampaignsClient() {
                                 </span>
                               )}
                             </div>
+
+                            {/* Reenviar a los que fallaron (cuota de Resend: 100/día). */}
+                            {recipients.some((r) => r.status === 'failed') && (
+                              <div className="brutalist-border bg-red-50 p-3 mb-3">
+                                <p className="mono text-[11px] font-bold uppercase mb-2">
+                                  {recipients.filter((r) => r.status === 'failed').length} correos no salieron
+                                  (probablemente la cuota diaria de Resend, 100/día).
+                                </p>
+                                <button
+                                  onClick={() => resendFailed(c.id)}
+                                  disabled={resending}
+                                  className="brutalist-border bg-black text-white px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40"
+                                >
+                                  {resending ? 'Reenviando…' : 'Reenviar a los que fallaron'}
+                                </button>
+                                <p className="mono text-[10px] text-gray-600 mt-2">
+                                  Manda hasta 100 por vez. Si quedan más, volvé mañana y apretá de nuevo.
+                                </p>
+                              </div>
+                            )}
 
                             {/* Detalle de la campaña */}
                             <dl className="brutalist-border bg-white p-3 mb-3 mono text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
