@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { RiWhatsappLine, RiMenuLine, RiCloseLine } from '@remixicon/react';
 import BrutalistButton from './BigButton';
 import SessionMenu from './SessionMenu';
+import LoginButton from './LoginButton';
 import { SOCIALS, WHATSAPP_LINK } from '../constants';
 
 const DiscoBallIcon = ({ size = 16 }: { size?: number }) => (
@@ -108,6 +109,8 @@ const HeaderNav = () => {
                   <DiscoBallIcon size={16} /> CLUB
                 </span>
               )}
+              {/* Login solo si no hay sesión (LoginButton se auto-oculta si la hay) */}
+              <LoginButton variant="desktop" />
             </div>
           )}
         </div>
@@ -128,8 +131,9 @@ const HeaderNav = () => {
       {/* Mobile popover */}
       {open && (
         <div className="lg:hidden absolute top-full left-0 right-0 bg-white border-b-4 border-black z-50 flex flex-col gap-3 p-4">
-          {/* Lo primero: quién eres y salir. */}
+          {/* Lo primero: quién eres y salir, o entrar si no hay sesión. */}
           <SessionMenu variant="mobile" />
+          <LoginButton variant="mobile" />
           <BrutalistButton
             variant="whatsapp"
             className="text-sm py-3 px-4 w-full"
