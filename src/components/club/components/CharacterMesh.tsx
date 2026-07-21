@@ -158,17 +158,18 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
         <meshStandardMaterial map={charTex ?? undefined} color={bodyColor} emissive={bodyColor} emissiveIntensity={0.3} />
       </mesh>
 
-      {/* Head group */}
+      {/* Head group. La cabeza es una caja NÍTIDA (no redondeada) a propósito: la
+          cara es un plano pegado al frente y la geometría redondeada rompía su
+          alineación/visibilidad. Cuerpo y extremidades sí van redondeados. */}
       <group ref={headRef} position={[0, 1.5, 0]}>
-        <mesh scale={[0.32, 0.38, 0.3]} geometry={roundedUnit} castShadow>
+        <mesh castShadow>
+          <boxGeometry args={[0.32, 0.38, 0.3]} />
           <meshStandardMaterial color={headColor} emissive={headColor} emissiveIntensity={isDefault ? 0 : 0.25} />
         </mesh>
         {faceTexture && (
-          // Adelantada respecto al frente de la cabeza (z≈0.15 tras redondear) y
-          // con renderOrder para que nunca la oculte/pelee la caja de la cabeza.
-          <mesh position={[0, 0, 0.18]} renderOrder={2}>
-            <planeGeometry args={[0.34, 0.4]} />
-            <meshBasicMaterial map={faceTexture} transparent={!isDefault} depthWrite={false} />
+          <mesh position={[0, 0, 0.151]}>
+            <planeGeometry args={[0.32, 0.38]} />
+            <meshBasicMaterial map={faceTexture} transparent={!isDefault} />
           </mesh>
         )}
         {/* Head extras (ears, eye bulges, stem, etc.) */}
