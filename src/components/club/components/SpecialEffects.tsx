@@ -21,6 +21,16 @@ export function setLevitateUntil(t: number) {
   if (t > levitateActiveUntil) levitateActiveUntil = t;
 }
 
+/**
+ * Final del CLUB DROP: todos (jugador, remotos y bailarines) hacen el MISMO
+ * movimiento — giro + levitación, como la animación de "caída". Es el cierre
+ * coreografiado del logro. Tiempo del reloj de r3f.
+ */
+export let finaleSpinUntil = 0;
+export function setFinaleSpinUntil(t: number) {
+  if (t > finaleSpinUntil) finaleSpinUntil = t;
+}
+
 // ─── Constantes del re-rol de especiales (M12) ───────────────────────
 // (Valores del diseño §3 M12; candidatos a un bloque `especiales` de TUNING —
 // tuning.ts es de Fase 0, así que viven aquí para no tocar archivos ajenos.)

@@ -18,7 +18,7 @@ import { setPlayerPose, setPlayerDance } from '../playerState';
 import { notifyGrenadeCharge } from '../juice';
 import { playDenied, playRiser } from '../sounds';
 import { roundGate } from '../RoundContext';
-import { levitateActiveUntil } from './SpecialEffects';
+import { levitateActiveUntil, finaleSpinUntil } from './SpecialEffects';
 
 // Lightweight 3D text billboard using canvas texture
 const TextSprite: React.FC<{
@@ -363,20 +363,14 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           break;
         // Teclas 6-0 → los 5 movimientos especiales (Onda, Spotlight,
         // Confetti, Levitar, Terremoto). useSpecial valida desbloqueo y cargas.
+        // Entre rounds no se pueden usar (roundGate).
         case '6':
-          useSpecialRef.current(0);
-          break;
         case '7':
-          useSpecialRef.current(1);
-          break;
         case '8':
-          useSpecialRef.current(2);
-          break;
         case '9':
-          useSpecialRef.current(3);
-          break;
         case '0':
-          useSpecialRef.current(4);
+          if (!roundGate.canPlay) break;
+          useSpecialRef.current(e.key === '0' ? 4 : Number(e.key) - 6);
           break;
       }
     };
@@ -573,6 +567,14 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     }
 
     const isMoving = moveX !== 0 || moveZ !== 0;
+
+    // Cierre del CLUB DROP: todos hacen el MISMO movimiento (giro + levitación).
+    if (finaleSpinUntil > time && danceMoveRef.current !== 2) {
+      danceMoveRef.current = 2; // Spin
+      danceStartRef.current = time;
+      spinStartRotationRef.current = rotationRef.current;
+      lastDanceScoreSecondRef.current = 0;
+    }
 
     // Auto-stop dance after duration + score periodically while dancing
     const danceMove = danceMoveRef.current;

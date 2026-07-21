@@ -4,7 +4,7 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useEnergy } from '../EnergyContext';
-import { setLevitateUntil } from './SpecialEffects';
+import { setLevitateUntil, setFinaleSpinUntil } from './SpecialEffects';
 import { MAT_BODY, MAT_NEON } from '../materials';
 
 // ═══ CLUB DROP: el momento de "lo logramos" ═══════════════════════════
@@ -91,6 +91,7 @@ export const ClubDropSpectacle: React.FC = () => {
 
   // Estado del espectáculo en refs (cero re-renders)
   const activeRef = useRef(false);
+  const finaleRequestedRef = useRef(false);
   const startedAtRef = useRef(0);
   const intensityRef = useRef(0); // 0..1 suavizado
 
@@ -130,6 +131,8 @@ export const ClubDropSpectacle: React.FC = () => {
         startedAtRef.current = 0; // lo fija el primer frame
       } else if (ev.type === 'gloriaEnd') {
         activeRef.current = false;
+        // Cierre coreografiado: todos giran y levitan a la vez (3s).
+        finaleRequestedRef.current = true;
       }
     });
     return unsub;
@@ -142,6 +145,14 @@ export const ClubDropSpectacle: React.FC = () => {
 
     if (activeRef.current && startedAtRef.current === 0) startedAtRef.current = t;
     const since = t - startedAtRef.current;
+
+    // Cierre del drop: todos giran y levitan al unísono durante 3s.
+    if (finaleRequestedRef.current) {
+      finaleRequestedRef.current = false;
+      startedAtRef.current = 0;
+      setFinaleSpinUntil(t + 3);
+      setLevitateUntil(t + 3);
+    }
 
     // Intensidad objetivo: pico en la explosión inicial, sostenida en la GLORIA
     const target = activeRef.current ? (since < DROP_BURST_S ? 1 : 0.62) : 0;

@@ -46,17 +46,19 @@ export const TUNING = {
     // La barra tiene que SUBIR jugando: antes decaía 1.0/s y cada HYPE DROP sólo
     // sumaba 10, así que hacía falta un drop cada 10s sólo para empatar y nunca
     // avanzaba. Ahora decae lento y cada logro suma bastante más.
-    decayPerS: 0.3,
+    decayPerS: 0.25,
     decayEscalada: 1.08, // +8% de decay por ciclo post-drop
     decayCap: 1.2,
-    porHypeDrop: 18,
-    porVip: 25,
-    porEspecial: 15,
+    // Sube un poco más rápido jugando (se pidió acelerar la carga)
+    porHypeDrop: 25,
+    porVip: 34,
+    porEspecial: 20,
     etapaMedia: 60, // ≥60 club a full; 30–60 luces al 70%
     etapaBajon: 30, // <30 = EL BAJÓN
     clubDropUmbral: 145, // cuesta más llegar al CLUB DROP (se pedía subirlo)
     umbralPorJugadorExtra: 0.3, // +30% de umbral por jugador extra presente
-    gloriaS: 25, // duración de la GLORIA
+    // El CLUB DROP dura 10s en total: 5s de celebración + 5s de GLORIA.
+    gloriaS: 5,
     postGloriaEnergia: 55,
     chillTrasSinDisparoS: 120, // modo chill tras 120s sin disparar
     chillTecho: 50, // la energía se asienta en min(actual, 50)

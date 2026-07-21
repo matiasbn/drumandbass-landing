@@ -10,7 +10,7 @@ import { useEnergy } from '../EnergyContext';
 import { playerState } from '../playerState';
 import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
-import { earthquakeActiveUntil, levitateActiveUntil } from './SpecialEffects';
+import { earthquakeActiveUntil, levitateActiveUntil, finaleSpinUntil } from './SpecialEffects';
 import { makeRoundedUnitBox, getCharacterTexture, getFaceAtlas, FACE_ATLAS_COLS } from './characterAssets';
 import { roundGate } from '../RoundContext';
 
@@ -414,7 +414,16 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       const time = s.animClock[i] * ANIM_SPEEDS[i] + ANIM_OFFSETS[i];
 
       // ── Dance state machine (los estados de gameplay la fuerzan) ──
-      if (vip || apagado) {
+      // Cierre del CLUB DROP: todos los bailarines hacen el MISMO giro.
+      if (finaleSpinUntil > elapsed) {
+        if (s.danceMove[i] !== 2) {
+          s.isDancing[i] = 1;
+          s.danceMove[i] = 2; // Spin
+          s.danceStartTime[i] = s.animClock[i];
+          s.spinStartRot[i] = s.rotY[i];
+        }
+        s.danceTimer[i] = 1; // se mantiene mientras dure el cierre
+      } else if (vip || apagado) {
         // El VIP corre y el APAGADO mira el celular: ninguno baila
         if (s.isDancing[i]) {
           s.isDancing[i] = 0;
