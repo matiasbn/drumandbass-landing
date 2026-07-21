@@ -100,6 +100,11 @@ export const SITE_EVENT_NAMES = [
   'login',
   'logout',
   'button_click',
+  // SUBIDÓN (shooter del club) — solo las 2 señales clave; el resto queda
+  // en HIDDEN_ACTIONS de analyticsLabels.ts (se trackean pero no se muestran).
+  'club_club_drop',
+  'club_session_summary',
+  'club_round_end',
   'landing_evento_view',
   'junglist_coupon_view',
   'junglist_coupon_copy',

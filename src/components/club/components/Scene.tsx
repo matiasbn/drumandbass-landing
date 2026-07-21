@@ -4,7 +4,7 @@ import React, { Suspense, MutableRefObject } from 'react';
 import { DanceFloor } from './DanceFloor';
 import { DJBooth } from './DJBooth';
 import { DJ } from './DJ';
-import { DancerGroup } from './DancerGroup';
+import { InstancedDancers } from './InstancedDancers';
 import { PlayerDancer } from './PlayerDancer';
 import { OtherPlayers } from './OtherPlayers';
 import { LogoBanner } from './LogoBanner';
@@ -16,6 +16,9 @@ import { LiveScreen } from './LiveScreen';
 import { WallChatScreen } from './WallChatScreen';
 import { StrobeWalls } from './StrobeWalls';
 import { SpecialEffects } from './SpecialEffects';
+import { ClubDropSpectacle } from './ClubDropSpectacle';
+import { Platforms } from './Platforms';
+import { Projectiles } from './Projectiles';
 
 // Toggle YouTube live chat wall screen
 const SHOW_YOUTUBE_CHAT = false;
@@ -39,15 +42,19 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, yout
       <LiveScreen isLive={isLive} youtubeVideoId={youtubeVideoId} />
       {SHOW_YOUTUBE_CHAT && isLive && youtubeVideoId && <WallChatScreen youtubeVideoId={youtubeVideoId} />}
       <DanceFloor />
+      <Platforms />
       <StrobeWalls isPlayingRef={isPlayingRef} />
       <DJBooth />
       <DJ isPlayingRef={isPlayingRef} />
-      <DancerGroup isPlayingRef={isPlayingRef} />
+      <InstancedDancers isPlayingRef={isPlayingRef} />
       <PlayerDancer isPlayingRef={isPlayingRef} />
       <OtherPlayers isPlayingRef={isPlayingRef} />
       <StageElements isPlayingRef={isPlayingRef} />
       <JungleDecor isPlayingRef={isPlayingRef} />
       <SpecialEffects />
+      {/* Celebración del CLUB DROP: piso arcoíris, haces de luz y levitación */}
+      <ClubDropSpectacle />
+      <Projectiles />
     </>
   );
 };

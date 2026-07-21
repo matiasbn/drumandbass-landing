@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { getCostume, resolveColor, CostumeId, CostumeExtra } from './costumes';
 import { getAccessory, AccessoryPiece } from './accessories';
 import { useFaceTexture } from './useFaceTexture';
+import { getSharedRoundedUnitBox, getCharacterTexture } from './characterAssets';
 
 interface CharacterMeshProps {
   playerColor: string;
@@ -145,15 +146,21 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
   const headExtras = costume.extras.filter(e => e.attachTo === 'head');
   const rootExtras = costume.extras.filter(e => e.attachTo === 'root');
 
+  // Geometría redondeada unidad compartida (menos cuadrada) escalada por parte,
+  // y textura para dar detalle a los personajes.
+  const roundedUnit = getSharedRoundedUnitBox();
+  const charTex = getCharacterTexture();
+
   return (
     <>
       {/* Body */}
-      <mesh position={[0, 1, 0]} castShadow>
-        <boxGeometry args={bodySize as [number, number, number]} />
-        <meshStandardMaterial color={bodyColor} emissive={bodyColor} emissiveIntensity={0.3} />
+      <mesh position={[0, 1, 0]} scale={bodySize as [number, number, number]} geometry={roundedUnit} castShadow>
+        <meshStandardMaterial map={charTex ?? undefined} color={bodyColor} emissive={bodyColor} emissiveIntensity={0.3} />
       </mesh>
 
-      {/* Head group */}
+      {/* Head group. La cabeza es una caja NÍTIDA (no redondeada) a propósito: la
+          cara es un plano pegado al frente y la geometría redondeada rompía su
+          alineación/visibilidad. Cuerpo y extremidades sí van redondeados. */}
       <group ref={headRef} position={[0, 1.5, 0]}>
         <mesh castShadow>
           <boxGeometry args={[0.32, 0.38, 0.3]} />
@@ -178,24 +185,20 @@ export const CharacterMesh: React.FC<CharacterMeshProps> = ({
       {/* Arms (hidden for some costumes like banana) */}
       {!costume.hideArms && (
         <>
-          <mesh ref={leftArmRef} position={[-0.32, 1.1, 0]} castShadow>
-            <boxGeometry args={[0.12, 0.5, 0.12]} />
+          <mesh ref={leftArmRef} position={[-0.32, 1.1, 0]} scale={[0.12, 0.5, 0.12]} geometry={roundedUnit} castShadow>
             <meshStandardMaterial color={armColor} emissive={armColor} emissiveIntensity={isDefault ? 0 : 0.25} />
           </mesh>
-          <mesh ref={rightArmRef} position={[0.32, 1.1, 0]} castShadow>
-            <boxGeometry args={[0.12, 0.5, 0.12]} />
+          <mesh ref={rightArmRef} position={[0.32, 1.1, 0]} scale={[0.12, 0.5, 0.12]} geometry={roundedUnit} castShadow>
             <meshStandardMaterial color={armColor} emissive={armColor} emissiveIntensity={isDefault ? 0 : 0.25} />
           </mesh>
         </>
       )}
 
       {/* Legs */}
-      <mesh ref={leftLegRef} position={[-0.12, 0.35, 0]} castShadow>
-        <boxGeometry args={[0.15, 0.6, 0.15]} />
+      <mesh ref={leftLegRef} position={[-0.12, 0.35, 0]} scale={[0.15, 0.6, 0.15]} geometry={roundedUnit} castShadow>
         <meshStandardMaterial color={legColor} emissive={legColor} emissiveIntensity={isDefault ? 0 : 0.15} />
       </mesh>
-      <mesh ref={rightLegRef} position={[0.12, 0.35, 0]} castShadow>
-        <boxGeometry args={[0.15, 0.6, 0.15]} />
+      <mesh ref={rightLegRef} position={[0.12, 0.35, 0]} scale={[0.15, 0.6, 0.15]} geometry={roundedUnit} castShadow>
         <meshStandardMaterial color={legColor} emissive={legColor} emissiveIntensity={isDefault ? 0 : 0.15} />
       </mesh>
 

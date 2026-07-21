@@ -1,14 +1,32 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuth } from './AuthContext';
+import { TUNING } from './tuning';
+
+/**
+ * Capa broadcast del shooter (SUBIDÓN §5) — eventos ligeros fire-and-forget
+ * sobre el MISMO canal 'nightclub' (la lógica de presence queda intacta).
+ * Todo es cosmético/reconciliable: sin fiabilidad, sin estado por frame.
+ */
+export type ClubFxPayload =
+  | { kind: 'shot'; from: string; pos: [number, number, number]; dir: [number, number, number]; color: string }
+  | { kind: 'grenade'; from: string; pos: [number, number, number]; dir: [number, number, number]; color: string; speed: number; charge: number }
+  | { kind: 'energy'; from: string; value: number; ts: number }
+  | { kind: 'hype_drop'; from: string }
+  | { kind: 'club_drop'; from: string }
+  | { kind: 'bump'; from: string; to: string }
+  | { kind: 'round_score'; from: string; round: number; score: number };
+
+export type ClubFxListener = (fx: ClubFxPayload) => void;
 
 export interface PlayerState {
   id: string;
   username: string;
   x: number;
+  y: number;
   z: number;
   rotation: number;
   color: string;
@@ -26,7 +44,7 @@ interface MultiplayerContextType {
   localPlayerId: string | null;
   username: string | null;
   setUsername: (name: string) => void;
-  updatePosition: (x: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
+  updatePosition: (x: number, y: number, z: number, rotation: number, danceMove?: number, jumping?: boolean) => void;
   sendChatBubble: (message: string) => void;
   lastMessage: string | null;
   lastMessageAt: number | null;
@@ -35,6 +53,10 @@ interface MultiplayerContextType {
   faceType?: number;
   costumeId?: string;
   accessoryId?: string;
+  /** Broadcast fire-and-forget de FX del shooter (throttle 8 msg/s) — §5 */
+  sendClubFx: (payload: ClubFxPayload) => void;
+  /** Suscripción a FX remotos (Set en ref, cero re-renders); devuelve unsubscribe */
+  subscribeClubFx: (listener: ClubFxListener) => () => void;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextType | null>(null);
@@ -66,6 +88,33 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const positionRef = useRef({ x: 0, z: 2, rotation: 0, danceMove: 0, jumping: false });
+
+  // ── Capa broadcast del shooter (§5) — solo AÑADE; presence intacta ──
+  const clubFxListenersRef = useRef<Set<ClubFxListener>>(new Set());
+  // Throttle simple por ventana de 1s (límite TUNING.multi.broadcastMaxPerS)
+  const fxWindowRef = useRef({ start: 0, count: 0 });
+
+  const sendClubFx = useCallback((payload: ClubFxPayload) => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    const now = Date.now();
+    const win = fxWindowRef.current;
+    if (now - win.start >= 1000) {
+      win.start = now;
+      win.count = 0;
+    }
+    if (win.count >= TUNING.multi.broadcastMaxPerS) return; // se descarta: es cosmético
+    win.count++;
+    // Fire-and-forget: sin await, sin reintentos
+    void channel.send({ type: 'broadcast', event: 'club_fx', payload });
+  }, []);
+
+  const subscribeClubFx = useCallback((listener: ClubFxListener) => {
+    clubFxListenersRef.current.add(listener);
+    return () => {
+      clubFxListenersRef.current.delete(listener);
+    };
+  }, []);
 
   const setUsername = useCallback((name: string) => {
     localStorage.setItem('dnbchile_username', name);
@@ -128,6 +177,12 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
           return next;
         });
       })
+      // Capa broadcast del shooter (§5): FX cosméticos, sin echo propio (self: false)
+      .on('broadcast', { event: 'club_fx' }, ({ payload }) => {
+        const fx = payload as ClubFxPayload;
+        if (!fx || typeof fx !== 'object' || !('kind' in fx)) return;
+        clubFxListenersRef.current.forEach(fn => fn(fx));
+      })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           await channel.track({
@@ -157,7 +212,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, [username, localPlayerId, playerColor, faceType, costumeId, accessoryId]);
 
-  const updatePosition = useCallback((x: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
+  const updatePosition = useCallback((x: number, y: number, z: number, rotation: number, danceMove = 0, jumping = false) => {
     positionRef.current = { x, z, rotation, danceMove, jumping };
 
     if (channelRef.current && username) {
@@ -165,6 +220,7 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
         id: localPlayerId,
         username,
         x,
+        y,
         z,
         rotation,
         color: playerColor,
@@ -203,24 +259,28 @@ export const MultiplayerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [localPlayerId, username, playerColor, faceType, costumeId, accessoryId]);
 
+  const contextValue = useMemo(() => ({
+    players,
+    localPlayerId,
+    username,
+    setUsername,
+    updatePosition,
+    sendChatBubble,
+    lastMessage,
+    lastMessageAt,
+    isConnected,
+    playerColor,
+    faceType,
+    costumeId,
+    accessoryId,
+    sendClubFx,
+    subscribeClubFx,
+  }), [players, localPlayerId, username, setUsername, updatePosition, sendChatBubble,
+       lastMessage, lastMessageAt, isConnected, playerColor, faceType, costumeId, accessoryId,
+       sendClubFx, subscribeClubFx]);
+
   return (
-    <MultiplayerContext.Provider
-      value={{
-        players,
-        localPlayerId,
-        username,
-        setUsername,
-        updatePosition,
-        sendChatBubble,
-        lastMessage,
-        lastMessageAt,
-        isConnected,
-        playerColor,
-        faceType,
-        costumeId,
-        accessoryId,
-      }}
-    >
+    <MultiplayerContext.Provider value={contextValue}>
       {children}
     </MultiplayerContext.Provider>
   );
