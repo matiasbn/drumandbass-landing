@@ -116,14 +116,30 @@ export default function JunglistClient() {
     const data = await jRes.json().catch(() => ({}));
     const pkData = await pkRes.json().catch(() => ({}));
 
+    // Si llegó desde un evento (?next=) y YA es junglist/DJ, no tiene nada que
+    // registrar: se le devuelve al evento, donde la landing le dará el feedback
+    // (su código, o que no hay descuento para su perfil). Leemos el param acá
+    // para no depender del estado nextUrl (que se setea en otro efecto).
+    const back = readNext();
+
     // Un DJ ya es junglist (por unión): no se le pide registro junglist.
     if (pkData.profile) {
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('dj');
       return;
     }
 
     if (data.junglist) {
       setJunglist(data.junglist);
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('profile');
     } else {
       // Prellenar nombre/apellido con datos de la propia cuenta de Google (no de nuestra DB).

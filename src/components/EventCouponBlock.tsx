@@ -179,8 +179,35 @@ export default function EventCouponBlock({
 
   if (state.kind === 'loading') return null;
 
-  // No hay descuento que ofrecerle: solo la landing del evento.
-  if (state.kind === 'no_coupon' || (state.kind !== 'ok' && !canGetCoupon)) return null;
+  // Ya es junglist pero a su perfil no le toca descuento (p. ej. es solo para
+  // nuevos). Se le da feedback claro en vez de silencio: sabe que es miembro y
+  // que acá no hay nada que canjear. No bloquea la página.
+  if (state.kind === 'no_coupon') {
+    return (
+      <section
+        data-section="Descuento Junglist"
+        className="p-6 lg:p-12 border-b-4 border-black bg-black text-white"
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <RiCoupon3Line size={28} />
+          <h2 className="text-2xl lg:text-4xl font-black uppercase italic">Ya eres Junglist ✓</h2>
+        </div>
+        <p className="mono text-sm lg:text-base font-bold uppercase leading-tight opacity-80">
+          Este evento tiene descuento solo para otro perfil de Junglist, así que esta vez no hay
+          código para ti. Igual nos vemos en la pista.
+        </p>
+        {userEmail && (
+          <p className="mono text-xs mt-4 opacity-60">
+            Conectado como <strong>{userEmail}</strong>
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  // No es junglist y no hay nada que ofrecerle (el cupón no aplica a su caso):
+  // solo la landing del evento.
+  if (state.kind !== 'ok' && !canGetCoupon) return null;
 
   // Ya es junglist y tiene código: se muestra en la página, sin bloquearla.
   if (state.kind === 'ok') {
