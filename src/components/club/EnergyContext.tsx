@@ -46,6 +46,10 @@ interface EnergyContextType {
   stageRef: React.MutableRefObject<EnergyStage>;
   /** true durante los 25s de GLORIA post CLUB DROP */
   gloriaActiveRef: React.MutableRefObject<boolean>;
+  /** true durante toda la celebración del CLUB DROP (5s) + GLORIA */
+  dropActiveRef: React.MutableRefObject<boolean>;
+  /** Epoch (ms) en que termina la celebración — para el contador del HUD */
+  dropEndsAtRef: React.MutableRefObject<number>;
   /** Multiplicador de hype vigente (1 normal, x2 ventana, x3 DROP INMINENTE) */
   hypeMultRef: React.MutableRefObject<number>;
   /** true en modo chill (120s sin disparar) */
@@ -297,6 +301,8 @@ export const EnergyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     umbralRef,
     stageRef,
     gloriaActiveRef,
+    dropActiveRef,
+    dropEndsAtRef: gloriaEndAtRef,
     hypeMultRef,
     chillRef,
     addEnergy,

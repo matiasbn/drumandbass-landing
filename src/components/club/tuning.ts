@@ -54,7 +54,7 @@ export const TUNING = {
     porEspecial: 15,
     etapaMedia: 60, // ≥60 club a full; 30–60 luces al 70%
     etapaBajon: 30, // <30 = EL BAJÓN
-    clubDropUmbral: 100,
+    clubDropUmbral: 145, // cuesta más llegar al CLUB DROP (se pedía subirlo)
     umbralPorJugadorExtra: 0.3, // +30% de umbral por jugador extra presente
     gloriaS: 25, // duración de la GLORIA
     postGloriaEnergia: 55,

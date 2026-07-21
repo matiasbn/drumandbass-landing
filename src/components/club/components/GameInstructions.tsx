@@ -59,12 +59,15 @@ export const GameInstructions: React.FC = () => {
           <section>
             <h3 className="text-[#00ff41] text-sm mb-2">CONTROLES</h3>
             <div className="space-y-1 text-white/70">
-              <Row keys="WASD" desc="Moverte por el club" />
+              <Row keys="WASD" desc="Moverte por el club (A/D de costado)" />
+              <Row keys="← →" desc="Girar · ↑ ↓ avanzar y retroceder" />
               <Row keys="Mouse" desc="Apuntar (click para capturar el mouse)" />
               <Row keys="Click Izq" desc="Disparar energía" />
               <Row keys="Click Der" desc="Bomba de Bajo: mantener para cargar, soltar para lanzar" />
               <Row keys="Espacio" desc="Saltar (doble salto en el aire)" />
               <Row keys="1-5" desc="Bailes (bailar cerca de un NPC frena su bajón)" />
+              <Row keys="6-0" desc="Movimientos especiales (según los que tengas desbloqueados)" />
+              <Row keys="Q" desc="Saludar a un jugador cercano" />
               <Row keys="ESC" desc="Soltar el mouse" />
             </div>
           </section>

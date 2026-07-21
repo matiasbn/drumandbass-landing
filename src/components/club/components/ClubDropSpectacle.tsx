@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useEnergy } from '../EnergyContext';
 import { setLevitateUntil } from './SpecialEffects';
+import { MAT_BODY, MAT_NEON } from '../materials';
 
 // ═══ CLUB DROP: el momento de "lo logramos" ═══════════════════════════
 // Cuando la Energía del Club llega al máximo tiene que notarse. Esto monta
@@ -59,6 +60,26 @@ const floorFragment = /* glsl */ `
   }
 `;
 
+// Banda que rodea TODO el club: luces que corren por el perímetro.
+const bandFragment = /* glsl */ `
+  uniform float uTime;
+  uniform float uIntensity;
+  varying vec2 vUv;
+
+  vec3 hue(float h) {
+    return 0.5 + 0.5 * cos(6.28318 * (h + vec3(0.0, 0.33, 0.67)));
+  }
+
+  void main() {
+    // vUv.x recorre el perímetro; vUv.y va de abajo (0) a arriba (1)
+    float chase = fract(vUv.x * 6.0 - uTime * 0.9);      // luces que corren
+    float pulse = smoothstep(0.0, 0.35, chase) * smoothstep(0.75, 0.4, chase);
+    float vFade = smoothstep(1.0, 0.15, vUv.y);           // se apaga hacia arriba
+    vec3 col = hue(vUv.x * 2.0 - uTime * 0.25) * (0.55 + pulse * 1.5);
+    gl_FragColor = vec4(col, (0.16 + pulse * 0.7) * vFade * uIntensity);
+  }
+`;
+
 export const ClubDropSpectacle: React.FC = () => {
   const { subscribe } = useEnergy();
 
@@ -77,6 +98,24 @@ export const ClubDropSpectacle: React.FC = () => {
     () => ({ uTime: { value: 0 }, uIntensity: { value: 0 } }),
     [],
   );
+  const bandUniforms = useMemo(
+    () => ({ uTime: { value: 0 }, uIntensity: { value: 0 } }),
+    [],
+  );
+  const bandMatRef = useRef<THREE.ShaderMaterial>(null);
+
+  // Colores originales de las superficies compartidas, para restaurarlos al
+  // terminar el drop (durante el drop TODO el club cambia de color).
+  const baseSurface = useMemo(
+    () => ({
+      bodyEmissive: MAT_BODY.emissive.clone(),
+      bodyIntensity: MAT_BODY.emissiveIntensity,
+      neon: MAT_NEON.color.clone(),
+    }),
+    [],
+  );
+  const surfaceTintedRef = useRef(false);
+  const _tmpColor = useMemo(() => new THREE.Color(), []);
 
   // Colores de los haces (paleta neón del club)
   const beamColors = useMemo(
@@ -110,7 +149,16 @@ export const ClubDropSpectacle: React.FC = () => {
 
     const vis = intensityRef.current > 0.01;
     group.visible = vis;
-    if (!vis) return;
+    if (!vis) {
+      // Terminó: devuelve las superficies del club a sus colores normales.
+      if (surfaceTintedRef.current) {
+        surfaceTintedRef.current = false;
+        MAT_NEON.color.copy(baseSurface.neon);
+        MAT_BODY.emissive.copy(baseSurface.bodyEmissive);
+        MAT_BODY.emissiveIntensity = baseSurface.bodyIntensity;
+      }
+      return;
+    }
 
     // Todos levitan mientras dura el espectáculo
     if (activeRef.current) setLevitateUntil(t + 0.2);
@@ -120,6 +168,21 @@ export const ClubDropSpectacle: React.FC = () => {
       floorMatRef.current.uniforms.uTime.value = t;
       floorMatRef.current.uniforms.uIntensity.value = intensityRef.current;
     }
+    // Banda perimetral (rodea todo el club)
+    if (bandMatRef.current) {
+      bandMatRef.current.uniforms.uTime.value = t;
+      bandMatRef.current.uniforms.uIntensity.value = intensityRef.current;
+    }
+
+    // Las SUPERFICIES del club (plataformas, escenario, bordes neón) cambian de
+    // color: se recorre el arcoíris sobre los materiales compartidos.
+    const hueT = (t * 0.25) % 1;
+    _tmpColor.setHSL(hueT, 1, 0.55);
+    MAT_NEON.color.copy(_tmpColor).lerp(baseSurface.neon, 1 - intensityRef.current);
+    _tmpColor.setHSL((hueT + 0.5) % 1, 0.9, 0.28);
+    MAT_BODY.emissive.copy(_tmpColor).lerp(baseSurface.bodyEmissive, 1 - intensityRef.current);
+    MAT_BODY.emissiveIntensity = baseSurface.bodyIntensity + intensityRef.current * 1.2;
+    surfaceTintedRef.current = true;
 
     // Haces girando
     if (beamsRef.current) {
@@ -179,7 +242,22 @@ export const ClubDropSpectacle: React.FC = () => {
         })}
       </group>
 
-      {/* 3. Anillo de choque desde el centro */}
+      {/* 3. Banda de luces corriendo alrededor de TODO el club */}
+      <mesh position={[0, 4.2, 0]}>
+        <cylinderGeometry args={[23, 23, 8.4, 64, 1, true]} />
+        <shaderMaterial
+          ref={bandMatRef}
+          vertexShader={floorVertex}
+          fragmentShader={bandFragment}
+          uniforms={bandUniforms}
+          transparent
+          depthWrite={false}
+          side={THREE.BackSide}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+
+      {/* 4. Anillo de choque desde el centro */}
       <mesh ref={ringRef} position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.9, 1, 64]} />
         <meshBasicMaterial

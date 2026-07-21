@@ -11,7 +11,7 @@ import { playerState } from '../playerState';
 import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
 import { earthquakeActiveUntil, levitateActiveUntil } from './SpecialEffects';
-import { makeRoundedUnitBox, getCharacterTexture } from './characterAssets';
+import { makeRoundedUnitBox, getCharacterTexture, getFaceAtlas, FACE_ATLAS_COLS } from './characterAssets';
 
 // ─── NPC configuration ───────────────────────────────────────────────
 const NPC_COUNT = 16;
@@ -235,6 +235,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
   const rightLegRef = useRef<THREE.InstancedMesh>(null);
 
   // Instanced hype bars (2 meshes: bg + fill)
+  const faceRef = useRef<THREE.InstancedMesh>(null);
   const barBgRef = useRef<THREE.InstancedMesh>(null);
   const barFillRef = useRef<THREE.InstancedMesh>(null);
 
@@ -288,12 +289,55 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     const tex = getCharacterTexture();
     return new THREE.MeshBasicMaterial({ map: tex ?? undefined, toneMapped: false });
   }, []);
+  // Caras de los bailarines: un plano por bot con un ATLAS 4×4 de 16 rostros.
+  // Cada instancia elige su celda con un offset de UV (atributo por instancia),
+  // así los 16 rostros distintos cuestan UNA sola draw call.
+  const faceGeo = useMemo(() => {
+    const g = new THREE.PlaneGeometry(1, 1);
+    const off = new Float32Array(NPC_COUNT * 2);
+    const cells = FACE_ATLAS_COLS * FACE_ATLAS_COLS;
+    for (let i = 0; i < NPC_COUNT; i++) {
+      const cell = i % cells;
+      const col = cell % FACE_ATLAS_COLS;
+      const row = Math.floor(cell / FACE_ATLAS_COLS);
+      off[i * 2] = col / FACE_ATLAS_COLS;
+      // La textura de canvas viene con flipY: la fila 0 (arriba) es v alta
+      off[i * 2 + 1] = 1 - (row + 1) / FACE_ATLAS_COLS;
+    }
+    g.setAttribute('aFaceOffset', new THREE.InstancedBufferAttribute(off, 2));
+    return g;
+  }, []);
+
+  const faceMat = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({
+      map: getFaceAtlas() ?? undefined,
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    // Desplaza las UV a la celda del atlas que le toca a cada instancia.
+    m.onBeforeCompile = (shader) => {
+      shader.vertexShader =
+        'attribute vec2 aFaceOffset;\n' +
+        shader.vertexShader.replace(
+          '#include <uv_vertex>',
+          `#include <uv_vertex>
+          #ifdef USE_MAP
+            vMapUv = vMapUv / ${FACE_ATLAS_COLS}.0 + aFaceOffset;
+          #endif`,
+        );
+    };
+    return m;
+  }, []);
+
   useEffect(() => {
     return () => {
       roundedGeo.dispose();
       charMat.dispose();
+      faceGeo.dispose();
+      faceMat.dispose();
     };
-  }, [roundedGeo, charMat]);
+  }, [roundedGeo, charMat, faceGeo, faceMat]);
 
   // Set instance colors once on mount
   const colorsSet = useRef(false);
@@ -308,8 +352,9 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     const rLeg = rightLegRef.current;
     const barBg = barBgRef.current;
     const barFill = barFillRef.current;
+    const face = faceRef.current;
 
-    if (!body || !head || !lArm || !rArm || !lLeg || !rLeg || !barBg || !barFill) return;
+    if (!body || !head || !lArm || !rArm || !lLeg || !rLeg || !barBg || !barFill || !face) return;
 
     // Set colors once. OJO: siempre con .slice() — los buffers se REESCRIBEN por
     // frame con los colores de estado (M3/M7) y `bodyColors` es la paleta base.
@@ -717,6 +762,17 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       // Head: at [0, headLocalY, 0] relative
       setInstance(head, i, s.posX[i] + Math.sin(bodyRY) * 0 , posY + headLocalY * scH, s.posZ[i], headRX, bodyRY, headRZ, 0.3 * scW, 0.35 * scH, 0.28 * scW);
 
+      // Cara: plano pegado al frente de la cabeza, mirando hacia adelante.
+      const faceOff = 0.14 * scW + 0.013;
+      setInstance(
+        face, i,
+        s.posX[i] + Math.sin(bodyRY) * faceOff,
+        posY + headLocalY * scH,
+        s.posZ[i] + Math.cos(bodyRY) * faceOff,
+        headRX, bodyRY, headRZ,
+        0.26 * scW, 0.3 * scH, 1,
+      );
+
       // Arms: offset from body center, need to account for group rotation
       const cosR = Math.cos(bodyRY);
       const sinR = Math.sin(bodyRY);
@@ -825,6 +881,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     rLeg.instanceMatrix.needsUpdate = true;
     barBg.instanceMatrix.needsUpdate = true;
     barFill.instanceMatrix.needsUpdate = true;
+    face.instanceMatrix.needsUpdate = true;
 
     // Colores por estado: subir los buffers (16 instancias — costo trivial)
     bodyCol.needsUpdate = true;
@@ -845,6 +902,8 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       <instancedMesh ref={rightArmRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
       <instancedMesh ref={leftLegRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
       <instancedMesh ref={rightLegRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      {/* Caras: 16 rostros distintos desde un atlas, en una sola draw call */}
+      <instancedMesh ref={faceRef} args={[faceGeo, faceMat, NPC_COUNT]} frustumCulled={false} />
 
       {/* Hype bar backgrounds */}
       <instancedMesh ref={barBgRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>

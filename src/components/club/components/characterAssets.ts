@@ -24,6 +24,98 @@ export function getSharedRoundedUnitBox(): THREE.BufferGeometry {
   return _sharedUnit;
 }
 
+// ─── Atlas de CARAS para los bailarines instanciados ──────────────────
+// 4×4 = 16 caras distintas (una por bot) en una sola textura. Cada instancia
+// elige su celda con un desplazamiento de UV, así los 16 rostros se dibujan
+// en UNA sola draw call. Fondo transparente: se ve el tono de piel debajo.
+export const FACE_ATLAS_COLS = 4;
+const FACE_CELL = 128;
+
+let _faceAtlas: THREE.CanvasTexture | null = null;
+
+export function getFaceAtlas(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  if (_faceAtlas) return _faceAtlas;
+
+  const size = FACE_CELL * FACE_ATLAS_COLS;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const ink = '#15151c';
+  for (let i = 0; i < FACE_ATLAS_COLS * FACE_ATLAS_COLS; i++) {
+    const cx = (i % FACE_ATLAS_COLS) * FACE_CELL;
+    const cy = Math.floor(i / FACE_ATLAS_COLS) * FACE_CELL;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const eyeY = 46 + (i % 3) * 4;
+    const eyeDx = 26 + (i % 4) * 3;
+    const eyeStyle = i % 4; // 0 punto · 1 cuadrado · 2 raya · 3 anteojos
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+
+    if (eyeStyle === 3) {
+      // Anteojos de fiesta
+      ctx.fillRect(64 - eyeDx - 16, eyeY - 11, 32, 22);
+      ctx.fillRect(64 + eyeDx - 16, eyeY - 11, 32, 22);
+      ctx.beginPath();
+      ctx.moveTo(64 - eyeDx + 16, eyeY);
+      ctx.lineTo(64 + eyeDx - 16, eyeY);
+      ctx.stroke();
+    } else {
+      for (const sx of [-1, 1]) {
+        const ex = 64 + sx * eyeDx;
+        if (eyeStyle === 0) {
+          ctx.beginPath();
+          ctx.arc(ex, eyeY, 8, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (eyeStyle === 1) {
+          ctx.fillRect(ex - 7, eyeY - 8, 14, 16);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(ex - 9, eyeY);
+          ctx.lineTo(ex + 9, eyeY);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Boca: sonrisa, raya, "o" o lengua fuera
+    const mouth = Math.floor(i / 4) % 4;
+    const my = 88;
+    ctx.beginPath();
+    if (mouth === 0) {
+      ctx.arc(64, my - 8, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    } else if (mouth === 1) {
+      ctx.moveTo(50, my);
+      ctx.lineTo(78, my);
+      ctx.stroke();
+    } else if (mouth === 2) {
+      ctx.arc(64, my, 10, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.arc(64, my - 6, 14, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+      ctx.fillStyle = '#ff5c8a';
+      ctx.beginPath();
+      ctx.arc(64, my + 6, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _faceAtlas = tex;
+  return tex;
+}
+
 // Textura procedural compartida (una sola, cacheada). Gris con un degradado
 // vertical (más claro arriba, más oscuro abajo) que hace de sombreado falso
 // para dar forma sobre un material sin luces, más un tejido sutil de líneas

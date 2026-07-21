@@ -170,7 +170,7 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     lastMessageAt,
     players,
   } = useMultiplayer();
-  const { scoreAction, setPlayerPosition } = useScore();
+  const { scoreAction, setPlayerPosition, useSpecial } = useScore();
   const { shoot, throwGrenade, checkHits } = useProjectiles();
   const { positions: npcPositions } = useNpcPositions();
   const { playerPosRef: camPlayerPosRef, cameraYawRef, cameraPitchRef, pointerLockedRef } = useCamera();
@@ -250,6 +250,8 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   scoreActionRef.current = scoreAction;
   const setPlayerPositionRef = useRef(setPlayerPosition);
   setPlayerPositionRef.current = setPlayerPosition;
+  const useSpecialRef = useRef(useSpecial);
+  useSpecialRef.current = useSpecial;
 
   const keysRef = useRef({
     forward: false,
@@ -356,11 +358,27 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           danceStartRef.current = frozenTimeRef.current;
           lastDanceScoreSecondRef.current = 0;
           break;
-        case '6':
         case 'q':
         case 'Q':
-          // Wave at nearby player
+          // Saludo a un jugador cercano (antes estaba en la tecla 6)
           scoreActionRef.current('wave', 'Wave');
+          break;
+        // Teclas 6-0 → los 5 movimientos especiales (Onda, Spotlight,
+        // Confetti, Levitar, Terremoto). useSpecial valida desbloqueo y cargas.
+        case '6':
+          useSpecialRef.current(0);
+          break;
+        case '7':
+          useSpecialRef.current(1);
+          break;
+        case '8':
+          useSpecialRef.current(2);
+          break;
+        case '9':
+          useSpecialRef.current(3);
+          break;
+        case '0':
+          useSpecialRef.current(4);
           break;
       }
     };

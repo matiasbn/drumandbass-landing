@@ -20,7 +20,7 @@ const STAGE_UI: Record<EnergyStage, { color: string; label: string }> = {
 };
 
 const ClubEnergyHUD: React.FC = () => {
-  const { energyRef, umbralRef, stageRef, chillRef, subscribe } = useEnergy();
+  const { energyRef, umbralRef, stageRef, chillRef, dropActiveRef, dropEndsAtRef, subscribe } = useEnergy();
   const { liveTitle } = useLive();
   const { profile } = useAuth();
 
@@ -36,6 +36,7 @@ const ClubEnergyHUD: React.FC = () => {
   const fillRef = useRef<HTMLDivElement>(null);
   const pctRef = useRef<HTMLSpanElement>(null);
   const vipRef = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -82,6 +83,7 @@ const ClubEnergyHUD: React.FC = () => {
     let raf = 0;
     let lastPct = -1;
     let lastVipSec = -1;
+    let lastDropSec = -1;
     const tick = () => {
       const pct = Math.round((energyRef.current / umbralRef.current) * 100);
       if (pct !== lastPct) {
@@ -99,11 +101,21 @@ const ClubEnergyHUD: React.FC = () => {
           if (vipSec > 0) vipRef.current.textContent = `★ VIP EN LA PISTA — 3 hits · ${vipSec}s`;
         }
       }
+      // Contador de lo que queda del CLUB DROP (celebración + GLORIA)
+      const dropLeft = dropActiveRef.current ? dropEndsAtRef.current - Date.now() : 0;
+      const dropSec = dropLeft > 0 ? Math.ceil(dropLeft / 1000) : 0;
+      if (dropSec !== lastDropSec) {
+        lastDropSec = dropSec;
+        if (dropRef.current) {
+          dropRef.current.style.display = dropSec > 0 ? 'block' : 'none';
+          if (dropSec > 0) dropRef.current.textContent = `★ CLUB DROP — ${dropSec}s`;
+        }
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [energyRef, umbralRef]);
+  }, [energyRef, umbralRef, dropActiveRef, dropEndsAtRef]);
 
   const ui = STAGE_UI[stage];
   const barColor = gloria ? '#ffdd00' : ui.color;
@@ -166,6 +178,13 @@ const ClubEnergyHUD: React.FC = () => {
         <div
           ref={vipRef}
           className="mt-2 px-3 py-1.5 text-center text-[10px] bg-black/80 backdrop-blur border border-[#ffdd00]/60 text-[#ffdd00] tabular-nums"
+          style={{ display: 'none' }}
+        />
+
+        {/* Cuánto queda del CLUB DROP (celebración + GLORIA) */}
+        <div
+          ref={dropRef}
+          className="mt-2 px-3 py-2 text-center text-sm font-black tracking-wider bg-black/85 backdrop-blur border-2 border-[#ff00ff]/70 text-white tabular-nums shadow-[0_0_25px_rgba(255,0,255,0.5)]"
           style={{ display: 'none' }}
         />
 
