@@ -4,7 +4,7 @@
 // OJO: esto NO marca el club como "en vivo". `isLive` sigue reflejando una
 // transmisión real (de ahí dependen los rounds y el chat del live); este video
 // es sólo ambiente.
-export const DEFAULT_CLUB_VIDEO_ID = '6DPls9WctrY';
+export const DEFAULT_CLUB_VIDEO_ID = 'Cwq3AFyV044';
 
-/** Segundo en el que arranca el video por defecto (1:34). */
-export const DEFAULT_CLUB_VIDEO_START = 94;
+/** Segundo en el que arranca el video por defecto (desde el comienzo). */
+export const DEFAULT_CLUB_VIDEO_START = 0;
