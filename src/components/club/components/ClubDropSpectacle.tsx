@@ -16,7 +16,7 @@ import { MAT_BODY, MAT_NEON } from '../materials';
 //   3. Un anillo de choque que sale disparado desde el centro.
 // Además hace LEVITAR a todos (jugador y bailarines) mientras dura.
 
-const FLOOR_SIZE = 44; // cubre la pista ampliada
+const FLOOR_SIZE = 48; // cubre toda la pista ampliada (piso ±22)
 const BEAM_COUNT = 10;
 const DROP_BURST_S = 5; // parte intensa (celebración) antes de la GLORIA
 
@@ -244,7 +244,7 @@ export const ClubDropSpectacle: React.FC = () => {
 
       {/* 3. Banda de luces corriendo alrededor de TODO el club */}
       <mesh position={[0, 4.2, 0]}>
-        <cylinderGeometry args={[23, 23, 8.4, 64, 1, true]} />
+        <cylinderGeometry args={[24, 24, 8.4, 64, 1, true]} />
         <shaderMaterial
           ref={bandMatRef}
           vertexShader={floorVertex}

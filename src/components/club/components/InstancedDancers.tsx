@@ -46,7 +46,7 @@ const ANIM_SPEEDS = [1.1, 0.9, 1.2, 0.85, 1.0, 1.15, 0.95, 1.05, 0.95, 1.1, 0.9,
 // ─── Constants ───────────────────────────────────────────────────────
 const SHOOT_INTERVAL_MIN = 1.4; // ráfagas más seguidas (feel de bot de shooter)
 const SHOOT_INTERVAL_MAX = 3.8;
-const WANDER_BOUNDS = { minX: -17, maxX: 17, minZ: -17, maxZ: 17 };
+const WANDER_BOUNDS = { minX: -20.5, maxX: 20.5, minZ: -20.5, maxZ: 20.5 };
 const ARRIVAL_THRESHOLD = 0.3;
 const DANCE_COUNT = 4;
 const DANCE_DURATION_MIN = 1.5; // bailan poco: son bots, no estatuas
