@@ -271,12 +271,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const _upVec = useRef(new THREE.Vector3(0, 1, 0));
   const _hitMapRef = useRef(new Map<string, { x: number; y: number; z: number }>());
 
-  const BOUNDS = {
-    minX: -14,
-    maxX: 14,
-    minZ: -14,
-    maxZ: 14,
-  };
+  // Límites del jugador = los del mapa. Antes estaban hardcodeados en ±14
+  // (el borde de neón), así que el jugador se frenaba muy adentro mientras los
+  // bots sí llegaban al borde del piso.
+  const BOUNDS = MAP.bounds;
 
   const BASE_JUMP_HEIGHT = 0.15; // amplitud del bob de baile (visual, no física)
 

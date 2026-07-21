@@ -12,6 +12,7 @@ import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
 import { earthquakeActiveUntil, levitateActiveUntil } from './SpecialEffects';
 import { makeRoundedUnitBox, getCharacterTexture, getFaceAtlas, FACE_ATLAS_COLS } from './characterAssets';
+import { roundGate } from '../RoundContext';
 
 // ─── NPC configuration ───────────────────────────────────────────────
 const NPC_COUNT = 16;
@@ -457,7 +458,12 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       // Velocidad por estado: VIP corre, APAGADO arrastra los pies, BAJÓN algo lento
       const speedFactor = vip ? TUNING.vip.speedMult : apagado ? 0.65 : bajon ? 0.85 : 1;
 
-      if (!s.isDancing[i]) {
+      // Entre rounds (cuenta atrás y pantalla de ganadores) los bots también se
+      // congelan: ni se desplazan ni disparan, igual que el jugador.
+      if (!roundGate.canPlay) {
+        s.velX[i] = 0;
+        s.velZ[i] = 0;
+      } else if (!s.isDancing[i]) {
         // Reacción: si acaba de recibir un impacto, esquiva de lado.
         if (nowEpoch < h.hitFlashUntil && s.aiState[i] !== AI_DODGE) {
           s.aiState[i] = AI_DODGE;
@@ -587,7 +593,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       // ── Shooting (cosmético) — dispara a QUIEN ESTÁ ENCARANDO mientras lo
       // orbita, que es lo que hace que se lea como un bot de shooter. Sin
       // asignaciones: el objetivo ya está resuelto por la FSM.
-      if (!s.isDancing[i] && !apagado) {
+      if (roundGate.canPlay && !s.isDancing[i] && !apagado) {
         s.shootTimer[i] -= dt;
         if (s.shootTimer[i] <= 0) {
           const tgt = s.aiState[i] === AI_ENGAGE ? s.engageTarget[i] : -2;
