@@ -171,6 +171,27 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ counts, totalUnique });
 }
 
+// Borra una campaña del historial. campaign_recipients cae por CASCADE (FK), así
+// que se va también su tracking. Los cupones viven en el evento, no en la
+// campaña, así que borrarla no toca el descuento vigente.
+export async function DELETE(request: NextRequest) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServer(cookieStore);
+
+  const { isAdmin } = await verifyAdmin(supabase);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+
+  const { error } = await supabase.from('campaigns').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ success: true });
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);

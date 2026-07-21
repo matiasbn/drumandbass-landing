@@ -208,6 +208,9 @@ export default function CampaignsClient() {
   const [openCampaign, setOpenCampaign] = useState<CampaignSummary | null>(null);
   const [recipients, setRecipients] = useState<CampaignRecipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
+  // Borrado con confirmación en dos pasos (window.confirm es poco fiable).
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -351,6 +354,22 @@ export default function CampaignsClient() {
       // ignore
     } finally {
       setRecipientsLoading(false);
+    }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/campaigns?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setCampaigns((prev) => prev.filter((c) => c.id !== id));
+        if (openCampaign?.id === id) setOpenCampaign(null);
+        setConfirmDeleteId(null);
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1498,6 +1517,39 @@ export default function CampaignsClient() {
                                   ))}
                                 </tbody>
                               </table>
+                            </div>
+
+                            {/* Borrar campaña (baja también su tracking por CASCADE;
+                                los cupones viven en el evento, no se tocan). */}
+                            <div className="mt-4 pt-4 border-t-2 border-gray-300 flex justify-end">
+                              {confirmDeleteId === c.id ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="mono text-[11px] font-bold uppercase">
+                                    ¿Eliminar esta campaña?
+                                  </span>
+                                  <button
+                                    onClick={() => deleteCampaign(c.id)}
+                                    disabled={deleting}
+                                    className="brutalist-border bg-[#ff0055] text-white px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    disabled={deleting}
+                                    className="brutalist-border bg-white px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteId(c.id)}
+                                  className="brutalist-border bg-white text-[#ff0055] px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-[#ff0055] hover:text-white transition-colors cursor-pointer"
+                                >
+                                  Eliminar campaña
+                                </button>
+                              )}
                             </div>
                           </>
                         )}
