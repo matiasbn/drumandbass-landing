@@ -2,19 +2,13 @@ import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createSupabaseServer } from '@/src/lib/supabase-server';
+import { verifyAdmin as verifyAdminCore } from '@/src/lib/authz';
 
 // CRUD de streamings del CMS propio (tabla cms_streamings). Solo admins:
 // además del chequeo aquí, la RLS de la tabla exige profiles.is_admin.
 
 async function verifyAdmin(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return false;
-  const { data: adminProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-  return adminProfile?.is_admin === true;
+  return (await verifyAdminCore(supabase)).isAdmin;
 }
 
 // /api/live (revalidate 60s) decide el banner EN VIVO a partir de streamings.

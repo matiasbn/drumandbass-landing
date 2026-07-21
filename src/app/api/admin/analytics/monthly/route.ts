@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getMonthlyOverview } from '@/src/lib/ga';
+import { verifyAdmin } from '@/src/lib/authz';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,15 +24,8 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
   );
 }
 
-async function isAdmin(supabase: ReturnType<typeof createSupabaseServer>): Promise<boolean> {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return false;
-  const { data } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('user_id', user.id)
-    .single();
-  return data?.is_admin === true;
+async function isAdmin(supabase: Awaited<ReturnType<typeof createSupabaseServer>>): Promise<boolean> {
+  return (await verifyAdmin(supabase)).isAdmin;
 }
 
 export async function GET() {

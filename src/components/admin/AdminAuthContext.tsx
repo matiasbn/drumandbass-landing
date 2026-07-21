@@ -94,6 +94,9 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut({ scope: 'global' });
+    // También hay que limpiar el usuario: si queda, la UI sigue creyendo que hay
+    // sesión y el botón de salir parece no hacer nada.
+    setUser(null);
     setProfile(null);
     setIsAdmin(false);
   };

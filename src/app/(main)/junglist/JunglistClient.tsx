@@ -11,7 +11,7 @@ import { event } from '@/src/lib/gtag';
 import { WHATSAPP_LINK } from '@/src/constants';
 import BrutalistButton from '@/src/components/BigButton';
 
-type View = 'loading' | 'anon' | 'form' | 'welcome' | 'profile' | 'dj';
+type View = 'loading' | 'anon' | 'form' | 'welcome' | 'redirecting' | 'profile' | 'dj';
 
 interface FormState {
   name: string;
@@ -20,6 +20,17 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', last_name: '', instagram: '' };
+
+/**
+ * Destino al terminar, cuando se llegó desde otra página (p. ej. el descuento de
+ * un evento: /junglist?next=/evento/<id>). Solo rutas internas — un `next`
+ * absoluto o protocol-relative sería un open redirect.
+ */
+function readNext(): string | null {
+  if (typeof window === 'undefined') return null;
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
 
 // Marca Google (G a 4 colores).
 const GoogleG = () => (
@@ -46,6 +57,12 @@ export default function JunglistClient() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const welcomeRef = useRef<HTMLHeadingElement>(null);
+  // Página desde la que llegó (?next=), para volver ahí al terminar.
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNextUrl(readNext());
+  }, []);
 
   // El toast (p. ej. "Cambios guardados") se auto-oculta.
   useEffect(() => {
@@ -99,14 +116,30 @@ export default function JunglistClient() {
     const data = await jRes.json().catch(() => ({}));
     const pkData = await pkRes.json().catch(() => ({}));
 
+    // Si llegó desde un evento (?next=) y YA es junglist/DJ, no tiene nada que
+    // registrar: se le devuelve al evento, donde la landing le dará el feedback
+    // (su código, o que no hay descuento para su perfil). Leemos el param acá
+    // para no depender del estado nextUrl (que se setea en otro efecto).
+    const back = readNext();
+
     // Un DJ ya es junglist (por unión): no se le pide registro junglist.
     if (pkData.profile) {
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('dj');
       return;
     }
 
     if (data.junglist) {
       setJunglist(data.junglist);
+      if (back) {
+        setView('redirecting');
+        window.location.assign(back);
+        return;
+      }
       setView('profile');
     } else {
       // Prellenar nombre/apellido con datos de la propia cuenta de Google (no de nuestra DB).
@@ -127,12 +160,15 @@ export default function JunglistClient() {
 
   const signIn = async () => {
     setSubmitting(true);
-    // El callback prioriza la cookie pk_auth_redirect sobre `next`; la fijamos a
-    // /junglist para no heredar un redirect viejo (p. ej. /pk/edit de un login de DJ).
-    document.cookie = 'pk_auth_redirect=/junglist; path=/; max-age=600; SameSite=Lax';
+    // Si vino desde otra página (?next=), hay que volver ahí y no a /junglist:
+    // quien se inscribe desde el descuento de un evento espera su código, no esta
+    // pantalla. El callback prioriza la cookie sobre `next`, así que se fijan las
+    // dos al mismo destino para no heredar un redirect viejo (p. ej. /pk/edit).
+    const dest = `/junglist${nextUrl ? `?next=${encodeURIComponent(nextUrl)}` : ''}`;
+    document.cookie = `pk_auth_redirect=${dest}; path=/; max-age=600; SameSite=Lax`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/junglist` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(dest)}` },
     });
     if (error) {
       setError('No pudimos iniciar sesión. Intenta de nuevo.');
@@ -166,6 +202,15 @@ export default function JunglistClient() {
     setJunglist(data.junglist);
     if (method === 'POST') {
       event('junglist_signup');
+      // Si vino a buscar algo concreto (el descuento de un evento), se vuelve de
+      // inmediato: la bienvenida sobra cuando hay un destino esperando. Navegación
+      // completa y no router.push porque la sesión acaba de cambiar y la landing
+      // tiene que resolver el cupón con el estado nuevo.
+      if (nextUrl) {
+        setView('redirecting');
+        window.location.assign(nextUrl);
+        return;
+      }
       setView('welcome'); // momento de bienvenida solo en el alta
     } else {
       setToast('Cambios guardados');
@@ -286,6 +331,20 @@ export default function JunglistClient() {
         )}
 
         {/* Alta exitosa: bienvenida (solo tras registrarse, no al editar) */}
+        {view === 'redirecting' && (
+          <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
+            <div className="mono text-xs font-black uppercase tracking-widest bg-[#ff0055] text-white px-3 py-1.5 inline-block mb-6">
+              ✔ Inscrito
+            </div>
+            <h2 className="text-4xl lg:text-6xl font-black uppercase italic tracking-tighter leading-none mb-3">
+              ¡Ya eres junglist!
+            </h2>
+            <p className="mono font-bold uppercase text-gray-600 leading-tight">
+              Volviendo al evento para mostrarte tu descuento…
+            </p>
+          </div>
+        )}
+
         {view === 'welcome' && (
           <div className="brutalist-border brutalist-shadow-blue bg-white p-8 mt-6">
             <div className="mono text-xs font-black uppercase tracking-widest bg-[#ff0055] text-white px-3 py-1.5 inline-block mb-6">
