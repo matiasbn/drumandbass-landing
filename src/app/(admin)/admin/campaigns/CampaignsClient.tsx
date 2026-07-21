@@ -23,7 +23,7 @@ import { BASE_URL } from '@/src/constants';
 type AudienceKey = 'ravers' | 'registered' | 'pks' | 'junglists';
 
 const AUDIENCES: { key: AudienceKey; label: string }[] = [
-  { key: 'ravers', label: 'Ravers (Newsletter)' },
+  { key: 'ravers', label: 'No registrados (correos)' },
   { key: 'registered', label: 'Usuarios Registrados' },
   { key: 'pks', label: 'DJs (Press Kit)' },
   { key: 'junglists', label: 'Junglists (registro voluntario)' },
@@ -1417,7 +1417,8 @@ export default function CampaignsClient() {
                           <p className="mono text-sm text-gray-500">Cargando destinatarios…</p>
                         ) : (
                           <>
-                            <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
+                            {/* Audiencia */}
+                            <div className="flex flex-wrap gap-2 mb-2 mono text-[11px]">
                               <span className="brutalist-border px-2 py-1 bg-white">
                                 Destinatarios: {recipients.length}
                               </span>
@@ -1427,12 +1428,37 @@ export default function CampaignsClient() {
                               <span className="brutalist-border px-2 py-1 bg-white">
                                 No junglists: {recipients.filter((r) => r.segment === 'no_junglist').length}
                               </span>
-                              <span className="brutalist-border px-2 py-1 bg-white">
-                                Abrieron: {recipients.filter((r) => r.opened_at).length}
+                            </div>
+
+                            {/* Estados del correo (mismos valores que la columna Estado, cada
+                                destinatario cuenta en uno solo → suman el total). Tooltip en cada uno. */}
+                            <div className="flex flex-wrap gap-2 mb-3 mono text-[11px]">
+                              <span
+                                className="brutalist-border px-2 py-1 bg-white cursor-help"
+                                title="Enviado: el correo salió, pero su pixel de apertura no cargó y no visitó la landing. Puede haberlo abierto igual (clientes que bloquean imágenes)."
+                              >
+                                Enviado: {recipients.filter((r) => r.status === 'sent').length}
                               </span>
-                              <span className="brutalist-border px-2 py-1 bg-white">
-                                Visitaron: {recipients.filter((r) => r.visited_at).length}
+                              <span
+                                className="brutalist-border px-2 py-1 bg-white cursor-help"
+                                title="Abierto: cargó el pixel de apertura. Poco fiable — Gmail/Apple Mail precargan imágenes (falso positivo) y los clientes que las bloquean no lo marcan (falso negativo)."
+                              >
+                                Abierto: {recipients.filter((r) => r.status === 'opened').length}
                               </span>
+                              <span
+                                className="brutalist-border px-2 py-1 bg-white cursor-help"
+                                title="Clickeó: hizo click y aterrizó en la landing. Es la señal firme de que la persona se enganchó."
+                              >
+                                Clickeó: {recipients.filter((r) => r.status === 'clicked').length}
+                              </span>
+                              {recipients.some((r) => r.status === 'failed') && (
+                                <span
+                                  className="brutalist-border px-2 py-1 bg-red-100 cursor-help"
+                                  title="Falló: el envío no se pudo entregar (rebote, dirección inválida, etc.)."
+                                >
+                                  Falló: {recipients.filter((r) => r.status === 'failed').length}
+                                </span>
+                              )}
                             </div>
 
                             {/* Detalle de la campaña */}
