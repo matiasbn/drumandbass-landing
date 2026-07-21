@@ -195,7 +195,7 @@ export default function RaversClient() {
   };
 
   const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Eliminar raver ${email}?`)) return;
+    if (!confirm(`Eliminar a ${email}?`)) return;
     try {
       const res = await fetch(`/api/admin/ravers?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -249,13 +249,13 @@ export default function RaversClient() {
           <Link href="/admin" className="mono text-sm text-gray-600 hover:text-black uppercase">
             &larr; Volver al Admin
           </Link>
-          <h1 className="text-3xl font-black uppercase mt-2">Ravers</h1>
+          <h1 className="text-3xl font-black uppercase mt-2">No registrados</h1>
         </div>
       </div>
 
       {/* Upload Section */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow mb-8">
-        <h2 className="text-xl font-black uppercase mb-4">Importar Ravers</h2>
+        <h2 className="text-xl font-black uppercase mb-4">Importar no registrados</h2>
         <p className="mono text-sm text-gray-600 mb-4">
           Sube un archivo Excel (.xlsx) con columnas: NAME, LAST_NAME, EMAIL, INSTAGRAM
         </p>
@@ -342,7 +342,7 @@ export default function RaversClient() {
       {/* Existing Subscribers */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow">
         <h2 className="text-xl font-black uppercase mb-4">
-          Ravers ({loadingSubscribers ? '...' : subscribers.length})
+          No registrados ({loadingSubscribers ? '...' : subscribers.length})
         </h2>
 
         {loadingSubscribers ? (
@@ -350,7 +350,7 @@ export default function RaversClient() {
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-black border-r-transparent" />
           </div>
         ) : subscribers.length === 0 ? (
-          <p className="mono text-sm text-gray-600">No hay ravers aun.</p>
+          <p className="mono text-sm text-gray-600">No hay correos no registrados aún.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full mono text-sm">

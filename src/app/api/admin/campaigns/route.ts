@@ -40,9 +40,11 @@ async function getEmailsByAudiences(
   const counts: Record<string, number> = {};
 
   if (audiences.includes('ravers')) {
+    // Se ignoran los que se dieron de baja (unsubscribed_at no nulo).
     const { data, error } = await supabase
       .from('newsletter_subscribers')
-      .select('email');
+      .select('email')
+      .is('unsubscribed_at', null);
     if (!error && data) {
       const emails = data.map(r => r.email?.toLowerCase()).filter(Boolean) as string[];
       counts.ravers = emails.length;
@@ -75,7 +77,8 @@ async function getEmailsByAudiences(
   if (audiences.includes('junglists')) {
     const { data, error } = await supabase
       .from('junglists')
-      .select('email');
+      .select('email')
+      .is('unsubscribed_at', null);
     if (!error && data) {
       const emails = data.map(r => r.email?.toLowerCase()).filter(Boolean) as string[];
       counts.junglists = emails.length;
@@ -91,7 +94,7 @@ async function getEmailsByAudiences(
 // qué copy le toca a cada correo.
 async function getJunglistEmails(supabase: ReturnType<typeof createSupabaseServer>) {
   const [jungRes, pkRes] = await Promise.all([
-    supabase.from('junglists').select('email'),
+    supabase.from('junglists').select('email').is('unsubscribed_at', null),
     supabase.from('pk_profiles').select('email'),
   ]);
   const set = new Set<string>();
@@ -367,6 +370,9 @@ export async function POST(request: NextRequest) {
     return `${base}${sep}ct=${recId}&utm_source=email&utm_campaign=${campaignId}`;
   };
   const pixelUrl = (recId: string) => `${appOrigin}/api/campaign-open?ct=${recId}`;
+  // Link de baja: por correo. Marca ese email como dado de baja (no se borra;
+  // conserva su fecha).
+  const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
 
   // 2) Segmentamos: el correo depende del estado de registro de cada destinatario.
   //    Quien ya es junglist y tiene cupón, recibe "tu descuento te espera"; quien
@@ -418,6 +424,7 @@ export async function POST(request: NextRequest) {
           buttonText,
           buttonUrl: withCt(localButtonUrl, recIds[j]) || undefined,
           trackingPixelUrl: pixelUrl(recIds[j]),
+          unsubscribeUrl: unsubUrl(to),
         }),
       }));
 

@@ -97,31 +97,42 @@ interface CampaignRecipient {
   visit_count: number;
 }
 
-function Stepper({ current }: { current: number }) {
+function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
-      {STEPS.map((s, i) => (
-        <div key={s.num} className="flex items-center">
-          <div className="flex flex-col items-center">
-            <div
-              className={`w-8 h-8 flex items-center justify-center font-black text-sm brutalist-border ${
-                current >= s.num ? 'bg-black text-white' : 'bg-white text-black'
-              }`}
+      {STEPS.map((s, i) => {
+        // Se puede volver a cualquier paso ya alcanzado; avanzar sigue siendo por
+        // los botones (que validan). El estado se conserva entre pasos.
+        const reachable = s.num <= current;
+        return (
+          <div key={s.num} className="flex items-center">
+            <button
+              type="button"
+              onClick={() => reachable && onGo(s.num)}
+              disabled={!reachable}
+              className={`flex flex-col items-center ${reachable && s.num < current ? 'cursor-pointer group' : 'cursor-default'}`}
+              title={reachable && s.num < current ? `Volver a ${s.label}` : undefined}
             >
-              {s.num}
-            </div>
-            <p className="font-bold uppercase text-xs mt-1">{s.label}</p>
-            <p className="mono text-[10px] text-gray-500">{s.desc}</p>
+              <span
+                className={`w-8 h-8 flex items-center justify-center font-black text-sm brutalist-border transition-colors ${
+                  current >= s.num ? 'bg-black text-white' : 'bg-white text-black'
+                } ${reachable && s.num < current ? 'group-hover:bg-[#ff0055]' : ''}`}
+              >
+                {s.num}
+              </span>
+              <span className="font-bold uppercase text-xs mt-1">{s.label}</span>
+              <span className="mono text-[10px] text-gray-500">{s.desc}</span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <div
+                className={`w-12 sm:w-20 h-1 mx-2 mb-6 ${
+                  current > s.num ? 'bg-black' : 'bg-gray-300'
+                }`}
+              />
+            )}
           </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`w-12 sm:w-20 h-1 mx-2 mb-6 ${
-                current > s.num ? 'bg-black' : 'bg-gray-300'
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -724,7 +735,7 @@ export default function CampaignsClient() {
         ))}
       </div>
 
-      {view === 'nueva' && <Stepper current={step} />}
+      {view === 'nueva' && <Stepper current={step} onGo={(n) => setStep(n as 1 | 2 | 3)} />}
 
       {/* Step 1: Plantilla */}
       {view === 'nueva' && step === 1 && (
