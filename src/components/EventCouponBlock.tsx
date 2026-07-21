@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { RiCoupon3Line } from '@remixicon/react';
 
 import { createClient } from '@/src/lib/supabase';
-import { MOCK_AUTH_ENABLED, readMockPersona, SOCIAL } from '@/src/lib/devAuth';
 import { event } from '@/src/lib/gtag';
 import BigButton from '@/src/components/BigButton';
 
@@ -75,25 +74,6 @@ export default function EventCouponBlock({
 
   useEffect(() => {
     let alive = true;
-
-    // Con un perfil simulado la sesión de Supabase no existe: decide la API. El
-    // perfil 'social' cae a la sesión real (camino de abajo).
-    if (MOCK_AUTH_ENABLED) {
-      const persona = readMockPersona();
-      if (persona && persona !== SOCIAL) {
-        setUserEmail(persona.email);
-        fetch(`/api/evento/${eventId}/coupon`)
-          .then(r => r.json())
-          .then(data => {
-            if (!alive) return;
-            if (data.status === 'ok') setState({ kind: 'ok', code: data.code, isNew: data.kind === 'new' });
-            else if (data.status === 'anon') setState({ kind: 'anon' });
-            else setState({ kind: data.isJunglist ? 'no_coupon' : 'not_junglist' });
-          })
-          .catch(() => alive && setState({ kind: 'anon' }));
-        return;
-      }
-    }
 
     // Sin token de Supabase no hay sesión posible, y eso se sabe de inmediato: se
     // pinta la puerta en el primer frame en vez de esperar el round-trip de

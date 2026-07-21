@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { RiWhatsappLine } from '@remixicon/react';
 
 import { createClient } from '@/src/lib/supabase';
-import { MOCK_AUTH_ENABLED, readMockPersona, SOCIAL } from '@/src/lib/devAuth';
 import { WHATSAPP_LINK } from '@/src/constants';
 import BigButton from '@/src/components/BigButton';
 
@@ -19,14 +18,6 @@ export default function EventCommunityCTA() {
 
   useEffect(() => {
     let alive = true;
-    if (MOCK_AUTH_ENABLED) {
-      const persona = readMockPersona();
-      if (persona && persona !== SOCIAL) {
-        setIsJunglist(persona.isJunglist);
-        return;
-      }
-      // 'social' cae a la sesión real de abajo.
-    }
 
     (async () => {
       const supabase = createClient();

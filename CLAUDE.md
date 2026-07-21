@@ -128,57 +128,6 @@ Pattern (`src/lib/mockEvents.ts` + `src/app/(main)/page.tsx`):
 
 When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that hits it (relative dates, realistic `venue`/`flyer`/`description` HTML) rather than editing production data. Titles are prefixed `TEST · <state>` so they're obvious on screen. Note: on weekends `ESTA SEMANA` (now+2 days) rolls into `PRÓXIMA SEMANA` — that's correct calendar behavior, not a bug.
 
-## Mock sessions for auth-dependent flows (dev only)
-
-The Junglist discount on `/evento/[id]` branches five ways depending on **who is looking**, and verifying it by hand meant creating real Google accounts, registering them as junglists, deleting them, repeating. `src/lib/devAuth.ts` fakes the **identity** so those states can be walked in one click.
-
-**No env var needed** — `MOCK_AUTH_ENABLED = NODE_ENV === 'development'`. In production the constant is `false`, the mock branches are dead code (stripped from the client bundle), and identity always comes from the real Supabase session — **no shortcuts in prod**. In dev nothing is mocked either until you pick a persona: with no cookie the app uses your real session.
-
-Switch personas from the **dev identity panel** (`src/components/DevLogout.tsx`, bottom-right, mounted in the root layout). It shows who you currently are, lists the personas + a "Social login" option, and keeps the force-logout escape hatch. The choice lives in the `dnb_mock_persona` cookie; **default (no cookie) is Anónimo** — in dev identity is fictitious unless you opt into the real session. Personas (`MOCK_PERSONAS`):
-
-| Persona | Simulates | Expected on a landing with a coupon |
-|---|---|---|
-| `anon` (default) | No session | Full-screen gate, register + login |
-| `user` | Session, no junglist row | Gate only if there's a coupon for new junglists |
-| `junglist_new` | Registered **after** `coupon_set_at` | Welcome copy + `coupon_junglist_new` |
-| `junglist_old` | Registered **before** | "Por ser Junglist" + `coupon_junglist` |
-| `dj` | `pk_profiles` row | Same as `junglist_old` (DJ ⊃ junglist) |
-| `social` | **Real Google session** | Whatever your real account gets |
-
-**`social` = prod logic, and the only way to be admin.** Creating/sending campaigns writes to Supabase, whose RLS requires a real admin `auth.uid()` — a fictitious persona can never satisfy it. So admin work is done under `social`: pick it, log in with your real (admin) account, and RLS lets you write. Fictitious personas are for the public junglist flows only; they can never be admin (see `src/lib/authz.ts`).
-
-**Authorization lives in one file.** Every `/api/admin/*` route delegates to `verifyAdmin()` in `src/lib/authz.ts` (`import 'server-only'`). Its dev branch can only **deny** admin (a public persona or the Anónimo default) — it never grants; admin always comes from the real session. The prod guarantee: `MOCK_AUTH_ENABLED` is false in production (gated on `NODE_ENV`), so the mock branch is skipped entirely and identity is always the real Supabase/Google session; an `assertNeverProd()` tripwire throws if that branch is ever reached under `NODE_ENV=production`.
-
-**Only the identity is faked — never the data.** `api/evento/[id]/coupon` in mock mode reads the event's **real coupon columns** from Supabase and only simulates who's asking, so the new/existing matrix is exercised against real rows. Mocking the codes too would make every assertion pass and prove nothing. Honored in three places: that route, `EventCouponBlock`, and `EventCommunityCTA` (all early-return to the real path when the flag is off).
-
-**Caveat — duplicated logic.** `mockCouponFor()` re-implements the SQL function `get_event_coupon` in TypeScript. If the rule changes in SQL and not here, the mock lies. Keep both in sync, or seed real users in the dev DB instead.
-
-### Simulating production locally
-
-`NEXT_PUBLIC_PROD_SIM=1 npm run dev` turns **every** dev helper off at once — mock personas, synthetic events, the identity panel — so you see the app the way a real visitor does without having to remember to disable each one. Single switch in `src/lib/devFlags.ts` (`DEV_TOOLS_ENABLED = NODE_ENV === 'development' && !PROD_SIM`); everything dev-only hangs off it, so new helpers should too.
-
-**It turns dev shortcuts off; it does not make the environment production.** Two things stay dev on purpose, because their side effects are *not* revertible the way a dev DB row is:
-
-- **GA still doesn't load.** Test traffic would land in the real GA4 property and can't be deleted — it would poison the site's metrics permanently.
-- **Campaign email links still point at localhost.** Otherwise a test send would push people to the live site and log those clicks as real traffic.
-
-Emails themselves *do* go out for real (Resend has no sandbox here) — send them to yourself.
-
-### e2e for these flows
-
-`e2e/evento-descuento.spec.ts` splits in two on purpose:
-
-- **`sin sesión`** — runs anywhere. With no `sb-` cookie the component resolves "anon" without touching the network.
-- **`con sesión simulada`** — sets the persona cookie; skips outside dev. Faking a Supabase session from the browser does **not** work: `getUser()` validates the token against the auth server, so an invented cookie always resolves to null. Don't try to forge `sb-*` cookies in tests — use the personas.
-
-Both need a real event id (the landing is ISR over real CMS data), passed by env:
-
-```bash
-E2E_EVENT_ID=<uuid-de-un-evento-con-cupón> npx playwright test evento-descuento
-```
-
-Without it the suite skips instead of failing for an unrelated reason.
-
 ## El Sótano videos (YouTube)
 
 `src/lib/youtube.ts` `getSotanoVideos(n)` lists the channel's latest uploads (@drumandbasschile — uploads playlist `UUa93ljufgJ4Wdryd8FUFZnQ`) and filters by title containing **"El Sótano"** (accent/case-insensitive), cached with ISR (`fetch(..., { next: { revalidate: 3600 } })`) so it costs almost no quota and **updates itself** when a new chapter is uploaded. Rendered on the **home only** (`(main)/page.tsx`) via `src/components/YoutubeVideos.tsx` — 2 videos in one row, thumbnails that link out to `youtube.com/watch?v=…` + a channel button. Uses `YOUTUBE_API_KEY`; returns `[]` (and the section hides) if the key is missing or the API fails. To change the series, edit `TITLE_MATCH`; reads one page (50 uploads) so if the channel ever exceeds that, add pagination.
@@ -205,4 +154,4 @@ Manual release flow (when committing on `develop` directly, as during pair sessi
 
 `.env.local` keys (not committed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `REVALIDATION_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_GIPHY_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Supabase clients fall back to placeholders if unset (auth/chat silently disabled), so a missing key fails soft, not loud. `CONTENTFUL_SPACE_ID`/`CONTENTFUL_ACCESS_TOKEN` are no longer used by the app — only by the one-shot import script `scripts/contentful-to-sql.mjs`.
 
-**Dev-only flags** (never set in production): `MOCK_EVENTS=1` injects synthetic events on the home; `E2E_EVENT_ID=<uuid>` points the discount e2e suite at a real event; `NEXT_PUBLIC_PROD_SIM=1` disables every dev helper at once to preview production behavior. Simulated sessions need no flag — they're gated on `NODE_ENV === 'development'` and stay inert until a persona is picked.
+**Dev-only flags** (never set in production): `MOCK_EVENTS=1` injects synthetic events on the home (gated on `NODE_ENV === 'development'`).
