@@ -10,7 +10,7 @@ import { useEnergy } from '../EnergyContext';
 import { playerState } from '../playerState';
 import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
-import { earthquakeActiveUntil } from './SpecialEffects';
+import { earthquakeActiveUntil, levitateActiveUntil } from './SpecialEffects';
 import { makeRoundedUnitBox, getCharacterTexture } from './characterAssets';
 
 // ─── NPC configuration ───────────────────────────────────────────────
@@ -24,7 +24,14 @@ const NPC_NAMES = [
 // Ids estables `npc-<nombre>` precomputados (cero allocs de string por frame)
 const NPC_IDS = NPC_NAMES.map((n) => `npc-${n}`);
 
-const COLORS: [string, string, string, string] = ['#ff0055', '#00ccff', '#00ff41', '#ff8800'];
+// Paleta amplia: antes eran 4 colores repetidos (i % 4) y los bots se veían
+// clonados. Con 16 tonos distintos cada bailarín tiene identidad propia.
+const COLORS: string[] = [
+  '#ff0055', '#00ccff', '#00ff41', '#ff8800',
+  '#ff00ff', '#ffee00', '#7c4dff', '#00ffc8',
+  '#ff5e5e', '#4da6ff', '#b6ff3d', '#ff9ecb',
+  '#9d5cff', '#00e5ff', '#ffd54a', '#ff6d00',
+];
 
 const INIT_POSITIONS: [number, number, number][] = [
   [-10, 0, -8], [8, 0, 10], [-5, 0, 12], [12, 0, -3],
@@ -235,7 +242,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
   const bodyColors = useMemo(() => {
     const arr = new Float32Array(NPC_COUNT * 3);
     for (let i = 0; i < NPC_COUNT; i++) {
-      const c = new THREE.Color(COLORS[i % 4]);
+      const c = new THREE.Color(COLORS[i % COLORS.length]);
       arr[i * 3] = c.r;
       arr[i * 3 + 1] = c.g;
       arr[i * 3 + 2] = c.b;
@@ -558,8 +565,8 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
 
       // ── Position & hype ──
       const surfaceY = getSurfaceHeight(s.posX[i], s.posZ[i]);
-      // Amplitud por estado (M3): el apagado no rebota; en EL BAJÓN baja al 55%
-      const amp = apagado ? 0 : bajon ? 0.55 : 1;
+      // Amplitud por estado: en EL BAJÓN el rebote baja al 55%
+      const amp = bajon ? 0.55 : 1;
       const baseBob = isPlaying ? Math.sin(time * 4) * 0.15 * amp : 0;
       let posY = surfaceY + baseBob;
 
@@ -641,18 +648,10 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
       let llRX = 0, rlRX = 0;
       let bodyRY = groupRotY;
 
-      if (apagado && !syncDance) {
-        // Pose "mirando el celular" (M3): cabeza gacha, brazos al frente — comunica
-        // aburrimiento, no hostilidad. Piernas arrastradas si camina.
-        headRX = 0.55;
-        headLocalY = 1.44;
-        laRX = -1.15;
-        laRZ = -0.12;
-        raRX = -1.15;
-        raRZ = 0.12;
-        llRX = isMoving ? Math.sin(time * 8) * 0.25 : 0;
-        rlRX = isMoving ? Math.sin(time * 8 + Math.PI) * 0.25 : 0;
-      } else if (activeDance === 1) {
+      // (La antigua pose "mirando el celular" se eliminó: dejaba a todos los bots
+      // con la misma cabeza inclinada y aspecto idéntico. Ahora la pista siempre
+      // está activa — ver hypeFloor en tuning.)
+      if (activeDance === 1) {
         // Hands up
         const bodyBounce = Math.abs(Math.sin(danceTime * 5)) * 0.12;
         posY = surfaceY + baseBob + bodyBounce + (npcHyped ? (elapsed - s.hypeDropStart[i] < 1 ? (elapsed - s.hypeDropStart[i]) * 4.5 : 4.5) : 0);
@@ -704,6 +703,11 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         const e = h.squashT * Math.cos((1 - h.squashT) * Math.PI * 1.5); // 1 → −0.33 → 0
         scW = sc * (1 + 0.25 * e);
         scH = sc * (1 - 0.25 * e);
+      }
+
+      // CLUB DROP / especial Levitar: toda la pista se eleva flotando.
+      if (levitateActiveUntil > elapsed) {
+        posY += 1.6 + Math.sin(elapsed * 2 + ANIM_OFFSETS[i]) * 0.35;
       }
 
       // ── Set instance matrices ──

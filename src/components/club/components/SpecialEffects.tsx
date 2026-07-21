@@ -16,6 +16,11 @@ import { playSting } from '../sounds';
 export let earthquakeActiveUntil = 0;
 export let levitateActiveUntil = 0;
 
+/** Permite que el CLUB DROP haga levitar a todos (tiempo del reloj de r3f). */
+export function setLevitateUntil(t: number) {
+  if (t > levitateActiveUntil) levitateActiveUntil = t;
+}
+
 // ─── Constantes del re-rol de especiales (M12) ───────────────────────
 // (Valores del diseño §3 M12; candidatos a un bloque `especiales` de TUNING —
 // tuning.ts es de Fase 0, así que viven aquí para no tocar archivos ajenos.)

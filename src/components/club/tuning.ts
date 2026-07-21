@@ -21,16 +21,19 @@ export const TUNING = {
 
   /** Hype de NPC (M3) */
   npc: {
-    hypeHit: 15,
-    hypeBeat: 22, // hit con beat-shot
-    hypeGrenade: 12,
-    hypeGrenadeFull: 20, // granada a carga completa
+    hypeHit: 22, // ~5 impactos para un HYPE DROP
+    hypeBeat: 30, // hit con beat-shot
+    hypeGrenade: 14,
+    hypeGrenadeFull: 24, // granada a carga completa
     // El club está VIVO por defecto: los NPCs nacen bien arriba y bajan lento,
     // así que casi siempre bailan, se mueven y disparan (llamativos). Dispararles
-    // los lleva al HYPE DROP como bonus, NO es una tarea de reanimación. Sólo
-    // unos pocos y por poco tiempo caen a "apagado".
+    // los lleva al HYPE DROP como bonus, NO es una tarea de reanimación.
     decayPerS: 0.6,
-    apagadoUmbral: 15, // bajo esto el NPC baja la energía (raro y temporal)
+    // PISO de hype: nunca bajan de aquí. Sin esto, tras ~80s todos caían bajo el
+    // umbral y quedaban con la pose de "mirando el celular" (cabeza inclinada,
+    // todos iguales y grises). Con piso, la pista se mantiene viva siempre.
+    hypeFloor: 45,
+    apagadoUmbral: 15, // inalcanzable con el piso: la pose apagada ya no aparece
     dropResetTo: 60, // hype tras un HYPE DROP (nunca Sísifo)
     dropInmuneS: 5, // inmunidad post-drop (rotación de objetivos)
     spawnHypeMin: 65,
@@ -40,12 +43,15 @@ export const TUNING = {
   /** Energía del Club (M4/M5/M13) */
   energia: {
     start: 40,
-    decayPerS: 1.0,
-    decayEscalada: 1.1, // +10% de decay por ciclo post-drop
-    decayCap: 2.0,
-    porHypeDrop: 10,
-    porVip: 15,
-    porEspecial: 10,
+    // La barra tiene que SUBIR jugando: antes decaía 1.0/s y cada HYPE DROP sólo
+    // sumaba 10, así que hacía falta un drop cada 10s sólo para empatar y nunca
+    // avanzaba. Ahora decae lento y cada logro suma bastante más.
+    decayPerS: 0.3,
+    decayEscalada: 1.08, // +8% de decay por ciclo post-drop
+    decayCap: 1.2,
+    porHypeDrop: 18,
+    porVip: 25,
+    porEspecial: 15,
     etapaMedia: 60, // ≥60 club a full; 30–60 luces al 70%
     etapaBajon: 30, // <30 = EL BAJÓN
     clubDropUmbral: 100,

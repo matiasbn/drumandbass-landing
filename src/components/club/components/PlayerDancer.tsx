@@ -17,6 +17,7 @@ import { TUNING } from '../tuning';
 import { setPlayerPose, setPlayerDance } from '../playerState';
 import { notifyGrenadeCharge } from '../juice';
 import { playDenied, playRiser } from '../sounds';
+import { roundGate } from '../RoundContext';
 import { levitateActiveUntil } from './SpecialEffects';
 
 // Lightweight 3D text billboard using canvas texture
@@ -406,7 +407,9 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     // El click que ADQUIERE el lock no cuenta (el lock llega async después del click)
     // y los clicks sobre UI tampoco (sin lock, el puntero está libre sobre la UI).
     // Los eventos sintéticos (isTrusted === false) vienen de MobileControls: pasan siempre.
-    const inputAllowed = (e: MouseEvent) => !e.isTrusted || pointerLockedRef.current;
+    // roundGate: entre rounds (cuenta atrás y pantalla de ganadores) no se dispara.
+    const inputAllowed = (e: MouseEvent) =>
+      roundGate.canPlay && (!e.isTrusted || pointerLockedRef.current);
 
     // Mouse: left click = shoot, right click hold = grenade charge
     const handleMouseDown = (e: MouseEvent) => {
@@ -524,7 +527,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     const moveStep = TUNING.fisica.moveSpeed * dt;
 
     // Block input when dead
-    const keys = alive ? keysRef.current : { forward: false, backward: false, left: false, right: false, turnLeft: false, turnRight: false };
+    // Entre rounds el jugador queda congelado (no camina ni gira).
+    const keys = alive && roundGate.canPlay
+      ? keysRef.current
+      : { forward: false, backward: false, left: false, right: false, turnLeft: false, turnRight: false };
 
     // Flechas ←/→ GIRAN la cámara (y con ella el personaje y el apuntado), en
     // vez de strafear. Mismo sentido que el mouse: mirar a la derecha baja el yaw.

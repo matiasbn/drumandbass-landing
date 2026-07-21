@@ -472,10 +472,12 @@ export const HealthProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         h.vipUntil = 0;
         h.vipHits = 0;
       }
-      // Decay −4/s (a la mitad con buff de baile; pausado en chill y durante VIP)
+      // Decay lento con PISO (nunca por debajo de hypeFloor): la pista se
+      // mantiene viva y con color. A la mitad con buff de baile; pausado en
+      // chill y durante el VIP.
       if (!chill && h.vipUntil === 0) {
         const rate = TUNING.npc.decayPerS * (now < h.buffUntil ? TUNING.baile.buffDecayMult : 1);
-        h.hype = Math.max(0, h.hype - rate * dtS);
+        h.hype = Math.max(TUNING.npc.hypeFloor, h.hype - rate * dtS);
       }
       h.apagado = h.hype < TUNING.npc.apagadoUmbral;
     });

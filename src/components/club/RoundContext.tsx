@@ -25,11 +25,20 @@ import { useScore } from './ScoreContext';
 import { useMultiplayer } from './MultiplayerContext';
 import { event as gaEvent } from '@/src/lib/gtag';
 
+const COUNTDOWN_MS = 5_000; // cuenta atrás 5→1 antes de arrancar
 const ROUND_MS = 180_000; // 3 minutos de juego
 const RESULTS_MS = 15_000; // pantalla de ganadores
-const CYCLE_MS = ROUND_MS + RESULTS_MS;
+const CYCLE_MS = COUNTDOWN_MS + ROUND_MS + RESULTS_MS;
 
-export type RoundPhase = 'waiting' | 'active' | 'results';
+export type RoundPhase = 'waiting' | 'countdown' | 'active' | 'results';
+
+/**
+ * Puerta de juego para el resto de la app (la lee PlayerDancer en su bucle sin
+ * suscribirse al contexto → cero re-renders). Sólo se puede caminar/disparar
+ * durante la fase activa del round; en la cuenta atrás y en la pantalla de
+ * ganadores el jugador queda quieto.
+ */
+export const roundGate = { canPlay: true };
 
 export interface Standing {
   username: string;
@@ -105,8 +114,9 @@ export const RoundProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const tick = () => {
       const now = Date.now();
 
-      // Sin stream en vivo → no hay rounds.
+      // Sin stream en vivo → no hay rounds (y se puede jugar libremente).
       if (!isLiveRef.current) {
+        roundGate.canPlay = true;
         if (curPhaseRef.current !== 'waiting') {
           curPhaseRef.current = 'waiting';
           curRoundIdRef.current = -1;
@@ -123,42 +133,45 @@ export const RoundProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       const roundId = Math.floor(now / CYCLE_MS);
       const cyclePos = now % CYCLE_MS;
-      const inActive = cyclePos < ROUND_MS;
+      const inCountdown = cyclePos < COUNTDOWN_MS;
+      const inActive = !inCountdown && cyclePos < COUNTDOWN_MS + ROUND_MS;
 
-      // Recién puesto en vivo: fija el snapshot para no contar puntos previos.
-      if (curRoundIdRef.current === -1) {
-        roundStartScoreRef.current = sessionScoreRef.current;
-        othersRef.current.clear();
-        if (!inActive) {
-          // Entramos durante la pantalla de ganadores: esperamos al próximo round.
-          const secondsLeft = Math.ceil((CYCLE_MS - cyclePos) / 1000);
-          curPhaseRef.current = 'waiting';
-          setState({ phase: 'waiting', roundId: -1, secondsLeft, myScore: 0, standings: [] });
-          return;
-        }
-      }
-
-      // ¿Empezó un round nuevo? (cruce de frontera hacia la fase activa)
-      if (roundId !== curRoundIdRef.current && inActive) {
+      // Al empezar la cuenta atrás (o al entrar en vivo) se fija el snapshot:
+      // el puntaje del round arranca en 0.
+      if (inCountdown && curRoundIdRef.current !== roundId) {
         curRoundIdRef.current = roundId;
         roundStartScoreRef.current = sessionScoreRef.current;
         othersRef.current.clear();
         frozenStandingsRef.current = null;
-        curPhaseRef.current = 'active';
         gaEvent('club_round_start', { round: roundId });
+      }
+      // Entrar en vivo a mitad de ciclo: fija snapshot para no arrastrar puntos.
+      if (curRoundIdRef.current === -1) {
+        roundStartScoreRef.current = sessionScoreRef.current;
+        othersRef.current.clear();
+        if (inActive) curRoundIdRef.current = roundId; // se suma al round en curso
       }
 
       const myScore = Math.max(0, Math.round(sessionScoreRef.current - roundStartScoreRef.current));
 
-      if (inActive) {
+      if (inCountdown) {
+        // Cuenta atrás 5→1: nadie se mueve ni dispara.
+        roundGate.canPlay = false;
+        curPhaseRef.current = 'countdown';
+        const secondsLeft = Math.ceil((COUNTDOWN_MS - cyclePos) / 1000);
+        setState({ phase: 'countdown', roundId, secondsLeft, myScore: 0, standings: [] });
+      } else if (inActive) {
+        roundGate.canPlay = true;
         curPhaseRef.current = 'active';
-        const secondsLeft = Math.ceil((ROUND_MS - cyclePos) / 1000);
+        const secondsLeft = Math.ceil((COUNTDOWN_MS + ROUND_MS - cyclePos) / 1000);
         if (now - lastBroadcastRef.current > 3000 && usernameRef.current) {
           lastBroadcastRef.current = now;
           sendClubFx({ kind: 'round_score', from: usernameRef.current, round: roundId, score: myScore });
         }
         setState({ phase: 'active', roundId, secondsLeft, myScore, standings: computeStandings(roundId, myScore) });
       } else {
+        // Terminó el round: se congela el juego hasta el próximo.
+        roundGate.canPlay = false;
         // Ventana de resultados: congela el ranking una vez.
         const secondsLeft = Math.ceil((CYCLE_MS - cyclePos) / 1000);
         if (curPhaseRef.current !== 'results') {

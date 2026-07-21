@@ -30,6 +30,26 @@ export const RoundOverlay: React.FC = () => {
     );
   }
 
+  if (phase === 'countdown') {
+    // Cuenta atrás 5→1 antes de arrancar: el juego está congelado.
+    return (
+      <div className="pointer-events-none absolute inset-0 z-[60] flex flex-col items-center justify-center">
+        <div className="font-mono text-xs uppercase tracking-[0.4em] text-[#00ccff]">
+          Prepárate
+        </div>
+        <div
+          key={secondsLeft}
+          className="mt-2 animate-pulse text-[7rem] font-black leading-none tabular-nums text-white drop-shadow-[0_0_30px_rgba(0,204,255,0.9)]"
+        >
+          {secondsLeft}
+        </div>
+        <div className="mt-2 font-mono text-sm uppercase tracking-widest text-white/60">
+          El round empieza
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'active') {
     const low = secondsLeft <= 15; // últimos 15s en rojo
     return (
@@ -104,6 +124,9 @@ export const RoundOverlay: React.FC = () => {
           )}
           <div className="mt-1 text-white/40">
             Siguiente round en <span className="tabular-nums text-[#00ccff]">{secondsLeft}s</span>
+          </div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-wider text-white/30">
+            Juego en pausa
           </div>
         </div>
       </div>

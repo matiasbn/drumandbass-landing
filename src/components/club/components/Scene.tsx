@@ -16,6 +16,7 @@ import { LiveScreen } from './LiveScreen';
 import { WallChatScreen } from './WallChatScreen';
 import { StrobeWalls } from './StrobeWalls';
 import { SpecialEffects } from './SpecialEffects';
+import { ClubDropSpectacle } from './ClubDropSpectacle';
 import { Platforms } from './Platforms';
 import { Projectiles } from './Projectiles';
 
@@ -51,6 +52,8 @@ export const Scene: React.FC<SceneProps> = ({ isPlayingRef, isLive = false, yout
       <StageElements isPlayingRef={isPlayingRef} />
       <JungleDecor isPlayingRef={isPlayingRef} />
       <SpecialEffects />
+      {/* Celebración del CLUB DROP: piso arcoíris, haces de luz y levitación */}
+      <ClubDropSpectacle />
       <Projectiles />
     </>
   );
