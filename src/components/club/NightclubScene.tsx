@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { RiMenuLine, RiLogoutBoxLine, RiSettings3Line, RiPaletteLine, RiPlayFill, RiPauseFill, RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
+import { RiMenuLine, RiLogoutBoxLine, RiSettings3Line, RiPaletteLine } from '@remixicon/react';
 import { NightclubCanvas } from './NightclubCanvas';
-import { AudioPlayer } from './components/AudioPlayer';
 import { Chat } from './components/Chat';
 import { LiveChat } from './components/LiveChat';
 import { MobileControls } from './components/MobileControls';
@@ -27,47 +26,7 @@ import { GameInstructions } from './components/GameInstructions';
 import { DamageOverlay } from './components/DamageOverlay';
 import { useAuth } from './AuthContext';
 
-const MobilePlayerToggle: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => {
-  const { isPlaying, trackTitle, togglePlay } = usePlayback();
-  const color = isPlaying ? '#00ff41' : '#ff0055';
-
-  return (
-    <div
-      className="flex items-stretch bg-black/60 backdrop-blur border font-mono text-xs tracking-wider transition-colors overflow-hidden"
-      style={{ borderColor: `${color}66`, width: 220 }}
-    >
-      {/* Play/Pause button */}
-      <button
-        onClick={togglePlay}
-        className="flex items-center justify-center px-2.5 border-r transition-colors"
-        style={{ borderColor: `${color}33`, color }}
-      >
-        {isPlaying ? <RiPauseFill className="w-4 h-4" /> : <RiPlayFill className="w-4 h-4" />}
-      </button>
-
-      {/* Track info + expand toggle */}
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-1.5 px-2.5 py-2 min-w-0 flex-1"
-        style={{ color }}
-      >
-        <div className="flex-1 min-w-0 marquee-container">
-          {isPlaying ? (
-            <div className="marquee-content">
-              {trackTitle}&nbsp;&nbsp;&bull;&nbsp;&nbsp;{trackTitle}&nbsp;&nbsp;&bull;&nbsp;&nbsp;
-            </div>
-          ) : (
-            <div className="truncate opacity-70">PAUSED</div>
-          )}
-        </div>
-        {open ? <RiArrowUpSLine className="w-4 h-4 shrink-0" /> : <RiArrowDownSLine className="w-4 h-4 shrink-0" />}
-      </button>
-    </div>
-  );
-};
-
 const NightclubSceneInner: React.FC = () => {
-  const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -82,6 +41,15 @@ const NightclubSceneInner: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const { profile, signOut } = useAuth();
   const { isLive, liveTitle, youtubeVideoId } = useLive();
+  const { setIsPlaying } = usePlayback();
+
+  // La música del club ahora sale SIEMPRE de la pantalla (stream en vivo o el
+  // video por defecto). Antes este flag lo marcaba el player de SoundCloud, y
+  // de él dependen las animaciones de los bailarines: se activa mientras haya
+  // video en pantalla.
+  useEffect(() => {
+    setIsPlaying(Boolean(youtubeVideoId));
+  }, [youtubeVideoId, setIsPlaying]);
 
   const handleLogout = async () => {
     setMenuOpen(false);
@@ -158,22 +126,9 @@ const NightclubSceneInner: React.FC = () => {
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <CharacterCustomModal isOpen={customizeOpen} onClose={() => setCustomizeOpen(false)} />
 
-        {/* Audio player - desktop: bottom left, above controls hint (hidden when live) */}
-        {!isLive && (
-          <div className="absolute bottom-24 left-4 z-10 hidden md:block">
-            <AudioPlayer />
-          </div>
-        )}
-
-        {/* Mobile: mini player toggle + collapsible player at top right (hidden when live) */}
-        {!isLive && (
-          <div className="absolute top-4 right-4 z-10 md:hidden flex flex-col items-end">
-            <MobilePlayerToggle open={mobilePlayerOpen} onToggle={() => setMobilePlayerOpen(o => !o)} />
-            <div className={mobilePlayerOpen ? 'mt-2' : 'hidden'}>
-              <AudioPlayer />
-            </div>
-          </div>
-        )}
+        {/* (El player de SoundCloud se quitó: la música del club sale de la
+            pantalla — el stream en vivo o el video por defecto — y tener dos
+            fuentes de audio a la vez se pisaba.) */}
 
         {/* Controls hint - desktop: bottom left */}
         <div className="absolute bottom-4 left-4 z-10 hidden md:block">
