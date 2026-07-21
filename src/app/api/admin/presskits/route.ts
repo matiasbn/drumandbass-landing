@@ -47,16 +47,18 @@ export async function GET() {
     return NextResponse.json({ presskits: [], error: pkError.message }, { status: 500 });
   }
 
-  // Get all pk_profiles to map user_id -> slug
+  // Get all pk_profiles to map user_id -> slug + email
   const { data: profiles } = await supabase
     .from('pk_profiles')
-    .select('user_id, slug');
+    .select('user_id, slug, email');
 
   const slugMap = new Map((profiles || []).map((p) => [p.user_id, p.slug]));
+  const emailMap = new Map((profiles || []).map((p) => [p.user_id, p.email]));
 
   const enriched = (presskits || []).map((pk) => ({
     ...pk,
     slug: slugMap.get(pk.user_id) || null,
+    email: emailMap.get(pk.user_id) || null,
   }));
 
   return NextResponse.json({ presskits: enriched });

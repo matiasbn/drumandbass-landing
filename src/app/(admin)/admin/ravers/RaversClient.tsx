@@ -45,9 +45,6 @@ export default function RaversClient() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; last_name: string; email: string; instagram: string }>({ name: '', last_name: '', email: '', instagram: '' });
   const [saving, setSaving] = useState(false);
-  // Limpiar toda la lista (confirmación en dos pasos, no window.confirm).
-  const [confirmingClear, setConfirmingClear] = useState(false);
-  const [clearing, setClearing] = useState(false);
 
   const fetchSubscribers = useCallback(async () => {
     setLoadingSubscribers(true);
@@ -210,22 +207,6 @@ export default function RaversClient() {
     }
   };
 
-  const handleConsolidate = async () => {
-    setClearing(true);
-    try {
-      const res = await fetch('/api/admin/ravers?consolidate=1', { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        await fetchSubscribers();
-        setConfirmingClear(false);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setClearing(false);
-    }
-  };
-
   const toggleSort = (key: keyof Subscriber) => {
     if (sortKey === key) {
       setSortAsc(!sortAsc);
@@ -360,41 +341,9 @@ export default function RaversClient() {
 
       {/* Existing Subscribers */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow">
-        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-          <h2 className="text-xl font-black uppercase">
-            No registrados ({loadingSubscribers ? '...' : subscribers.length})
-          </h2>
-          {/* Limpiar toda la lista, con confirmación en dos pasos */}
-          {subscribers.length > 0 && (
-            confirmingClear ? (
-              <div className="flex items-center gap-2">
-                <span className="mono text-xs font-bold uppercase">¿Borrar los que ya son junglists o DJs?</span>
-                <button
-                  onClick={handleConsolidate}
-                  disabled={clearing}
-                  className="brutalist-border bg-[#ff0055] text-white px-3 py-2 mono text-xs font-bold uppercase hover:bg-[#dd0044] transition-colors cursor-pointer disabled:opacity-40"
-                >
-                  {clearing ? 'Consolidando…' : 'Sí, consolidar'}
-                </button>
-                <button
-                  onClick={() => setConfirmingClear(false)}
-                  disabled={clearing}
-                  className="brutalist-border bg-white px-3 py-2 mono text-xs font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
-                >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmingClear(true)}
-                title="Borra de la lista los correos que ya son junglists o DJs"
-                className="brutalist-border bg-white text-[#ff0055] px-3 py-2 mono text-xs font-bold uppercase hover:bg-[#ff0055] hover:text-white transition-colors cursor-pointer"
-              >
-                Consolidar
-              </button>
-            )
-          )}
-        </div>
+        <h2 className="text-xl font-black uppercase mb-4">
+          No registrados ({loadingSubscribers ? '...' : subscribers.length})
+        </h2>
 
         {loadingSubscribers ? (
           <div className="text-center py-8">
