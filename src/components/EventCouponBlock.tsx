@@ -289,10 +289,11 @@ export default function EventCouponBlock({
           {!couponForNew
             ? 'El descuento es para Junglists ya registrados. Inicia sesión para ver el tuyo.'
             : state.kind === 'anon'
-              ? 'Ser Junglist es gratis y te toma un minuto. Inscríbete o inicia sesión para ver si tienes descuento.'
-              : 'Completa tu registro gratis para ver si tienes descuento.'}
+              ? 'Ser Junglist es gratis y te toma un minuto. Inscríbete o inicia sesión para ver tu descuento.'
+              : 'Completa tu registro gratis para ver tu descuento.'}
         </p>
 
+        {/* Los dos caminos al descuento: inscribirse o iniciar sesión. */}
         <div className="flex flex-col gap-4">
           {couponForNew && (
             <BigButton
@@ -307,21 +308,21 @@ export default function EventCouponBlock({
             <button
               type="button"
               onClick={login}
-              className="w-full brutalist-border bg-white text-black text-lg py-6 px-6 font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer"
+              className="w-full brutalist-border bg-black text-white text-lg py-6 px-6 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer"
             >
               Ya soy Junglist, iniciar sesión
             </button>
           )}
         </div>
 
-        {/* Salida deliberadamente poco atractiva: es una opción real, pero no
-            compite con la principal. */}
+        {/* Opt-out claro: solo quiere ver el evento, sin el descuento. Botón real
+            (blanco) pero visualmente por debajo de los dos de arriba. */}
         <button
           type="button"
           onClick={dismiss}
-          className="block mx-auto mt-10 mono text-xs uppercase underline opacity-70 hover:opacity-100 cursor-pointer"
+          className="w-full brutalist-border bg-white text-black mt-4 py-4 px-6 font-bold uppercase text-sm hover:bg-gray-100 transition-colors cursor-pointer"
         >
-          No quiero ser Junglist, llévame al evento
+          No quiero descuento, llévame al evento
         </button>
       </div>
     </div>
