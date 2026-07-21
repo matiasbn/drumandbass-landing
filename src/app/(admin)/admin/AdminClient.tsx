@@ -64,8 +64,8 @@ export default function AdminClient() {
       href: '/admin/users',
     },
     {
-      title: 'Ravers',
-      description: 'Importar y ver ravers registrados',
+      title: 'Importar correos',
+      description: 'Importar y ver correos',
       href: '/admin/ravers',
     },
     {

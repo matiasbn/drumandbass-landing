@@ -93,11 +93,17 @@ export async function POST(request: NextRequest) {
 
   const results: RowResult[] = [];
 
-  // Listas disjuntas: los correos que ya son junglists (registro voluntario) no se
-  // importan a la lista manual de ravers.
-  const { data: junglistRows } = await supabase.from('junglists').select('email');
+  // Listas disjuntas: los correos que ya son junglists o DJs (pk_profiles) no se
+  // importan a la lista de correos — se ignoran y se reportan como ya registrados.
+  const [junglistRows, pkRows] = await Promise.all([
+    supabase.from('junglists').select('email'),
+    supabase.from('pk_profiles').select('email'),
+  ]);
   const junglistEmails = new Set(
-    (junglistRows || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+    (junglistRows.data || []).map((j) => j.email?.toLowerCase()).filter(Boolean)
+  );
+  const djEmails = new Set(
+    (pkRows.data || []).map((p) => p.email?.toLowerCase()).filter(Boolean)
   );
 
   for (const row of rows) {
@@ -109,6 +115,10 @@ export async function POST(request: NextRequest) {
 
     if (junglistEmails.has(email)) {
       results.push({ email, status: 'skipped', error: 'Ya es junglist' });
+      continue;
+    }
+    if (djEmails.has(email)) {
+      results.push({ email, status: 'skipped', error: 'Ya es DJ' });
       continue;
     }
 

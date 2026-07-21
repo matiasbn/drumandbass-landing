@@ -5,6 +5,7 @@ export function buildEmailHtml({
   buttonText,
   buttonUrl,
   trackingPixelUrl,
+  unsubscribeUrl,
 }: {
   title: string;
   body: string;
@@ -13,6 +14,8 @@ export function buildEmailHtml({
   buttonUrl?: string;
   /** Pixel 1×1 para medir aperturas (opcional). Se inyecta al final del cuerpo. */
   trackingPixelUrl?: string;
+  /** Link de baja: al abrirlo se marca el correo como dado de baja (no se borra). */
+  unsubscribeUrl?: string;
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -119,6 +122,9 @@ export function buildEmailHtml({
                     <p style="margin:0;font-family:'Space Mono','Courier New',monospace;font-size:11px;">
                       <a href="https://drumandbasschile.cl" style="color:#ff0055;text-decoration:none;font-weight:700;">drumandbasschile.cl</a>
                     </p>
+                    ${unsubscribeUrl ? `<p style="margin:12px 0 0 0;font-family:'Space Mono','Courier New',monospace;font-size:10px;color:#999999;">
+                      <a href="${unsubscribeUrl}" style="color:#999999;text-decoration:underline;">Darme de baja</a>
+                    </p>` : ''}
                   </td>
                 </tr>
               </table>
