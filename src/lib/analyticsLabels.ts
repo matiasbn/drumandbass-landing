@@ -43,6 +43,8 @@ export const EVENT_LABELS: Record<string, string> = {
   club_quality_change: 'Cambios de calidad gráfica (club)',
   club_sound_toggle: 'Toggle de sonido del club',
   club_shake_toggle: 'Toggle de vibración de cámara (club)',
+  club_round_start: 'Rounds iniciados (club)',
+  club_round_end: 'Rounds terminados (club)',
 };
 export const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
 
@@ -84,6 +86,8 @@ export const EVENT_TIPS: Record<string, string> = {
   club_quality_change: 'Un jugador cambió la calidad gráfica del club (param quality).',
   club_sound_toggle: 'Un jugador activó/desactivó el sonido sintetizado del club (param enabled).',
   club_shake_toggle: 'Un jugador activó/desactivó la vibración de cámara (param enabled).',
+  club_round_start: 'Empezó un round de 3 min (durante el stream en vivo).',
+  club_round_end: 'Terminó un round (params: winner, my_score, placement, players).',
 };
 export const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
@@ -100,6 +104,7 @@ export const CORE_ACTIONS = [
   'junglist_unsubscribe', // 8. bajas de junglist
   'club_club_drop', // 9. CLUB DROPs del shooter (¿el ciclo está bien tuneado?)
   'club_session_summary', // 10. sesiones de juego cerradas (duración/score en params)
+  'club_round_end', // 11. rounds de 3 min terminados (ganadores/participación)
 ];
 
 // Acciones que se trackean pero NO se muestran en el dashboard (back-office de
@@ -124,4 +129,5 @@ export const HIDDEN_ACTIONS = [
   'club_quality_change',
   'club_sound_toggle',
   'club_shake_toggle',
+  'club_round_start',
 ];

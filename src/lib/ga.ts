@@ -96,6 +96,7 @@ export const SITE_EVENT_NAMES = [
   // en HIDDEN_ACTIONS de analyticsLabels.ts (se trackean pero no se muestran).
   'club_club_drop',
   'club_session_summary',
+  'club_round_end',
 ];
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

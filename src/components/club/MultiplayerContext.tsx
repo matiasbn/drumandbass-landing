@@ -17,7 +17,8 @@ export type ClubFxPayload =
   | { kind: 'energy'; from: string; value: number; ts: number }
   | { kind: 'hype_drop'; from: string }
   | { kind: 'club_drop'; from: string }
-  | { kind: 'bump'; from: string; to: string };
+  | { kind: 'bump'; from: string; to: string }
+  | { kind: 'round_score'; from: string; round: number; score: number };
 
 export type ClubFxListener = (fx: ClubFxPayload) => void;
 

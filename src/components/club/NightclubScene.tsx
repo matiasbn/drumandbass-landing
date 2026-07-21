@@ -18,8 +18,10 @@ import { ProjectileProvider } from './ProjectileContext';
 import { NpcPositionsProvider } from './NpcPositionsContext';
 import { CameraProvider } from './CameraContext';
 import { HealthProvider } from './HealthContext';
+import { RoundProvider } from './RoundContext';
 import { ScoreHUD } from './components/ScoreHUD';
 import { CrosshairHUD } from './components/CrosshairHUD';
+import { RoundOverlay } from './components/RoundOverlay';
 import { SessionSummary } from './components/SessionSummary';
 import { GameInstructions } from './components/GameInstructions';
 import { DamageOverlay } from './components/DamageOverlay';
@@ -206,6 +208,9 @@ const NightclubSceneInner: React.FC = () => {
         {/* Crosshair del Bass Cannon (WS-2): cooldown, hitmarkers, carga, combo */}
         <CrosshairHUD />
 
+        {/* Rounds de 3 min: temporizador + pantalla de ganadores (durante el stream) */}
+        <RoundOverlay />
+
         {/* Game Instructions */}
         <GameInstructions />
 
@@ -234,7 +239,9 @@ const NightclubScene: React.FC = () => {
     <NpcPositionsProvider>
     <CameraProvider>
     <HealthProvider>
-      <NightclubSceneInner />
+      <RoundProvider>
+        <NightclubSceneInner />
+      </RoundProvider>
     </HealthProvider>
     </CameraProvider>
     </NpcPositionsProvider>
