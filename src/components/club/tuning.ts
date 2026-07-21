@@ -25,12 +25,16 @@ export const TUNING = {
     hypeBeat: 22, // hit con beat-shot
     hypeGrenade: 12,
     hypeGrenadeFull: 20, // granada a carga completa
-    decayPerS: 4,
-    apagadoUmbral: 30, // bajo esto el NPC se apaga (celular)
-    dropResetTo: 40, // hype tras un HYPE DROP (nunca Sísifo)
+    // El club está VIVO por defecto: los NPCs nacen bien arriba y bajan lento,
+    // así que casi siempre bailan, se mueven y disparan (llamativos). Dispararles
+    // los lleva al HYPE DROP como bonus, NO es una tarea de reanimación. Sólo
+    // unos pocos y por poco tiempo caen a "apagado".
+    decayPerS: 0.6,
+    apagadoUmbral: 15, // bajo esto el NPC baja la energía (raro y temporal)
+    dropResetTo: 60, // hype tras un HYPE DROP (nunca Sísifo)
     dropInmuneS: 5, // inmunidad post-drop (rotación de objetivos)
-    spawnHypeMin: 30,
-    spawnHypeMax: 60,
+    spawnHypeMin: 65,
+    spawnHypeMax: 100,
   },
 
   /** Energía del Club (M4/M5/M13) */

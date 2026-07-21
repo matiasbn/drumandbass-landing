@@ -11,6 +11,7 @@ import { playerState } from '../playerState';
 import { TUNING } from '../tuning';
 import { getSurfaceHeight } from './Platforms';
 import { earthquakeActiveUntil } from './SpecialEffects';
+import { makeRoundedUnitBox, getCharacterTexture } from './characterAssets';
 
 // ─── NPC configuration ───────────────────────────────────────────────
 const NPC_COUNT = 16;
@@ -58,10 +59,10 @@ const barTmp = new THREE.Color();
 // ─── Colores de estado (M3/M7/M11) — compartidos, cero allocs por frame ─
 const colWhite = new THREE.Color(0xffffff); // flash del hit (80ms)
 const colGold = new THREE.Color(0xffd700); // VIP dorado
-const colApagado = new THREE.Color(0x4a4a52); // desaturación del APAGADO
+const colApagado = new THREE.Color(0x8a7f95); // tono tenue del APAGADO (visible, no negro)
 const colBuff = new THREE.Color(0xb0ffd0); // aura sutil del buff de baile
 const colSkin = new THREE.Color(0xe0c4a8);
-const colLegs = new THREE.Color(0x222222);
+const colLegs = new THREE.Color(0x4a4658); // pantalón oscuro pero visible (no negro con basic mat)
 const colTmp = new THREE.Color();
 const colTmp2 = new THREE.Color();
 
@@ -219,7 +220,7 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
   }, []);
 
   const legColors = useMemo(() => {
-    const c = new THREE.Color('#222222');
+    const c = new THREE.Color('#4a4658');
     const arr = new Float32Array(NPC_COUNT * 3);
     for (let i = 0; i < NPC_COUNT; i++) {
       arr[i * 3] = c.r;
@@ -228,6 +229,23 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
     }
     return arr;
   }, []);
+
+  // Geometría redondeada compartida (menos cuadrada) y material siempre-visible.
+  // meshBasicMaterial (sin luces) + textura: los NPCs no tienen emissive como el
+  // jugador, así que dependían de las luces recortadas y salían oscuros. Con
+  // basic el color de instancia (vívido) se ve SIEMPRE; la textura da forma y
+  // detalle. toneMapped=false para que los neones no se apaguen con el tonemap.
+  const roundedGeo = useMemo(() => makeRoundedUnitBox(0.14, 2), []);
+  const charMat = useMemo(() => {
+    const tex = getCharacterTexture();
+    return new THREE.MeshBasicMaterial({ map: tex ?? undefined, toneMapped: false });
+  }, []);
+  useEffect(() => {
+    return () => {
+      roundedGeo.dispose();
+      charMat.dispose();
+    };
+  }, [roundedGeo, charMat]);
 
   // Set instance colors once on mount
   const colorsSet = useRef(false);
@@ -590,8 +608,8 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
         colTmp.copy(colGold); // VIP dorado (M7)
         colTmp2.copy(colSkin).lerp(colGold, 0.35);
       } else if (apagado) {
-        colTmp.lerp(colApagado, 0.75); // desaturado: fiesta apagada (M3)
-        colTmp2.copy(colSkin).lerp(colApagado, 0.45);
+        colTmp.lerp(colApagado, 0.4); // atenuado pero aún con color (M3)
+        colTmp2.copy(colSkin).lerp(colApagado, 0.25);
       } else if (nowEpoch < h.buffUntil) {
         colTmp.lerp(colBuff, 0.25 + 0.12 * Math.sin(elapsed * 6)); // aura del buff (M11)
         colTmp2.copy(colSkin);
@@ -672,41 +690,14 @@ export const InstancedDancers: React.FC<InstancedDancersProps> = ({ isPlayingRef
 
   return (
     <group>
-      {/* Body instances */}
-      <instancedMesh ref={bodyRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
-
-      {/* Head instances */}
-      <instancedMesh ref={headRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
-
-      {/* Left arm instances */}
-      <instancedMesh ref={leftArmRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
-
-      {/* Right arm instances */}
-      <instancedMesh ref={rightArmRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
-
-      {/* Left leg instances */}
-      <instancedMesh ref={leftLegRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
-
-      {/* Right leg instances */}
-      <instancedMesh ref={rightLegRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-      </instancedMesh>
+      {/* Body/cabeza/extremidades: geometría redondeada + material compartidos.
+          El color por instancia (vívido, con estados M3/M7) va sobre instanceColor. */}
+      <instancedMesh ref={bodyRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      <instancedMesh ref={headRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      <instancedMesh ref={leftArmRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      <instancedMesh ref={rightArmRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      <instancedMesh ref={leftLegRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
+      <instancedMesh ref={rightLegRef} args={[roundedGeo, charMat, NPC_COUNT]} frustumCulled={false} />
 
       {/* Hype bar backgrounds */}
       <instancedMesh ref={barBgRef} args={[undefined, undefined, NPC_COUNT]} frustumCulled={false}>

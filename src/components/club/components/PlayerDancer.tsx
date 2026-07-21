@@ -249,8 +249,10 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
   const keysRef = useRef({
     forward: false,
     backward: false,
-    left: false,
+    left: false, // strafe (A/D)
     right: false,
+    turnLeft: false, // giro con flechas ←/→ (rota cámara + personaje)
+    turnRight: false,
   });
 
   const positionRef = useRef({ x: 0, z: 6 });
@@ -296,11 +298,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           keysRef.current.backward = true;
           break;
         case 'ArrowLeft':
+          keysRef.current.turnLeft = true; // flecha ← gira, no strafea
+          break;
         case 'a':
         case 'A':
-          keysRef.current.left = true;
+          keysRef.current.left = true; // A/D siguen strafeando
           break;
         case 'ArrowRight':
+          keysRef.current.turnRight = true; // flecha → gira
+          break;
         case 'd':
         case 'D':
           keysRef.current.right = true;
@@ -367,11 +373,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
           keysRef.current.backward = false;
           break;
         case 'ArrowLeft':
+          keysRef.current.turnLeft = false;
+          break;
         case 'a':
         case 'A':
           keysRef.current.left = false;
           break;
         case 'ArrowRight':
+          keysRef.current.turnRight = false;
+          break;
         case 'd':
         case 'D':
           keysRef.current.right = false;
@@ -510,7 +520,15 @@ export const PlayerDancer: React.FC<PlayerDancerProps> = ({ isPlayingRef }) => {
     const moveStep = TUNING.fisica.moveSpeed * dt;
 
     // Block input when dead
-    const keys = alive ? keysRef.current : { forward: false, backward: false, left: false, right: false };
+    const keys = alive ? keysRef.current : { forward: false, backward: false, left: false, right: false, turnLeft: false, turnRight: false };
+
+    // Flechas ←/→ GIRAN la cámara (y con ella el personaje y el apuntado), en
+    // vez de strafear. Mismo sentido que el mouse: mirar a la derecha baja el yaw.
+    // Se recalcula camForward/camRight abajo tras el giro para que adelante sea
+    // relativo a la nueva orientación. A/D mantienen el strafe.
+    const TURN_SPEED = 2.4; // rad/s
+    if (keys.turnLeft) cameraYawRef.current += TURN_SPEED * dt;
+    if (keys.turnRight) cameraYawRef.current -= TURN_SPEED * dt;
     if (keys.forward) {
       moveX += camForward.x * moveStep;
       moveZ += camForward.z * moveStep;
