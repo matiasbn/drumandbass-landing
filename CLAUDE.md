@@ -41,6 +41,8 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 
 **Contexts pattern:** each surface has an isolated React context provider — `club/AuthContext` (players), `admin/AdminAuthContext`, `pk/PkAuthContext`. They are separate on purpose; don't cross-wire them.
 
+**The home renders each event TWICE — change both cards.** The events list on the home has two layouts: **`EventItem`** (mobile/tablet, `lg:hidden`) and **`EventsCarousel` → `EventCard`** (desktop, `hidden lg:block`). Both consume the same `CmsEvent`. Any change to how an event card looks (a new badge, field, or CTA) must be applied to **both `EventItem` and `EventCard`**, or it will only show on one breakpoint (e.g. a badge added to `EventItem` is invisible on desktop). The event landing (`/evento/[id]`) is a third, separate layout. Grepping the home HTML can mislead: `EventItem` is in the DOM but CSS-hidden on desktop, so a badge can be "present" in `curl` output yet invisible in a desktop browser.
+
 **Date-dependent UI must be client-computed (ISR gotcha).** The home is ISR-cached (`revalidate = 3600`), so anything derived from "now" would freeze at cache-generation time and go **stale in prod** (e.g. a `PRÓXIMA SEMANA` badge that never updates). The event proximity badge lives in `src/components/ProximityBadge.tsx` (client, `useEffect` + `dayjs()`) using pure logic from `src/lib/eventBadge.ts`; `EventItem` (server) just renders `<ProximityBadge date endDate />`. It renders `null` until mount (no hydration mismatch, nothing baked into cached HTML). The static event date box stays server-rendered. Follow this pattern for any new now-relative UI.
 
 ## Conventions
