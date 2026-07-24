@@ -155,15 +155,16 @@ interface CampaignSummary {
   status: string;
   sent_at: string | null;
   created_at: string;
+  parent_campaign_id: string | null;
 }
 
 interface CampaignRecipient {
   email: string;
   status: string;
   segment: string | null;
-  opened_at: string | null;
   visited_at: string | null;
   visit_count: number;
+  coupon_copy_at: string | null;
 }
 
 function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void }) {
@@ -297,6 +298,14 @@ export default function CampaignsClient() {
   const [syncingLive, setSyncingLive] = useState(false);
   // Filtro de la tabla de destinatarios por estado ('all' = todos).
   const [recipientFilter, setRecipientFilter] = useState<'all' | RecipientStatus>('all');
+  // Reenvío a los que no interactuaron (crea nueva campaña "· Reenvío N").
+  const [resendingUnopened, setResendingUnopened] = useState(false);
+  const [confirmResendUnopened, setConfirmResendUnopened] = useState(false);
+  // A cuántos les reenviaría el botón (línea completa; lo calcula el backend).
+  const [resendTargetCount, setResendTargetCount] = useState(0);
+  // Acciones registradas (log genérico): hoy, copias del cupón + primera copia.
+  const [couponCopies, setCouponCopies] = useState(0);
+  const [firstCouponCopyAt, setFirstCouponCopyAt] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -433,6 +442,9 @@ export default function CampaignsClient() {
     const res = await fetch(`/api/admin/campaigns?campaign=${id}`);
     const data = await res.json();
     setRecipients(data.recipients || []);
+    setResendTargetCount(data.resendTarget || 0);
+    setCouponCopies(data.couponCopies || 0);
+    setFirstCouponCopyAt(data.firstCouponCopyAt || null);
   };
 
   // Núcleo del sync: consulta Resend en vivo (no envía) y actualiza estados de
@@ -459,6 +471,7 @@ export default function CampaignsClient() {
     setOpenCampaign(c);
     setRecipients([]);
     setRecipientFilter('all');
+    setConfirmResendUnopened(false);
     setRecipientsLoading(true);
     try {
       await fetchRecipients(c.id);
@@ -516,6 +529,43 @@ export default function CampaignsClient() {
       window.alert(`Error de red al reenviar: ${e instanceof Error ? e.message : ''}`);
     } finally {
       setResending(false);
+    }
+  };
+
+  // Reenvía el MISMO correo a quienes recibieron pero no visitaron la landing.
+  // Crea una campaña nueva "<original> · Reenvío N". Puede repetirse varias veces.
+  const resendUnopened = async (id: string) => {
+    setResendingUnopened(true);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resendUnopenedCampaignId: id }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        window.alert(`No se pudo reenviar: ${data.error || ''}`);
+        return;
+      }
+      if (!data.created) {
+        window.alert(
+          data.reason === 'all-unsubscribed'
+            ? 'Todos los que no interactuaron se dieron de baja. No se reenvió a nadie.'
+            : 'No hay destinatarios sin interactuar: todos visitaron (o rebotaron/fallaron).'
+        );
+        return;
+      }
+      window.alert(
+        `Campaña "${data.name}" creada.\nReenviado a ${data.sent}${
+          data.failed ? ` · ${data.failed} sin enviar (cuota)` : ''
+        }.`
+      );
+      setConfirmResendUnopened(false);
+      await fetchCampaigns();
+    } catch (e) {
+      window.alert(`Error de red al reenviar: ${e instanceof Error ? e.message : ''}`);
+    } finally {
+      setResendingUnopened(false);
     }
   };
 
@@ -1671,6 +1721,50 @@ export default function CampaignsClient() {
                               </div>
                             )}
 
+                            {/* Insistir: reenvía el correo a quienes no interactuaron con la línea
+                                (original + reenvíos). El conteo lo calcula el backend sobre toda la
+                                línea. "Abrir" por pixel no se mide: la señal real es la visita. */}
+                            {resendTargetCount > 0 && (
+                              <div className="brutalist-border bg-blue-50 p-3 mb-3">
+                                <p className="mono text-[11px] font-bold uppercase mb-2">
+                                  {resendTargetCount} recibieron pero no visitaron la landing
+                                </p>
+                                {confirmResendUnopened ? (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="mono text-[11px] font-bold uppercase">
+                                      ¿Crear un reenvío para estos {resendTargetCount}?
+                                    </span>
+                                    <button
+                                      onClick={() => resendUnopened(c.id)}
+                                      disabled={resendingUnopened}
+                                      className="brutalist-border bg-[#0000ff] text-white px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-blue-800 transition-colors cursor-pointer disabled:opacity-40"
+                                    >
+                                      {resendingUnopened ? 'Reenviando…' : 'Sí, reenviar'}
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmResendUnopened(false)}
+                                      disabled={resendingUnopened}
+                                      className="brutalist-border bg-white text-black px-3 py-2 mono text-[11px] font-bold uppercase hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-40"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmResendUnopened(true)}
+                                    className="brutalist-border bg-[#0000ff] text-white px-4 py-2 mono text-[11px] font-bold uppercase hover:bg-blue-800 transition-colors cursor-pointer"
+                                  >
+                                    Insistir a los que no interactuaron ({resendTargetCount})
+                                  </button>
+                                )}
+                                <p className="mono text-[10px] text-gray-600 mt-2">
+                                  Crea una campaña hija &quot;· Reenvío N&quot; con el mismo correo, para
+                                  quienes no visitaron NINGÚN correo de esta línea (original + reenvíos).
+                                  No incluye a quienes ya visitaron, rebotaron o se dieron de baja.
+                                </p>
+                              </div>
+                            )}
+
                             {/* Sin enviar: siempre visible para saber cuántos quedan pendientes.
                                 El reenvío manda el máximo que la cuota de Resend permita hoy; si
                                 quedan más, se vuelve a apretar otro día hasta llegar a 0. */}
@@ -1717,9 +1811,46 @@ export default function CampaignsClient() {
                                 <dd>{dayjs(c.sent_at || c.created_at).format('DD MMM YYYY · HH:mm')}</dd>
                               </div>
                               <div>
-                                <dt className="font-bold uppercase text-gray-500">Plantilla</dt>
-                                <dd>{c.template === 'evento' ? 'Evento' : c.template || 'Personalizada'}</dd>
+                                <dt className="font-bold uppercase text-gray-500">Primer click</dt>
+                                <dd>
+                                  {(() => {
+                                    // Derivado: la visita más temprana de sus destinatarios.
+                                    const times = recipients
+                                      .map((r) => r.visited_at)
+                                      .filter((t): t is string => !!t);
+                                    if (!times.length) return '—';
+                                    const first = times.reduce((a, b) => (a < b ? a : b));
+                                    return dayjs(first).format('DD MMM YYYY · HH:mm');
+                                  })()}
+                                </dd>
                               </div>
+                              <div>
+                                <dt className="font-bold uppercase text-gray-500">Plantilla</dt>
+                                <dd>
+                                  {c.template === 'evento' ? 'Evento' : c.template || 'Personalizada'}
+                                  {c.parent_campaign_id && (
+                                    <span className="ml-2 inline-block bg-[#0000ff] text-white font-bold uppercase px-1.5 py-0.5 text-[9px]">
+                                      Reenvío
+                                    </span>
+                                  )}
+                                </dd>
+                              </div>
+                              {c.coupon_mode && c.coupon_mode !== 'none' && (
+                                <div>
+                                  <dt className="font-bold uppercase text-gray-500">
+                                    Copiaron el código
+                                  </dt>
+                                  <dd>
+                                    {couponCopies}
+                                    {firstCouponCopyAt && (
+                                      <span className="text-gray-500">
+                                        {' '}
+                                        · 1ª vez {dayjs(firstCouponCopyAt).format('DD MMM · HH:mm')}
+                                      </span>
+                                    )}
+                                  </dd>
+                                </div>
+                              )}
                               <div>
                                 <dt className="font-bold uppercase text-gray-500">Audiencias</dt>
                                 <dd>
@@ -1814,6 +1945,9 @@ export default function CampaignsClient() {
                                     <th className="text-left p-2">Segmento</th>
                                     <th className="text-left p-2">Estado</th>
                                     <th className="text-center p-2">Visitó</th>
+                                    {c.coupon_mode && c.coupon_mode !== 'none' && (
+                                      <th className="text-center p-2">Copió código</th>
+                                    )}
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1851,15 +1985,32 @@ export default function CampaignsClient() {
                                             {meta.label}
                                           </span>
                                         </td>
-                                        <td className="p-2 text-center">
+                                        <td className="p-2 text-center whitespace-nowrap">
                                           {r.visited_at ? (
-                                            <span className="text-[#0000ff] font-bold">
-                                              ✓{r.visit_count > 1 ? ` (${r.visit_count})` : ''}
+                                            <span
+                                              className="text-[#0000ff] font-bold"
+                                              title={`Visitó el ${dayjs(r.visited_at).format('DD MMM YYYY · HH:mm')}`}
+                                            >
+                                              {dayjs(r.visited_at).format('DD MMM · HH:mm')}
                                             </span>
                                           ) : (
                                             <span className="text-gray-300">—</span>
                                           )}
                                         </td>
+                                        {c.coupon_mode && c.coupon_mode !== 'none' && (
+                                          <td className="p-2 text-center whitespace-nowrap">
+                                            {r.coupon_copy_at ? (
+                                              <span
+                                                className="text-green-600 font-bold"
+                                                title={`Copió el código el ${dayjs(r.coupon_copy_at).format('DD MMM YYYY · HH:mm')}`}
+                                              >
+                                                {dayjs(r.coupon_copy_at).format('DD MMM · HH:mm')}
+                                              </span>
+                                            ) : (
+                                              <span className="text-gray-300">—</span>
+                                            )}
+                                          </td>
+                                        )}
                                       </tr>
                                     );
                                   })}

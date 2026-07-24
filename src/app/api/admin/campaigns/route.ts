@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
   if (searchParams.get('list') === '1') {
     const { data, error } = await supabase
       .from('campaigns')
-      .select('id, name, template, event_id, subject, coupon_mode, coupon_new_code, coupon_existing_code, audiences, recipients, sent_count, failed_count, status, sent_at, created_at')
+      .select('id, name, template, event_id, subject, coupon_mode, coupon_new_code, coupon_existing_code, audiences, recipients, sent_count, failed_count, status, sent_at, created_at, parent_campaign_id')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) return NextResponse.json({ campaigns: [], error: error.message }, { status: 500 });
@@ -158,12 +158,42 @@ export async function GET(request: NextRequest) {
       supabase.from('campaigns').select('*').eq('id', campaignId).maybeSingle(),
       supabase
         .from('campaign_recipients')
-        .select('email, status, segment, opened_at, visited_at, visit_count')
+        .select('id, email, status, segment, visited_at, visit_count')
         .eq('campaign_id', campaignId)
         .order('email'),
     ]);
     if (!campaign) return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 });
-    return NextResponse.json({ campaign, recipients: recipients || [] });
+    // Conteo real (línea completa) de a cuántos les reenviaría el botón "insistir".
+    const t = await computeResendTargets(supabase, campaignId);
+    const resendTarget = t.source ? t.targets.size : 0;
+    // Acciones registradas (log genérico). Hoy: quién copió el cupón y cuándo.
+    const { data: copyRows } = await supabase
+      .from('campaign_actions')
+      .select('recipient_id, at, campaign_recipients!inner(campaign_id)')
+      .eq('action', 'coupon_copy')
+      .eq('campaign_recipients.campaign_id', campaignId);
+    const copyByRecipient = new Map<string, string>();
+    for (const r of copyRows ?? []) copyByRecipient.set(r.recipient_id as string, r.at as string);
+    const couponCopies = copyByRecipient.size;
+    const firstCouponCopyAt = couponCopies
+      ? [...copyByRecipient.values()].reduce((a, b) => (a < b ? a : b))
+      : null;
+    // Adjuntamos coupon_copy_at por destinatario (para verlo fila por fila).
+    const recipientsOut = (recipients ?? []).map((r) => ({
+      email: r.email,
+      status: r.status,
+      segment: r.segment,
+      visited_at: r.visited_at,
+      visit_count: r.visit_count,
+      coupon_copy_at: copyByRecipient.get(r.id as string) ?? null,
+    }));
+    return NextResponse.json({
+      campaign,
+      recipients: recipientsOut,
+      resendTarget,
+      couponCopies,
+      firstCouponCopyAt,
+    });
   }
 
   // Audience counts mode
@@ -399,6 +429,222 @@ async function syncFromResend(
   return NextResponse.json({ success: true, synced, remaining: count ?? 0 });
 }
 
+// Calcula a quién reenviarle: los que recibieron la campaña RAÍZ pero NO
+// interactuaron con NINGÚN correo de su línea (raíz + reenvíos). Una campaña
+// "· Reenvío N" apunta a su raíz vía parent_campaign_id, así el conjunto se
+// angosta correctamente en cada reenvío. "Abrir" por pixel no se mide (no es
+// fiable): interacción = visita por token. Excluye a quien visitó cualquier
+// correo de la línea, a rebotados/spam y a dados de baja.
+async function computeResendTargets(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  sourceId: string
+) {
+  const empty = {
+    source: null as Record<string, unknown> | null,
+    rootId: '',
+    rootCampaign: null as Record<string, unknown> | null,
+    childCount: 0,
+    targets: new Map<string, 'junglist' | 'no_junglist'>(),
+  };
+  const { data: source } = await supabase.from('campaigns').select('*').eq('id', sourceId).maybeSingle();
+  if (!source) return empty;
+
+  const rootId = (source.parent_campaign_id as string | null) || (source.id as string);
+  let rootCampaign = source;
+  if (rootId !== source.id) {
+    const { data: root } = await supabase.from('campaigns').select('*').eq('id', rootId).maybeSingle();
+    if (root) rootCampaign = root;
+  }
+
+  // Línea completa: raíz + hijas.
+  const { data: children } = await supabase
+    .from('campaigns')
+    .select('id')
+    .eq('parent_campaign_id', rootId);
+  const lineageIds = [rootId, ...(children ?? []).map((c) => c.id as string)];
+
+  const { data: lineageRecs } = await supabase
+    .from('campaign_recipients')
+    .select('email, status, visited_at, segment, campaign_id')
+    .in('campaign_id', lineageIds);
+
+  const engaged = new Set<string>(); // visitó CUALQUIER correo de la línea
+  const dead = new Set<string>(); // rebotó/spam en cualquier correo → no reintentar
+  for (const r of lineageRecs ?? []) {
+    const e = String(r.email).toLowerCase();
+    if (r.visited_at) engaged.add(e);
+    if (r.status === 'bounced' || r.status === 'complained') dead.add(e);
+  }
+
+  const [{ data: jUnsub }, { data: nUnsub }] = await Promise.all([
+    supabase.from('junglists').select('email').not('unsubscribed_at', 'is', null),
+    supabase.from('newsletter_subscribers').select('email').not('unsubscribed_at', 'is', null),
+  ]);
+  const unsub = new Set<string>();
+  for (const r of jUnsub ?? []) if (r.email) unsub.add(String(r.email).toLowerCase());
+  for (const r of nUnsub ?? []) if (r.email) unsub.add(String(r.email).toLowerCase());
+
+  // Base = destinatarios de la RAÍZ que recibieron (sent/delivered/opened), sin
+  // los que ya interactuaron / rebotaron / se dieron de baja. Conserva su segmento.
+  const targets = new Map<string, 'junglist' | 'no_junglist'>();
+  for (const r of lineageRecs ?? []) {
+    if (r.campaign_id !== rootId) continue;
+    if (!['sent', 'delivered', 'opened'].includes(String(r.status))) continue;
+    const e = String(r.email).toLowerCase();
+    if (engaged.has(e) || dead.has(e) || unsub.has(e) || targets.has(e)) continue;
+    targets.set(e, r.segment === 'junglist' ? 'junglist' : 'no_junglist');
+  }
+
+  return { source, rootId, rootCampaign, childCount: children?.length ?? 0, targets };
+}
+
+// Crea una campaña HIJA que reenvía el correo de la RAÍZ a quienes no interactuaron
+// con la línea (ver computeResendTargets). Se llama "<raíz> · Reenvío N" (N =
+// cantidad de hijas + 1) y apunta a la raíz por parent_campaign_id. El correo se
+// replica verbatim desde el segment_content de la raíz (o se regenera de fallback).
+async function resendToUnopened(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  apiKey: string,
+  sourceId: string
+) {
+  const t = await computeResendTargets(supabase, sourceId);
+  if (!t.source) return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 });
+  const { rootId, rootCampaign, childCount, targets } = t;
+
+  if (targets.size === 0) {
+    return NextResponse.json({ success: true, created: false, reason: 'no-unopened', count: 0 });
+  }
+
+  const base = String(rootCampaign.name || rootCampaign.subject || 'Campaña').replace(/ · Reenvío \d+$/i, '');
+  const newName = `${base} · Reenvío ${childCount + 1}`;
+
+  // Nueva campaña hija: contenido = RAÍZ, parent = raíz.
+  const { data: created, error: createErr } = await supabase
+    .from('campaigns')
+    .insert({
+      name: newName,
+      parent_campaign_id: rootId,
+      template: rootCampaign.template,
+      event_id: rootCampaign.event_id,
+      subject: rootCampaign.subject,
+      title: rootCampaign.title,
+      body_html: rootCampaign.body_html,
+      image_url: rootCampaign.image_url,
+      button_text: rootCampaign.button_text,
+      button_url: rootCampaign.button_url,
+      coupon_mode: rootCampaign.coupon_mode,
+      coupon_new_code: rootCampaign.coupon_new_code,
+      coupon_existing_code: rootCampaign.coupon_existing_code,
+      audiences: rootCampaign.audiences,
+      segment_content: rootCampaign.segment_content,
+      recipients: targets.size,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (createErr || !created) {
+    return NextResponse.json(
+      { error: `No se pudo crear la campaña: ${createErr?.message ?? 'desconocido'}` },
+      { status: 500 }
+    );
+  }
+  const newId = created.id as string;
+
+  const resend = new Resend(apiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
+  const appOrigin = process.env.NODE_ENV === 'development' ? 'http://localhost:3600' : BASE_URL;
+  const localButtonUrl = (rootCampaign.button_url || '').replace(BASE_URL, appOrigin);
+  const withCt = (b: string, recId: string) => {
+    if (!b) return '';
+    const sep = b.includes('?') ? '&' : '?';
+    return `${b}${sep}ct=${recId}&utm_source=email&utm_campaign=${newId}`;
+  };
+  const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
+  const couponEnabled = !!rootCampaign.coupon_mode && rootCampaign.coupon_mode !== 'none';
+  const newCode = rootCampaign.coupon_new_code || '';
+  const existingCode = rootCampaign.coupon_existing_code || '';
+  const savedContent = rootCampaign.segment_content as Record<string, { subject: string; body: string }> | null;
+  const source = rootCampaign;
+
+  const list = Array.from(targets.entries()); // [email, segment]
+  const BATCH_SIZE = 100;
+  const rows: {
+    id: string;
+    campaign_id: string;
+    email: string;
+    resend_id: string | null;
+    status: string;
+    segment: string;
+  }[] = [];
+  let sent = 0;
+  let failed = 0;
+
+  for (let i = 0; i < list.length; i += BATCH_SIZE) {
+    const batch = list.slice(i, i + BATCH_SIZE);
+    const ids = batch.map(() => crypto.randomUUID());
+    const payload = batch.map(([email, seg], j) => {
+      const hasCoupon = couponEnabled && (seg === 'junglist' ? !!existingCode : !!newCode);
+      const saved = savedContent?.[seg];
+      return {
+        from: fromEmail,
+        to: email,
+        subject: saved?.subject ?? segmentSubject(source.subject, source.title || '', hasCoupon),
+        html: buildEmailHtml({
+          title: source.title || source.subject,
+          body: saved?.body ?? segmentBody(source.body_html || '', seg, hasCoupon),
+          imageBase64: source.image_url || undefined,
+          buttonText: source.button_text || undefined,
+          buttonUrl: withCt(localButtonUrl, ids[j]) || undefined,
+          unsubscribeUrl: unsubUrl(email),
+        }),
+      };
+    });
+    const pushRows = (status: string, resendIds: { id: string }[] | null) =>
+      batch.forEach(([email, seg], j) =>
+        rows.push({
+          id: ids[j],
+          campaign_id: newId,
+          email,
+          resend_id: resendIds?.[j]?.id ?? null,
+          status,
+          segment: seg,
+        })
+      );
+    try {
+      const { data, error } = await resend.batch.send(payload);
+      if (error) {
+        failed += batch.length;
+        pushRows('failed', null);
+      } else {
+        sent += data?.data?.length || batch.length;
+        pushRows('sent', data?.data ?? []);
+      }
+    } catch {
+      failed += batch.length;
+      pushRows('failed', null);
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += 500) {
+    await supabase.from('campaign_recipients').insert(rows.slice(i, i + 500));
+  }
+  await supabase
+    .from('campaigns')
+    .update({ sent_count: sent, failed_count: failed })
+    .eq('id', newId);
+
+  return NextResponse.json({
+    success: true,
+    created: true,
+    campaignId: newId,
+    name: newName,
+    count: targets.size,
+    sent,
+    failed,
+  });
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);
@@ -423,6 +669,11 @@ export async function POST(request: NextRequest) {
   // Sincronizar estados de entrega desde Resend (no envía nada).
   if (body.syncCampaignId) {
     return syncFromResend(supabase, apiKey, String(body.syncCampaignId));
+  }
+
+  // Reenviar el mismo correo a quienes no interactuaron → nueva campaña "· Reenvío N".
+  if (body.resendUnopenedCampaignId) {
+    return resendToUnopened(supabase, apiKey, String(body.resendUnopenedCampaignId));
   }
 
   const {

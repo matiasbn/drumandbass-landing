@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RiCoupon3Line } from '@remixicon/react';
+import { RiCoupon3Line, RiFileCopyLine, RiCheckLine } from '@remixicon/react';
 
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
@@ -173,6 +173,32 @@ export default function EventCouponBlock({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       event('junglist_coupon_copy', { event_id: eventId, event_title: eventTitle });
+      // Registro propio (fiable), atribuido al destinatario si llegó desde un
+      // correo de campaña. La URL manda; si no trae ct (p. ej. volviste del OAuth
+      // de inscripción), se usa el guardado al aterrizar, pero solo si es reciente
+      // (TTL 1 h) para no atribuir con un ct viejo. Log genérico → cualquier campaña.
+      let ct: string | null = new URLSearchParams(window.location.search).get('ct');
+      if (!ct) {
+        try {
+          const raw = sessionStorage.getItem(`dnb:ct:${eventId}`);
+          if (raw) {
+            const saved = JSON.parse(raw) as { ct?: string; at?: number };
+            if (saved.ct && saved.at && Date.now() - saved.at < 60 * 60 * 1000) {
+              ct = saved.ct;
+            }
+          }
+        } catch {
+          // sin sessionStorage / json inválido: queda solo el de la URL
+        }
+      }
+      if (ct) {
+        fetch('/api/campaign-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ct, action: 'coupon_copy' }),
+          keepalive: true,
+        }).catch(() => {});
+      }
     } catch {
       // sin portapapeles: el código igual está a la vista
     }
@@ -233,8 +259,9 @@ export default function EventCouponBlock({
           <button
             type="button"
             onClick={copy}
-            className="brutalist-border bg-black text-white px-6 py-4 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer"
+            className="brutalist-border bg-black text-white px-6 py-4 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
           >
+            {copied ? <RiCheckLine size={20} /> : <RiFileCopyLine size={20} />}
             {copied ? '¡Copiado!' : 'Copiar código'}
           </button>
         </div>
