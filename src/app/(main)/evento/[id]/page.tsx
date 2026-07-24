@@ -45,7 +45,7 @@ export default async function EventoLandingPage({ params }: PageProps) {
   return (
     <main className="grow">
       <TrackOnMount name="landing_evento_view" params={{ event_id: ev.id, event_title: ev.title }} />
-      <CampaignVisitBeacon />
+      <CampaignVisitBeacon eventId={ev.id} />
 
       {/* Descuento Junglist arriba de todo: al llegar, lo primero que ven es qué
           tienen que hacer para obtenerlo. El código se resuelve en el cliente
