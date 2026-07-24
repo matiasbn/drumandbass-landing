@@ -134,6 +134,14 @@ Email campaigns live in `admin/campaigns/CampaignsClient.tsx` + `api/admin/campa
 
 **RLS gotcha:** `campaign_recipients`/`campaign_actions` writes go through the admin cookie client (or SECURITY DEFINER for anon). If a sync/resend/action "succeeds" but nothing changes, the per-command policy is missing — see the RLS section. Migrations for all of the above live in `supabase/migrations/` and are applied by hand.
 
+### Junglist discount coupons (event-scoped, code-gated)
+
+Coupons live on the **event** (`cms_events.coupon_junglist_new` / `coupon_junglist` / `coupon_set_at`), NOT the campaign — the campaign only stores a snapshot for history and writes the codes to the event on send. `coupon_set_at` is the new-vs-existing cutoff (junglist registered after it ⇒ "new") and is **set once, never moved** (moving it would flip earlier registrants to "existing" and revoke their welcome code). One event = up to two codes (new / existing), which may be equal.
+
+**The codes are secret — never let them reach the client.** They're served ONLY by `get_event_coupon(event_id)` (SECURITY DEFINER, decides new/existing from `auth.uid()` + `coupon_set_at`, returns the applicable code or NULL). The code never goes in public HTML or the email — the email links to the landing, which reveals it against session + junglist status. **Column-grant gotcha (security-critical):** `cms_events` uses **per-column SELECT grants** so `anon`/`authenticated` can read everything EXCEPT `coupon_junglist_new` / `coupon_junglist` (they used to be readable with the public key — a real leak that was fixed). The public read gets booleans `has_coupon_new` / `has_coupon_existing` (generated columns) for the "Descuento Junglist" badge; `lib/cms.ts` maps those to `couponForNew`/`couponForExisting`. **Consequence: any NEW column added to `cms_events` must be added to the `GRANT SELECT (...)` list** (`supabase/migrations/20260730000000_hide_event_coupon_codes.sql`) or it will be invisible to the front. Filtering/ordering by the code columns from `anon`/`authenticated` also fails now (Postgres needs SELECT to reference a column in `WHERE`) — filter by the booleans instead (see `api/junglist/discounts`).
+
+**Surfacing:** the discount is shown site-wide via `JunglistDiscountBadge` (rose `#ff0055` chip + blue `#0000ff` shadow = discount + junglist) on both event cards (`EventItem` + `EventCard`) and the event landing header, and via `JunglistDiscountsCard` (`api/junglist/discounts` → the events THIS logged-in junglist qualifies for, resolved with `get_event_coupon`) in the junglist profile/welcome/DJ views and CommunityZone.
+
 ## Mock data for local testing (dev only)
 
 To exercise UI states that depend on live CMS data (event proximity badges, past-event filtering) without touching the production tables, the home page injects **synthetic events in development only**.
