@@ -504,16 +504,19 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
           <div className={`${listOpen ? 'block' : 'hidden'} lg:block space-y-2 lg:overflow-y-auto lg:pr-1`} style={sideStyle}>
             {view.map((r, vi) => {
               const isCurrent = currentReleaseIdx === vi;
+              // Un track suelto en curso pinta toda la tarjeta; en un EP NO (solo
+              // se resalta el track específico que suena, en la lista anidada).
+              const isCurrentSingle = isCurrent && !r.isEp;
               const isExpanded = expanded === r.url;
               const tracks = epTracks[r.url];
               const info = dl[r.url];
               return (
-                <div key={`${r.url}-${vi}`} className={`brutalist-border transition-colors ${isCurrent ? 'bg-[#FF5500] text-white' : 'bg-white'}`}>
+                <div key={`${r.url}-${vi}`} className={`brutalist-border transition-colors ${isCurrentSingle ? 'bg-[#FF5500] text-white' : 'bg-white'}`}>
                   <div className="flex items-stretch">
                     <button
                       onClick={() => (isCurrent ? toggle() : playRelease(vi))}
                       aria-label={isCurrent && playing ? `Pausar ${r.title}` : `Reproducir ${r.title}`}
-                      className={`shrink-0 w-12 flex items-center justify-center border-r-4 border-black ${isCurrent ? 'bg-black text-[#FF5500]' : 'bg-[#FF5500] text-white hover:bg-[#e64d00]'}`}
+                      className={`shrink-0 w-12 flex items-center justify-center border-r-4 border-black ${isCurrentSingle ? 'bg-black text-[#FF5500]' : 'bg-[#FF5500] text-white hover:bg-[#e64d00]'}`}
                     >
                       {isCurrent && playing ? <RiPauseFill className="w-6 h-6" /> : <RiPlayFill className="w-6 h-6" />}
                     </button>
@@ -522,7 +525,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                         {r.isEp ? (
                           <span className="mono text-[9px] font-black uppercase bg-[#7C3AED] text-white px-1.5 py-0.5">EP</span>
                         ) : (
-                          <span className={`mono text-[9px] font-black uppercase px-1.5 py-0.5 ${isCurrent ? 'bg-black text-white' : 'bg-[#FF5500] text-white'}`}>RELEASE</span>
+                          <span className={`mono text-[9px] font-black uppercase px-1.5 py-0.5 ${isCurrentSingle ? 'bg-black text-white' : 'bg-[#FF5500] text-white'}`}>RELEASE</span>
                         )}
                         {!r.isEp && info?.downloadable && (
                           <a
@@ -537,7 +540,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                           </a>
                         )}
                         {r.releasedAt && (
-                          <span className={`mono text-[9px] font-bold uppercase ml-auto ${isCurrent ? 'opacity-80' : 'opacity-50'}`}>
+                          <span className={`mono text-[9px] font-bold uppercase ml-auto ${isCurrentSingle ? 'opacity-80' : 'opacity-50'}`}>
                             {dayjs(r.releasedAt).format('DD MMM YYYY')}
                           </span>
                         )}
@@ -550,17 +553,17 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                         className="inline-flex items-start gap-1 text-sm font-black uppercase leading-tight break-words hover:underline"
                       >
                         {r.title}
-                        <RiSoundcloudLine className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${isCurrent ? 'text-white' : 'text-[#FF5500]'}`} />
+                        <RiSoundcloudLine className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${isCurrentSingle ? 'text-white' : 'text-[#FF5500]'}`} />
                       </a>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
-                        <span className={`mono text-[11px] font-bold uppercase truncate ${isCurrent ? 'opacity-90' : 'opacity-70'}`}>
+                        <span className={`mono text-[11px] font-bold uppercase truncate ${isCurrentSingle ? 'opacity-90' : 'opacity-70'}`}>
                           {r.slug ? <Link href={`/pk/${r.slug}`} className="hover:underline">{r.artistName}</Link> : r.artistName}
                         </span>
                         {r.isEp && (
                           <button
                             onClick={() => toggleExpand(r.url)}
                             aria-label={isExpanded ? 'Ocultar tracks' : 'Ver tracks del EP'}
-                            className={`shrink-0 inline-flex items-center gap-0.5 mono text-[9px] font-black uppercase ${isCurrent ? 'text-white' : 'text-[#7C3AED]'}`}
+                            className={`shrink-0 inline-flex items-center gap-0.5 mono text-[9px] font-black uppercase text-[#7C3AED]`}
                           >
                             Tracks
                             <RiArrowDownSLine className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -583,7 +586,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                           {tracks.map((t, ti) => {
                             const isThis = currentItem && sameUrl(currentItem.url, t.url);
                             return (
-                              <li key={t.url} className={`flex items-center gap-1 px-2 border-t border-black/20 ${isCurrent ? 'text-white' : ''}`}>
+                              <li key={t.url} className={`flex items-center gap-1 px-2 border-t border-black/20 ${isThis ? 'bg-[#FF5500] text-white' : ''}`}>
                                 <button
                                   onClick={() => (isThis ? toggle() : playTrackUrl(t.url))}
                                   aria-label={`Reproducir ${t.title}`}
@@ -600,7 +603,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                                     <RiDownloadLine className="w-3.5 h-3.5" />
                                   </a>
                                 )}
-                                <a href={t.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${t.title} en SoundCloud`} className={`shrink-0 p-1 ${isCurrent ? 'text-white hover:opacity-70' : 'text-[#FF5500] hover:opacity-70'}`}>
+                                <a href={t.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${t.title} en SoundCloud`} className={`shrink-0 p-1 hover:opacity-70 ${isThis ? 'text-white' : 'text-[#FF5500]'}`}>
                                   <RiSoundcloudLine className="w-3.5 h-3.5" />
                                 </a>
                               </li>
