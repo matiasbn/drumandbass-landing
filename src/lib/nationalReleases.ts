@@ -8,6 +8,9 @@ export interface NationalRelease {
   artistName: string;
   slug: string | null;
   releasedAt: string | null;
+  downloadable: boolean;
+  downloadUrl: string | null; // gate externo (Hypeddit…) o null si nativa/no descargable
+  isEp: boolean;
 }
 
 // Cliente anónimo sin cookies: lo usa el home (ISR). No debe usar el cliente
@@ -67,6 +70,11 @@ export async function getNationalReleases(limit?: number): Promise<NationalRelea
           slug: slugByUser.get(pk.user_id) ?? null,
           // Fallback a updated_at del presskit si el scraping de la fecha falló.
           releasedAt: m.released_at ?? pk.updated_at ?? null,
+          // La descarga se lee EN VIVO desde el cliente (endpoint cacheado), no de
+          // la DB — así refleja al instante si el artista la habilita/inhabilita.
+          downloadable: false,
+          downloadUrl: null,
+          isEp: m.is_ep === true,
         });
       }
     }

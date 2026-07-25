@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/src/lib/authz';
+import { enrichFeaturedReleaseDates } from '@/src/lib/soundcloud';
+import { PresskitMix } from '@/src/types/presskit';
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -95,6 +97,13 @@ export async function PATCH(request: NextRequest) {
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+  }
+
+  // Si el admin edita los mixes (p.ej. marca "Releases Nacionales"), capturar la
+  // fecha real de SoundCloud igual que el editor del DJ, así released_at no queda
+  // en null (que haría caer al fallback de fecha de guardado en /releases).
+  if (Array.isArray(updateData.mixes)) {
+    updateData.mixes = await enrichFeaturedReleaseDates(updateData.mixes as PresskitMix[]);
   }
 
   const { data, error } = await supabase

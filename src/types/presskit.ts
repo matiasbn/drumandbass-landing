@@ -21,6 +21,15 @@ export interface PresskitMix {
   featured?: boolean;
   // Fecha de publicación capturada desde SoundCloud (display_date) al marcar featured.
   released_at?: string | null;
+  // Si el release es descargable (flag nativo de SoundCloud O gate externo tipo
+  // Hypeddit), capturado junto con la fecha al marcar featured.
+  downloadable?: boolean;
+  // URL de descarga cuando NO es nativa (gate externo, p.ej. Hypeddit). null si
+  // es descarga nativa (se baja desde la página de SoundCloud) o no descargable.
+  download_url?: string | null;
+  // Si el release es un EP/álbum (URL de tipo playlist/set) en vez de un track
+  // suelto. Se muestra como categoría "EP" en Releases Nacionales.
+  is_ep?: boolean;
 }
 
 export interface PresskitLink {

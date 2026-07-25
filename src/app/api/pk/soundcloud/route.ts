@@ -6,6 +6,20 @@ const SC_MOBILE_HEADERS = {
     'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
 };
 
+// El título sale del atributo aria-label del HTML, así que viene con entidades
+// HTML (p.ej. "&amp;" por "&"). Las decodificamos para guardar el título limpio.
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 function extractUsername(url: string): string | null {
   try {
     const u = new URL(url);
@@ -60,7 +74,7 @@ export async function GET(req: NextRequest) {
         seen.add(slug);
         tracks.push({
           id: slug,
-          title: match[1],
+          title: decodeHtmlEntities(match[1]),
           url: `https://soundcloud.com/${username}/${slug}`,
         });
       }

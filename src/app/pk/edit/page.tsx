@@ -86,6 +86,9 @@ function PresskitEditor() {
   const [scSelectedTrack, setScSelectedTrack] = useState<string>('');
   const [scSelectedType, setScSelectedType] = useState<'set' | 'release'>('set');
   const [scDropdownOpen, setScDropdownOpen] = useState(false);
+  // Item de tipo set pendiente de confirmar (EP vs playlist).
+  const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
+  const [playlistBlocked, setPlaylistBlocked] = useState(false);
 
   // ── Cambios sin guardar (dirty) + auto-guardado ───────────────────────────
   // Snapshot en memoria (barato) para saber si hay cambios sin guardar. Los TEXTOS
@@ -500,17 +503,39 @@ function PresskitEditor() {
     }
   };
 
-  const addScTrack = () => {
-    const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
-    if (!track) return;
+  // Un item de SoundCloud es un "set" (URL /sets/…) cuando es un EP, álbum o
+  // playlist. No podemos distinguir un EP de una playlist automáticamente, así
+  // que se lo preguntamos al artista y bloqueamos las playlists.
+  const isSetUrl = (url: string) => /soundcloud\.com\/[^/]+\/sets\//i.test(url);
+
+  const addMixEntry = (track: SoundcloudTrackOption, isEp: boolean) => {
     autoPendingRef.current = true; // importar desde SoundCloud → auto-guardar
     setMixes([
       ...mixes,
-      { title: track.title, platform: 'SoundCloud', url: track.url, type: scSelectedType },
+      {
+        title: track.title,
+        platform: 'SoundCloud',
+        url: track.url,
+        // Un EP es un release (aparece en Releases Nacionales); marcamos is_ep.
+        type: isEp ? 'release' : scSelectedType,
+        ...(isEp ? { is_ep: true } : {}),
+      },
     ]);
     setScDropdownOpen(false);
     setScSelectedTrack('');
     setScTracks([]);
+    setEpPrompt(null);
+  };
+
+  const addScTrack = () => {
+    const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
+    if (!track) return;
+    // Si es un set, preguntamos EP vs playlist antes de agregar.
+    if (isSetUrl(track.url)) {
+      setEpPrompt(track);
+      return;
+    }
+    addMixEntry(track, false);
   };
 
   // Show auth modal if not logged in or needs profile
@@ -1059,12 +1084,47 @@ function PresskitEditor() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setScDropdownOpen(false); setScTracks([]); setScError(''); }}
+                        onClick={() => { setScDropdownOpen(false); setScTracks([]); setScError(''); setEpPrompt(null); setPlaylistBlocked(false); }}
                         className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
                       >
                         CANCELAR
                       </button>
                     </div>
+
+                    {/* Prompt EP vs playlist para items de tipo set */}
+                    {epPrompt && (
+                      <div className="brutalist-border bg-yellow-50 p-3 space-y-2">
+                        <p className="mono text-xs font-bold uppercase">
+                          «{epPrompt.title}» es un set de SoundCloud. ¿Qué es?
+                        </p>
+                        <p className="mono text-[11px] opacity-70 normal-case">
+                          Un EP se publica en Releases Nacionales. Una playlist (recopilatorio)
+                          no se puede publicar.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setPlaylistBlocked(false); addMixEntry(epPrompt, true); }}
+                            className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border bg-[#7C3AED] text-white hover:opacity-90 transition-opacity"
+                          >
+                            ES UN EP
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEpPrompt(null); setPlaylistBlocked(true); }}
+                            className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-black hover:text-white transition-colors"
+                          >
+                            ES UNA PLAYLIST
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {playlistBlocked && !epPrompt && (
+                      <p className="mono text-xs text-red-500 normal-case">
+                        Las playlists no se pueden publicar en Releases Nacionales. Elige un
+                        track o un EP.
+                      </p>
+                    )}
                   </>
                 )}
                 {!scLoading && scTracks.length === 0 && !scError && (
