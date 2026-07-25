@@ -52,6 +52,7 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - Icons come from `@remixicon/react`. Fonts are Space Grotesk / Space Mono via `next/font`.
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
+- **Español de CHILE (tuteo), NUNCA voseo argentino.** Todo el texto visible al usuario (UI, correos de campaña, tooltips, mensajes de error) va en **tuteo chileno**: "quieres" (no "querés"), "puedes" (no "podés"), "tienes" (no "tenés"), "activa/pon/mira/deja" (no "activá/poné/mirá/dejá"), "aquí" (no "acá"). Esto es **crítico**: un correo con voseo salió a producción y fue un problema serio. Antes de mandar cualquier copy nueva (sobre todo correos), revísala por voseo. Los comentarios de código internos son flexibles, pero el texto de cara al usuario NO.
 
 ## Analytics — consider tracking on every change
 
@@ -171,6 +172,22 @@ When adding a new CMS-driven UI state, extend `getMockEvents()` with a case that
 
 `src/lib/youtube.ts` `getSotanoVideos(n)` lists the channel's latest uploads (@drumandbasschile — uploads playlist `UUa93ljufgJ4Wdryd8FUFZnQ`) and filters by title containing **"El Sótano"** (accent/case-insensitive), cached with ISR (`fetch(..., { next: { revalidate: 3600 } })`) so it costs almost no quota and **updates itself** when a new chapter is uploaded. Rendered on the **home only** (`(main)/page.tsx`) via `src/components/YoutubeVideos.tsx` — 2 videos in one row, thumbnails that link out to `youtube.com/watch?v=…` + a channel button. Uses `YOUTUBE_API_KEY`; returns `[]` (and the section hides) if the key is missing or the API fails. To change the series, edit `TITLE_MATCH`; reads one page (50 uploads) so if the channel ever exceeds that, add pagination.
 
+## Reproductor de Releases Nacionales (`/releases`)
+
+`ReleasesPlayer.tsx` reproduce los releases featured con un **`<audio>` propio** (NO el widget de SoundCloud). Por qué y sus trampas:
+- **SoundCloud no tiene API pública.** El stream se obtiene scrapeando: `resolveSoundcloudStream` (`lib/soundcloud.ts`) saca un **`client_id`** del JS de SoundCloud (cacheado en memoria, refresca en 401/403) y resuelve el `media.transcodings` **progresivo** → URL MP3 firmada. Frágil (client_id rota, la URL firmada **expira** → se re-resuelve `onError`) y zona gris de ToS. Endpoint: `api/pk/soundcloud/stream`. Si SoundCloud cambia su web, se rompe → se reimplementa (decisión asumida; las reproducciones NO cuentan en SoundCloud).
+- **Por qué NO el widget:** en móvil muestra el gate "Play on SoundCloud" y **no auto-reproduce inline**; además su iframe cross-origin **se queda con la Media Session** (no se puede controlar desde nuestra página). Por eso el `<audio>` propio.
+- **Media Session (controles nativos del celular):** para que iOS/Android muestren **siguiente/anterior de playlist** en vez de los botones ±10s, hay que **deshabilitar explícitamente `seekforward`/`seekbackward`** (`setActionHandler(..., null)`) además de setear `nexttrack`/`previoustrack`. No es obvio; sin eso iOS muestra solo el seek.
+- **Autoplay en móvil:** el `load()`/`play()` debe correr **síncrono dentro del gesto** del usuario (nada de `await` antes) o el móvil bloquea. Por eso se **prefetchean** los stream URLs del actual + siguiente → el play es síncrono.
+- **Links cortos `on.soundcloud.com` no cargan** en el widget/reproductor: hay que normalizar a la canónica (`permalink_url`). El enrich normaliza al guardar; el player además usa la canónica que devuelve el endpoint de descarga como defensa.
+- **Descarga se lee EN VIVO, no de la DB.** Un track es descargable si el flag nativo `downloadable` es true **O** hay `purchase_url` con `purchase_title` de descarga (gate tipo Hypeddit — la mayoría de DnB usan gate, no nativo). Se consulta por track (`api/pk/soundcloud/download`, cacheado en edge); los campos `downloadable`/`download_url` **se borraron** de `presskits.mixes` (no confiar en la DB). `released_at`/`is_ep` **sí** viven en la DB.
+- **La cola es a nivel de TRACK, no de release:** cada track de un EP es un ítem propio (se precargan las tracklists vía `api/pk/soundcloud/set`), así el shuffle los **intercala** en vez de reproducir el EP en bloque.
+- **HLS:** se prefiere MP3 progresivo (reproduce en todos lados); un track solo-HLS puede no sonar en Chrome desktop (Safari/iOS sí) → hay aviso nativo con link a SoundCloud + "Saltar".
+
+## Campaña "Releases sin descarga" (`no_download`)
+
+Tipo de campaña **personalizado por DJ** (no segmentado): le avisa a cada DJ qué releases publicados suyos no tienen descarga. Flujo propio en `CampaignsClient` (template `no_download` → Calcular → preview por DJ + preview del correo → Enviar), separado del wizard segmentado/cupón. Backend en `api/admin/campaigns` (`noDownloadAction: 'preview' | 'send'`): computa en vivo (scrapea la descarga de cada featured, en paralelo), manda un correo por DJ vía Resend y persiste como campaña normal. El cuerpo del correo está duplicado en backend (`noDownloadEmailBody`) y en el preview del cliente (`noDownloadEmailHtml`) — **mantenerlos en sync**.
+
 ## Working with this file
 
 Whenever you edit `CLAUDE.md`, commit it yourself right after (`git add CLAUDE.md && git commit -m "docs: update CLAUDE.md"`). Do it as an explicit step — do not rely on an automated hook.
@@ -187,7 +204,7 @@ The **admin panel is a route, not a subdomain**: it lives at `<domain>/admin` (`
 
 Manual release flow (when committing on `develop` directly, as during pair sessions): commit the work → `git flow release start X.Y.Z` → `npm version X.Y.Z --no-git-tag-version` → commit `version bump` → `git flow release finish X.Y.Z` (macOS `getopt` rejects `-m "…"` with spaces; pass the tag message via `GIT_MERGE_AUTOEDIT=no GIT_EDITOR='cp /tmp/tagmsg' git flow release finish X.Y.Z`) → `git push origin main develop --tags`. This repo bumps the **minor** per release (2.17 → 2.18 → …). Tags use the **`v` prefix** (`gitflow.prefix.versiontag = v`).
 
-**Release gate must be `npx tsc --noEmit`, NOT `next build`.** `next build` writes to `.next` (the same dir a running `next dev` uses) and appends paths to `tsconfig.json` — running it mid-release dirties the working tree, which makes `git flow release start` abort, and it corrupts/kills an active dev server. Never `pkill` the user's dev server and never start a background `next dev` on port 3600 (causes `EADDRINUSE` for the user). To verify runtime behavior, curl the user's already-running dev server instead of spawning one.
+**Release gate must be `npx tsc --noEmit`, NOT `next build`.** `next build` writes to `.next` (the same dir a running `next dev` uses) and appends paths to `tsconfig.json` — running it mid-release dirties the working tree, which makes `git flow release start` abort, and it corrupts/kills an active dev server. Never `pkill` the user's dev server and never start a background `next dev` on port 3600 (causes `EADDRINUSE` for the user). To verify runtime behavior, curl the user's already-running dev server instead of spawning one. **Si hay WIP sin commitear al cortar un release, stashealo primero** (`git stash push <files>`): cualquier cambio sin stagear aborta `git flow release start` y te puede dejar un release a medias (bump commiteado en develop pero sin merge a main ni tag).
 
 ## Environment
 

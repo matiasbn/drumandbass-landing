@@ -31,14 +31,59 @@ const AUDIENCES: { key: AudienceKey; label: string }[] = [
 
 // Plantillas de correo. La primera rellena los campos desde un evento publicado;
 // se irán agregando más (p. ej. "Nuevo capítulo de El Sótano").
-type TemplateKey = 'evento';
+type TemplateKey = 'evento' | 'no_download';
 const TEMPLATES: { key: TemplateKey; name: string; desc: string }[] = [
   {
     key: 'evento',
     name: 'Evento',
     desc: 'Invita a un evento publicado: rellena flyer, fecha y lugar. Opcionalmente con descuento Junglist.',
   },
+  {
+    key: 'no_download',
+    name: 'Releases sin descarga',
+    desc: 'Avísale a cada DJ cuáles de sus releases publicados no tienen link de descarga. Un correo personalizado por DJ.',
+  },
 ];
+
+interface NoDownloadPreview {
+  djs: { email: string; artistName: string; slug: string | null; tracks: { title: string; url: string }[] }[];
+  totalDjs: number;
+  totalTracks: number;
+}
+type NoDownloadDj = NoDownloadPreview['djs'][number];
+
+// Preview del correo que recibe un DJ. Refleja el cuerpo del backend
+// (noDownloadEmailBody en api/admin/campaigns). Mantener en sync.
+function noDownloadEmailHtml(dj: NoDownloadDj): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const items = dj.tracks
+    .map(
+      (t) =>
+        `<li style="margin-bottom:8px;"><a href="${esc(t.url)}" style="color:#ff0055;font-weight:700;text-decoration:none;">${esc(t.title)}</a></li>`
+    )
+    .join('');
+  const one = dj.tracks.length === 1;
+  const body = `
+    <p>Hola <strong>${esc(dj.artistName)}</strong>,</p>
+    <p>Vimos que ${one ? 'este release tuyo' : 'estos releases tuyos'} en
+    <strong>Releases Nacionales</strong> de Drum and Bass Chile ${one ? 'no tiene' : 'no tienen'}
+    link de descarga:</p>
+    <ul style="padding-left:18px;">${items}</ul>
+    <p>Si quieres que la gente pueda <strong>bajar tu música</strong> desde el reproductor, tienes dos opciones en SoundCloud:</p>
+    <ol style="padding-left:18px;">
+      <li style="margin-bottom:6px;">Activa la <strong>descarga nativa</strong> del track (en la edición del track, "Enable downloads").</li>
+      <li>O pon un link de <strong>descarga/compra</strong> (Hypeddit, etc.) en el campo "Buy/Download".</li>
+    </ol>
+    <p>Apenas lo hagas, aparece el botón de descarga automáticamente en tu track del reproductor. 🙌</p>
+  `;
+  return buildEmailHtml({
+    title: 'Releases sin descarga',
+    body,
+    buttonText: 'Ver Releases Nacionales',
+    buttonUrl: `${BASE_URL}/releases`,
+  });
+}
 
 // Evento (subconjunto de cms_events que trae /api/admin/events) para el picker.
 interface EventLite {
@@ -281,6 +326,14 @@ export default function CampaignsClient() {
   const [segSubjects, setSegSubjects] = useState<Record<Segment, string>>({ junglist: '', no_junglist: '' });
   // Se incrementa al aplicar una plantilla, para regenerar los borradores.
   const [draftSeed, setDraftSeed] = useState(0);
+
+  // Campaña "Releases sin descarga" (template no_download): flujo propio.
+  const [ndPreview, setNdPreview] = useState<NoDownloadPreview | null>(null);
+  const [ndLoading, setNdLoading] = useState(false);
+  const [ndSending, setNdSending] = useState(false);
+  const [ndConfirm, setNdConfirm] = useState(false);
+  const [ndResult, setNdResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [ndPreviewIdx, setNdPreviewIdx] = useState(0); // qué DJ se ve en el preview del correo
 
   // Vista: componer una campaña nueva o revisar el historial.
   const [view, setView] = useState<'nueva' | 'historial'>('nueva');
@@ -629,6 +682,45 @@ export default function CampaignsClient() {
     setTemplate(key);
     setChosenEventId(null);
     if (key === 'evento' && events.length === 0) fetchEvents();
+    if (key === 'no_download') void computeNoDownload();
+  };
+
+  // ── Releases sin descarga ─────────────────────────────────────────────────
+  const computeNoDownload = async () => {
+    setNdLoading(true);
+    setNdPreview(null);
+    setNdResult(null);
+    setNdConfirm(false);
+    setNdPreviewIdx(0);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noDownloadAction: 'preview' }),
+      });
+      const d = await res.json();
+      if (res.ok) setNdPreview(d as NoDownloadPreview);
+    } finally {
+      setNdLoading(false);
+    }
+  };
+  const sendNoDownload = async () => {
+    setNdSending(true);
+    setNdConfirm(false);
+    try {
+      const res = await fetch('/api/admin/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noDownloadAction: 'send' }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setNdResult({ sent: d.sent ?? 0, failed: d.failed ?? 0 });
+        void fetchCampaigns();
+      }
+    } finally {
+      setNdSending(false);
+    }
   };
 
   // Rellena los campos del correo desde un evento publicado. El cuerpo va redactado
@@ -1083,15 +1175,112 @@ export default function CampaignsClient() {
             </div>
           )}
 
-          <div className="flex justify-end mt-6">
-            <button
-              onClick={continueFromTemplate}
-              disabled={!step1Valid}
-              className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Continuar →
-            </button>
-          </div>
+          {/* Panel "Releases sin descarga": preview por DJ + envío (flujo propio) */}
+          {template === 'no_download' && (
+            <div className="mt-6 pt-6 border-t-4 border-black">
+              {ndLoading ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-black border-r-transparent" />
+                  <p className="mono text-sm font-bold uppercase">Calculando releases sin descarga…</p>
+                  <p className="mono text-xs text-gray-500">Consultando SoundCloud track por track. Puede tardar unos segundos.</p>
+                </div>
+              ) : !ndPreview ? (
+                <button
+                  onClick={computeNoDownload}
+                  className="brutalist-border bg-black text-white px-4 py-2 font-bold uppercase text-sm hover:bg-gray-900 cursor-pointer"
+                >
+                  Calcular
+                </button>
+              ) : ndPreview.totalDjs === 0 ? (
+                <p className="mono text-sm">🎉 Todos los releases publicados tienen link de descarga. No hay a quién avisar.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className="mono text-sm">
+                      <strong>{ndPreview.totalDjs}</strong> DJs · <strong>{ndPreview.totalTracks}</strong> tracks sin descarga.
+                      Cada DJ recibe SU lista.
+                    </p>
+                    <button onClick={computeNoDownload} className="mono text-xs underline text-gray-500 hover:text-black shrink-0">
+                      Recalcular
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto mb-4">
+                    {ndPreview.djs.map((dj, i) => (
+                      <button
+                        key={dj.email}
+                        type="button"
+                        onClick={() => setNdPreviewIdx(i)}
+                        className={`w-full text-left brutalist-border p-3 transition-colors cursor-pointer flex items-center justify-between gap-2 ${i === ndPreviewIdx ? 'bg-[#ff0055] text-white' : 'bg-gray-50 hover:bg-gray-100'}`}
+                      >
+                        <span className="min-w-0">
+                          <span className="font-black uppercase text-sm">{dj.artistName}</span>{' '}
+                          <span className={`mono text-[11px] font-normal normal-case ${i === ndPreviewIdx ? 'text-white/80' : 'text-gray-500'}`}>· {dj.email}</span>
+                        </span>
+                        <span className={`mono text-[10px] font-bold uppercase shrink-0 ${i === ndPreviewIdx ? 'text-white/80' : 'text-gray-500'}`}>
+                          {dj.tracks.length} {dj.tracks.length === 1 ? 'track' : 'tracks'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Preview del correo real que recibiría el DJ seleccionado */}
+                  {ndPreview.djs[ndPreviewIdx] && (
+                    <div className="mb-4">
+                      <p className="mono text-xs font-bold uppercase text-gray-500 mb-2">
+                        Correo para {ndPreview.djs[ndPreviewIdx].artistName} (así se envía)
+                      </p>
+                      <div className="brutalist-border bg-white overflow-hidden">
+                        <iframe
+                          title="Preview del correo"
+                          srcDoc={noDownloadEmailHtml(ndPreview.djs[ndPreviewIdx])}
+                          className="w-full h-[520px] border-0"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {ndResult ? (
+                    <p className="mono text-sm font-bold text-green-700">
+                      ✓ {ndResult.sent} correos enviados{ndResult.failed ? ` · ${ndResult.failed} fallidos` : ''}.
+                    </p>
+                  ) : ndConfirm ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="mono text-sm">¿Enviar {ndPreview.totalDjs} correos personalizados?</span>
+                      <button
+                        onClick={sendNoDownload}
+                        disabled={ndSending}
+                        className="brutalist-border bg-[#ff0055] text-white px-4 py-2 font-bold uppercase text-sm hover:opacity-90 cursor-pointer disabled:opacity-50"
+                      >
+                        {ndSending ? 'Enviando…' : 'Sí, enviar'}
+                      </button>
+                      <button onClick={() => setNdConfirm(false)} className="mono text-xs underline text-gray-500 hover:text-black">
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setNdConfirm(true)}
+                      className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 cursor-pointer"
+                    >
+                      Enviar {ndPreview.totalDjs} correos →
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {template !== 'no_download' && (
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={continueFromTemplate}
+                disabled={!step1Valid}
+                className="brutalist-border bg-black text-white px-6 py-3 font-bold uppercase hover:bg-gray-900 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Continuar →
+              </button>
+            </div>
+          )}
         </div>
       )}
 
