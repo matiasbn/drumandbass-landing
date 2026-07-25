@@ -27,6 +27,9 @@ export const EVENT_LABELS: Record<string, string> = {
   presskit_view: 'Vistas de presskit',
   release_publish: 'Releases publicados (DJ)',
   release_click: 'Clic a un release',
+  release_play: 'Reproducciones de release',
+  release_open_soundcloud: 'Abrir release en SoundCloud',
+  release_download_click: 'Descargas de release',
   sotano_video_click: 'Clic a video de El Sótano',
   social_click: 'Clic a redes sociales',
   whatsapp_click: 'Clic a WhatsApp',
@@ -77,6 +80,9 @@ export const EVENT_TIPS: Record<string, string> = {
   presskit_view: 'Alguien vio un presskit público.',
   release_publish: 'Un DJ marcó un release para publicarlo en Releases Nacionales.',
   release_click: 'Un visitante hizo clic en un release (hacia SoundCloud).',
+  release_play: 'Un visitante reprodujo un release en el reproductor de Releases Nacionales.',
+  release_open_soundcloud: 'Un visitante abrió un release en SoundCloud desde el reproductor.',
+  release_download_click: 'Un visitante hizo clic en descargar un release (nativa o gate externo).',
   sotano_video_click: 'Clic a un video de El Sótano (hacia YouTube).',
   social_click: 'Clic a una red social (Instagram, SoundCloud, YouTube, Spotify, etc.).',
   whatsapp_click: 'Clic a un enlace de WhatsApp (grupo o contacto).',
@@ -113,6 +119,7 @@ export const CORE_ACTIONS = [
   'sotano_video_click', // 3. clic a video de El Sótano
   'whatsapp_click', // 4. clic a WhatsApp
   'release_click', // 5. clic a un release
+  'release_play', // 5b. reproducción de release en el reproductor
   'enter_club', // 6. entradas al club
   'social_click', // 7. clic a redes sociales
   'junglist_unsubscribe', // 8. bajas de junglist

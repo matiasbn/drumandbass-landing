@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { RiSoundcloudLine, RiArrowRightLine } from '@remixicon/react';
+import { RiSoundcloudLine, RiArrowRightLine, RiDownloadLine } from '@remixicon/react';
 import dayjs from '@/src/lib/date';
 import { event } from '@/src/lib/gtag';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
@@ -57,11 +57,18 @@ export default function NationalReleases({
           />
 
           <div className="flex items-center justify-between gap-2">
-            <span className="mono text-[10px] font-black uppercase bg-[#FF5500] text-white px-2 py-0.5">
-              RELEASE
-            </span>
+            {/* EP (violeta) vs RELEASE (naranja SoundCloud) */}
+            {r.isEp ? (
+              <span className="mono text-[10px] font-black uppercase bg-[#7C3AED] text-white px-2 py-0.5">
+                EP
+              </span>
+            ) : (
+              <span className="mono text-[10px] font-black uppercase bg-[#FF5500] text-white px-2 py-0.5">
+                RELEASE
+              </span>
+            )}
             {r.releasedAt && (
-              <span className="mono text-[10px] font-bold uppercase opacity-50">
+              <span className="mono text-[10px] font-bold uppercase opacity-50 shrink-0">
                 {dayjs(r.releasedAt).format('DD MMM YYYY')}
               </span>
             )}
@@ -72,18 +79,26 @@ export default function NationalReleases({
             <RiSoundcloudLine className="w-5 h-5 text-[#FF5500] shrink-0 mt-1" />
           </div>
 
-          <span className="mt-auto mono text-xs font-bold uppercase opacity-70 truncate">
-            {r.slug ? (
-              <Link
-                href={`/pk/${r.slug}`}
-                className="relative z-10 hover:text-[#FF5500] transition-colors"
-              >
-                {r.artistName}
-              </Link>
-            ) : (
-              r.artistName
+          <div className="mt-auto flex items-center justify-between gap-2">
+            <span className="mono text-xs font-bold uppercase opacity-70 truncate">
+              {r.slug ? (
+                <Link
+                  href={`/pk/${r.slug}`}
+                  className="relative z-10 hover:text-[#FF5500] transition-colors"
+                >
+                  {r.artistName}
+                </Link>
+              ) : (
+                r.artistName
+              )}
+            </span>
+            {r.downloadable && (
+              <span className="mono text-[10px] font-black uppercase bg-[#00b341] text-white px-2 py-0.5 inline-flex items-center gap-1 shrink-0">
+                <RiDownloadLine className="w-3 h-3" />
+                Descarga
+              </span>
             )}
-          </span>
+          </div>
         </div>
       ))}
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import NationalReleases from '@/src/components/NationalReleases';
+import ReleasesPlayer from '@/src/components/ReleasesPlayer';
 import { getNationalReleases } from '@/src/lib/nationalReleases';
 
 export const metadata: Metadata = {
@@ -38,7 +38,7 @@ export default async function ReleasesPage() {
             aparecer aquí.
           </p>
         ) : (
-          <NationalReleases releases={releases} />
+          <ReleasesPlayer releases={releases} />
         )}
       </section>
     </main>

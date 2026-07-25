@@ -1,8 +1,7 @@
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { PresskitMix } from '@/src/types/presskit';
-import { fetchSoundcloudDisplayDate, isSoundcloudUrl } from '@/src/lib/soundcloud';
+import { enrichFeaturedReleaseDates } from '@/src/lib/soundcloud';
 
 // Revalida las vistas que dependen de los releases marcados (home + /releases),
 // para que marcar/desmarcar se refleje al instante y no espere el ISR (1h).
@@ -11,23 +10,7 @@ function revalidateReleases() {
   revalidatePath('/releases');
 }
 
-// Captura la fecha de publicación (display_date) de SoundCloud para los releases
-// marcados como "featured" que todavía no la tengan. Solo aplica a SoundCloud.
-async function enrichMixes(mixes: PresskitMix[]): Promise<PresskitMix[]> {
-  return Promise.all(
-    mixes.map(async (m) => {
-      const isFeaturedScRelease =
-        !!m.featured && m.type === 'release' && isSoundcloudUrl(m.url);
-      if (!isFeaturedScRelease) {
-        // No es un release de SoundCloud marcado: no debe figurar en el banner.
-        return { ...m, featured: false };
-      }
-      if (m.released_at) return m; // ya capturada
-      const released_at = await fetchSoundcloudDisplayDate(m.url);
-      return { ...m, released_at };
-    })
-  );
-}
+const enrichMixes = enrichFeaturedReleaseDates;
 
 export async function GET() {
   const supabase = await createSupabaseServer();
