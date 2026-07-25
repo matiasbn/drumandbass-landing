@@ -6,6 +6,7 @@ import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
 import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
+import { socialToHandle, socialToUrl } from '@/src/lib/socials';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -26,33 +27,11 @@ import {
   RiArrowRightSLine,
 } from '@remixicon/react';
 
+// Instagram NO va acá: es un campo dedicado y obligatorio del formulario.
 const PLATFORM_OPTIONS = [
-  'Instagram', 'SoundCloud', 'Spotify', 'YouTube',
+  'SoundCloud', 'Spotify', 'YouTube',
   'Facebook', 'TikTok', 'Twitter', 'Bandcamp',
 ];
-
-const PLATFORM_BASE_URLS: Record<string, string> = {
-  Instagram: 'https://instagram.com/',
-  SoundCloud: 'https://soundcloud.com/',
-  Spotify: 'https://open.spotify.com/artist/',
-  YouTube: 'https://youtube.com/@',
-  Facebook: 'https://facebook.com/',
-  TikTok: 'https://tiktok.com/@',
-  Twitter: 'https://x.com/',
-  Bandcamp: 'https://',
-};
-
-function resolveSocialUrl(platform: string, value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  // If it's already a URL, return as-is
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  // Strip leading @ if present
-  const clean = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
-  const base = PLATFORM_BASE_URLS[platform];
-  if (!base) return trimmed;
-  return `${base}${clean}`;
-}
 
 const MAX_LOGOS = 3;
 const LOGO_MAX_SIZE = 3 * 1024 * 1024; // 3MB — logos are lightweight brand assets
@@ -81,6 +60,8 @@ function PresskitEditor() {
   const [realName, setRealName] = useState('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
+  // Instagram es un campo dedicado y obligatorio (no vive en la lista de redes).
+  const [instagram, setInstagram] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -106,6 +87,20 @@ function PresskitEditor() {
   const [scSelectedType, setScSelectedType] = useState<'set' | 'release'>('set');
   const [scDropdownOpen, setScDropdownOpen] = useState(false);
 
+  // ── Cambios sin guardar (dirty) + auto-guardado ───────────────────────────
+  // Snapshot en memoria (barato) para saber si hay cambios sin guardar. Los TEXTOS
+  // se guardan con botón (no request por letra); los cambios DISCRETOS (dropdowns,
+  // toggle publicado, subir/quitar imagen, borrar fila) marcan autoPendingRef y se
+  // guardan solos vía el efecto de más abajo.
+  const savedRef = useRef('');
+  const autoPendingRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const currentSnapshot = () =>
+    JSON.stringify({
+      artistName, realName, city, country, instagram, genresInput, bio,
+      photoUrls, logoUrls, socials, mixes, links, published,
+    });
+
   const fetchPresskit = useCallback(async () => {
     try {
       const res = await fetch('/api/pk');
@@ -116,20 +111,42 @@ function PresskitEditor() {
       const { presskit: pk } = await res.json();
       if (pk) {
         setPresskit(pk);
+        const loadedPhotoUrls: string[] =
+          pk.photo_urls?.length ? pk.photo_urls : pk.photo_url ? [pk.photo_url] : [];
+        // Instagram sale a su campo dedicado; el resto queda en la lista de redes.
+        const allSocials = (pk.socials || []).map((s: PresskitSocial) => ({
+          platform: s.platform,
+          url: socialToHandle(s.platform, s.url),
+        }));
+        const ig = allSocials.find((s: PresskitSocial) => s.platform === 'Instagram');
+        const loadedInstagram = ig?.url || '';
+        const loadedSocials = allSocials.filter((s: PresskitSocial) => s.platform !== 'Instagram');
+        const loadedGenres = (pk.genres || []).join(', ');
+        const loadedLogoUrls: string[] = pk.logo_urls || [];
+        const loadedMixes = pk.mixes || [];
+        const loadedLinks = pk.links || [];
+
         setArtistName(pk.artist_name || '');
         setRealName(pk.real_name || '');
         setCity(pk.city || '');
         setCountry(pk.country || '');
-        setGenresInput((pk.genres || []).join(', '));
+        setGenresInput(loadedGenres);
         setBio(pk.bio || '');
-        setPhotoUrls(
-          pk.photo_urls?.length ? pk.photo_urls : pk.photo_url ? [pk.photo_url] : []
-        );
-        setLogoUrls(pk.logo_urls || []);
-        setSocials(pk.socials || []);
-        setMixes(pk.mixes || []);
-        setLinks(pk.links || []);
+        setPhotoUrls(loadedPhotoUrls);
+        setLogoUrls(loadedLogoUrls);
+        setInstagram(loadedInstagram);
+        setSocials(loadedSocials);
+        setMixes(loadedMixes);
+        setLinks(loadedLinks);
         setPublished(pk.published || false);
+
+        // Snapshot inicial → "dirty" arranca en false. Mismo shape que currentSnapshot.
+        savedRef.current = JSON.stringify({
+          artistName: pk.artist_name || '', realName: pk.real_name || '', city: pk.city || '',
+          country: pk.country || '', instagram: loadedInstagram, genresInput: loadedGenres,
+          bio: pk.bio || '', photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
+          socials: loadedSocials, mixes: loadedMixes, links: loadedLinks, published: pk.published || false,
+        });
       }
     } catch (err) {
       console.error('Error fetching presskit:', err);
@@ -221,6 +238,7 @@ function PresskitEditor() {
       }
 
       if (newUrls.length > 0) {
+        autoPendingRef.current = true; // subir foto → auto-guardar
         setPhotoUrls((prev) => [...prev, ...newUrls]);
         setSaveMessage(`${newUrls.length} foto(s) subida(s) correctamente`);
         setTimeout(() => setSaveMessage(''), 3000);
@@ -292,6 +310,7 @@ function PresskitEditor() {
       }
 
       if (newUrls.length > 0) {
+        autoPendingRef.current = true; // subir logo → auto-guardar
         setLogoUrls((prev) => [...prev, ...newUrls]);
         setSaveMessage(`${newUrls.length} logo(s) subido(s) correctamente`);
         setTimeout(() => setSaveMessage(''), 3000);
@@ -304,62 +323,53 @@ function PresskitEditor() {
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveMessage('');
+  const persist = async (validate: boolean) => {
+    const genres = genresInput.split(',').map((g) => g.trim()).filter(Boolean);
 
-    const genres = genresInput
-      .split(',')
-      .map((g) => g.trim())
-      .filter(Boolean);
-
-    const resolvedSocials = socials
-      .filter((s) => s.url.trim())
-      .map((s) => ({
-        platform: s.platform,
-        url: resolveSocialUrl(s.platform, s.url),
-      }));
-
+    // Instagram (dedicado y obligatorio) va primero en las redes; el resto detrás.
+    const igHandle = socialToHandle('Instagram', instagram);
+    const resolvedSocials = [
+      ...(igHandle ? [{ platform: 'Instagram', url: igHandle }] : []),
+      ...socials
+        .filter((s) => s.url.trim() && s.platform !== 'Instagram')
+        .map((s) => ({ platform: s.platform, url: socialToHandle(s.platform, s.url) })),
+    ];
     const filteredMixes = mixes.filter((m) => m.title.trim() && m.url.trim());
     const filteredLinks = links.filter((l) => l.title.trim() && l.url.trim());
 
-    const hasEmptySocials = socials.some((s) => !s.url.trim());
-    const hasEmptyMixes = mixes.some((m) => !m.title.trim() || !m.url.trim());
-    const hasEmptyLinks = links.some((l) => !l.title.trim() || !l.url.trim());
-
-    if (hasEmptySocials || hasEmptyMixes || hasEmptyLinks) {
-      setSaveMessage('Error: Completa o elimina los campos vacíos marcados en rojo');
-      setSaving(false);
-      return;
-    }
-
-    if (photoUrls.length === 0) {
-      setSaveMessage('Error: Debes subir al menos una foto para tu presskit');
-      setSaving(false);
-      return;
-    }
-
-    if (logoUrls.length > MAX_LOGOS) {
-      setSaveMessage(`Error: Máximo ${MAX_LOGOS} logos. Elimina ${logoUrls.length - MAX_LOGOS}.`);
-      setSaving(false);
-      return;
+    // La validación dura (obligatorios, fila vacía, foto) solo aplica al guardado
+    // manual/publicación. El auto-guardado persiste el estado tal cual.
+    if (validate) {
+      if (!artistName.trim() || !realName.trim() || !city.trim() || !country.trim() || !instagram.trim()) {
+        setSaveMessage('Error: Completa AKA de DJ, nombre real, ciudad, país e Instagram');
+        return;
+      }
+      if (
+        socials.some((s) => !s.url.trim()) ||
+        mixes.some((m) => !m.title.trim() || !m.url.trim()) ||
+        links.some((l) => !l.title.trim() || !l.url.trim())
+      ) {
+        setSaveMessage('Error: Completa o elimina los campos vacíos marcados en rojo');
+        return;
+      }
+      if (photoUrls.length === 0) {
+        setSaveMessage('Error: Debes subir al menos una foto para tu presskit');
+        return;
+      }
+      if (logoUrls.length > MAX_LOGOS) {
+        setSaveMessage(`Error: Máximo ${MAX_LOGOS} logos. Elimina ${logoUrls.length - MAX_LOGOS}.`);
+        return;
+      }
     }
 
     const body = {
-      artist_name: artistName,
-      real_name: realName,
-      city,
-      country,
-      genres,
-      bio,
-      photo_urls: photoUrls,
-      logo_urls: logoUrls,
-      socials: resolvedSocials,
-      mixes: filteredMixes,
-      links: filteredLinks,
-      published,
+      artist_name: artistName, real_name: realName, city, country, genres, bio,
+      photo_urls: photoUrls, logo_urls: logoUrls, socials: resolvedSocials,
+      mixes: filteredMixes, links: filteredLinks, published,
     };
 
+    setSaving(true);
+    setSaveMessage('');
     try {
       const method = presskit ? 'PUT' : 'POST';
       const res = await fetch('/api/pk', {
@@ -367,15 +377,16 @@ function PresskitEditor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
       const data = await res.json();
       if (!res.ok) {
         setSaveMessage(`Error: ${data.error}`);
       } else {
         setPresskit(data.presskit);
         event(method === 'POST' ? 'presskit_created' : 'presskit_saved');
-        setSaveMessage('Guardado correctamente');
-        setTimeout(() => setSaveMessage(''), 3000);
+        savedRef.current = currentSnapshot();
+        setDirty(false);
+        setSaveMessage(validate ? 'Guardado correctamente' : 'Cambios guardados');
+        setTimeout(() => setSaveMessage(''), 2500);
       }
     } catch {
       setSaveMessage('Error al guardar');
@@ -384,9 +395,25 @@ function PresskitEditor() {
     }
   };
 
+  const handleSave = () => persist(true);
+
+  // ¿Hay cambios sin guardar? Compara el snapshot actual contra el último guardado.
+  useEffect(() => {
+    setDirty(currentSnapshot() !== savedRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artistName, realName, city, country, instagram, genresInput, bio, photoUrls, logoUrls, socials, mixes, links, published]);
+
+  // Auto-guardado: solo cuando un cambio DISCRETO marcó autoPendingRef (los textos no).
+  useEffect(() => {
+    if (!autoPendingRef.current) return;
+    autoPendingRef.current = false;
+    void persist(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoUrls, logoUrls, socials, mixes, links, published]);
+
   // Social handlers
-  const addSocial = () => setSocials([...socials, { platform: 'Instagram', url: '' }]);
-  const removeSocial = (i: number) => setSocials(socials.filter((_, idx) => idx !== i));
+  const addSocial = () => setSocials([...socials, { platform: 'SoundCloud', url: '' }]);
+  const removeSocial = (i: number) => { autoPendingRef.current = true; setSocials(socials.filter((_, idx) => idx !== i)); };
   const updateSocial = (i: number, field: keyof PresskitSocial, value: string) => {
     const updated = [...socials];
     updated[i] = { ...updated[i], [field]: value };
@@ -395,8 +422,9 @@ function PresskitEditor() {
 
   // Mix handlers
   const addMix = () => setMixes([...mixes, { title: '', platform: 'SoundCloud', url: '', type: 'set' }]);
-  const removeMix = (i: number) => setMixes(mixes.filter((_, idx) => idx !== i));
+  const removeMix = (i: number) => { autoPendingRef.current = true; setMixes(mixes.filter((_, idx) => idx !== i)); };
   const updateMix = (i: number, field: keyof PresskitMix, value: string | PresskitMix['type']) => {
+    if (field !== 'title' && field !== 'url') autoPendingRef.current = true; // dropdowns → auto
     const updated = [...mixes];
     updated[i] = { ...updated[i], [field]: value };
     // Si cambia la URL de un release marcado, invalida la fecha para recapturarla al guardar.
@@ -407,6 +435,7 @@ function PresskitEditor() {
   // "Publicar en Releases Nacionales": la fecha (released_at) la captura el
   // backend desde SoundCloud al guardar; aquí solo alternamos el flag.
   const toggleMixFeatured = (i: number) => {
+    autoPendingRef.current = true;
     const updated = [...mixes];
     const turningOn = !updated[i].featured;
     updated[i] = { ...updated[i], featured: turningOn };
@@ -416,7 +445,7 @@ function PresskitEditor() {
 
   // Link handlers
   const addLink = () => setLinks([...links, { title: '', url: '' }]);
-  const removeLink = (i: number) => setLinks(links.filter((_, idx) => idx !== i));
+  const removeLink = (i: number) => { autoPendingRef.current = true; setLinks(links.filter((_, idx) => idx !== i)); };
   const updateLink = (i: number, field: keyof PresskitLink, value: string) => {
     const updated = [...links];
     updated[i] = { ...updated[i], [field]: value };
@@ -439,7 +468,7 @@ function PresskitEditor() {
     setScDropdownOpen(true);
 
     try {
-      const resolvedUrl = resolveSocialUrl('SoundCloud', soundcloudUrl);
+      const resolvedUrl = socialToUrl('SoundCloud', soundcloudUrl);
       const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(resolvedUrl)}`);
       const data = await res.json();
       if (!res.ok) {
@@ -464,6 +493,7 @@ function PresskitEditor() {
   const addScTrack = () => {
     const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
     if (!track) return;
+    autoPendingRef.current = true; // importar desde SoundCloud → auto-guardar
     setMixes([
       ...mixes,
       { title: track.title, platform: 'SoundCloud', url: track.url, type: scSelectedType },
@@ -599,7 +629,7 @@ function PresskitEditor() {
           {/* Basic info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Nombre artístico *</label>
+              <label className={labelClass}>AKA de DJ *</label>
               <input
                 type="text"
                 value={artistName}
@@ -610,38 +640,56 @@ function PresskitEditor() {
               />
             </div>
             <div>
-              <label className={labelClass}>Nombre real</label>
+              <label className={labelClass}>Nombre real *</label>
               <input
                 type="text"
                 value={realName}
                 onChange={(e) => setRealName(e.target.value)}
                 className={inputClass}
                 placeholder="Carlos Mendoza"
+                required
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Ciudad</label>
+              <label className={labelClass}>Ciudad *</label>
               <input
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 className={inputClass}
                 placeholder="Santiago"
+                required
               />
             </div>
             <div>
-              <label className={labelClass}>País</label>
+              <label className={labelClass}>País *</label>
               <input
                 type="text"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className={inputClass}
                 placeholder="Chile"
+                required
               />
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Instagram *</label>
+            <input
+              type="text"
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
+              className={inputClass}
+              placeholder="tu_usuario"
+              required
+            />
+            <p className="mono text-[10px] opacity-40 mt-1">
+              Solo tu usuario (ej. <span className="font-bold">tu_usuario</span>), sin la URL.
+            </p>
           </div>
 
           <div>
@@ -664,6 +712,23 @@ function PresskitEditor() {
               placeholder="Cuéntanos sobre ti..."
               rows={4}
             />
+          </div>
+
+          {/* Barra de guardado: los textos se guardan acá; los dropdowns/uploads solos. */}
+          <div className="flex flex-wrap items-center gap-3 border-4 border-black bg-gray-50 p-3">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!dirty || saving}
+              className="brutalist-border bg-black text-white px-6 py-2 mono text-sm font-bold uppercase hover:bg-gray-900 disabled:opacity-40 disabled:cursor-default cursor-pointer"
+            >
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+            <span
+              className={`mono text-xs font-bold uppercase ${dirty ? 'text-[#ff0055]' : 'text-green-600'}`}
+            >
+              {saving ? '' : dirty ? '● Hay cambios sin guardar' : '✓ Todos los cambios guardados'}
+            </span>
           </div>
 
           <div>
@@ -722,6 +787,7 @@ function PresskitEditor() {
                             await supabase.storage.from('pk-photos').remove([pathMatch[1]]);
                           }
                         } catch { /* ignore storage errors */ }
+                        autoPendingRef.current = true;
                         setPhotoUrls((prev) => prev.filter((_, idx) => idx !== i));
                       }}
                       className="p-1 bg-white brutalist-border hover:bg-red-500 hover:text-white transition-colors"
@@ -799,6 +865,7 @@ function PresskitEditor() {
                             await supabase.storage.from('pk-photos').remove([pathMatch[1]]);
                           }
                         } catch { /* ignore storage errors */ }
+                        autoPendingRef.current = true;
                         setLogoUrls((prev) => prev.filter((_, idx) => idx !== i));
                       }}
                       className="p-1 bg-white brutalist-border hover:bg-red-500 hover:text-white transition-colors"
@@ -882,10 +949,11 @@ function PresskitEditor() {
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
                     className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
-                    placeholder={`Nombre de usuario o URL completa`}
+                    placeholder="Solo tu nombre de usuario"
                   />
                   <p className="mono text-[10px] opacity-40">
-                    Ej: @tu_usuario o https://{social.platform.toLowerCase()}.com/tu_usuario
+                    Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
+                    completa. Si pegas la URL, la recortamos sola.
                   </p>
                 </div>
               ))}
@@ -1121,6 +1189,7 @@ function PresskitEditor() {
               type="button"
               onClick={() => {
                 event('presskit_publish', { published: !published });
+                autoPendingRef.current = true; // toggle publicado → auto-guardar
                 setPublished(!published);
               }}
               className={`inline-flex items-center gap-2 mono text-sm font-bold uppercase px-4 py-2 brutalist-border transition-colors ${
@@ -1152,7 +1221,7 @@ function PresskitEditor() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleSave}
-              disabled={saving || !artistName || photoUrls.length > 5 || logoUrls.length > MAX_LOGOS}
+              disabled={saving || !dirty || !artistName || photoUrls.length > 5 || logoUrls.length > MAX_LOGOS}
               className="inline-flex items-center gap-2 bg-[#ff0055] text-white px-8 py-3 font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
             >
               {saving ? (
@@ -1162,9 +1231,13 @@ function PresskitEditor() {
               )}
               {saving ? 'GUARDANDO...' : 'GUARDAR'}
             </button>
-            {saveMessage && (
+            {saveMessage ? (
               <span className={`mono text-sm font-bold ${saveMessage.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>
                 {saveMessage}
+              </span>
+            ) : (
+              <span className={`mono text-xs font-bold uppercase ${dirty ? 'text-[#ff0055]' : 'text-green-600'}`}>
+                {dirty ? '● Hay cambios sin guardar' : '✓ Todos los cambios guardados'}
               </span>
             )}
           </div>

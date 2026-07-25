@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
+import { socialToUrl } from '@/src/lib/socials';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
 import TrackOnMount from '@/src/components/TrackOnMount';
@@ -162,7 +163,7 @@ export default async function PublicPresskitPage({ params }: PageProps) {
                 <BrutalistButton
                   key={platform}
                   variant={config.variant}
-                  href={ensureAbsoluteUrl(url)}
+                  href={socialToUrl(platform, url)}
                   external
                   className="p-6 flex-col text-center"
                 >

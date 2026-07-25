@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { PresskitMix } from '@/src/types/presskit';
@@ -111,6 +111,27 @@ export default function PresskitsClient() {
       published: pk.published,
     });
   };
+
+  // Al llegar desde "Editar presskit" (?slug=…), abre ese presskit y hace scroll.
+  // Solo una vez, cuando ya cargaron los presskits.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenedRef.current || presskits.length === 0) return;
+    const slug = new URLSearchParams(window.location.search).get('slug');
+    if (!slug) {
+      autoOpenedRef.current = true;
+      return;
+    }
+    const pk = presskits.find((p) => p.slug === slug);
+    if (pk) {
+      autoOpenedRef.current = true;
+      startEdit(pk);
+      setTimeout(() => {
+        document.getElementById(`pk-${pk.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presskits]);
 
   const cancelEdit = () => {
     setEditingId(null);
@@ -237,7 +258,7 @@ export default function PresskitsClient() {
                     .filter(({ m }) => isFeaturedRelease(m));
                   return (
                   <Fragment key={pk.id}>
-                  <tr className="border-b border-gray-300">
+                  <tr id={`pk-${pk.id}`} className="border-b border-gray-300 scroll-mt-24">
                     {editingId === pk.id ? (
                       <>
                         <td className="py-2 pr-2">

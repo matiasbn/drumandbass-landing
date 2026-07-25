@@ -104,6 +104,11 @@ export default function EventosClient() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  // Quiénes copiaron el código de este evento (por evento+usuario) + desglose.
+  const [copiers, setCopiers] = useState<
+    { email: string; copied_at: string; fromCampaign: boolean }[]
+  >([]);
+  const [copiersAgg, setCopiersAgg] = useState({ total: 0, fromCampaign: 0, organic: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
@@ -165,6 +170,18 @@ export default function EventosClient() {
               coupon_new: d.coupon.coupon_junglist_new || '',
               coupon_existing: d.coupon.coupon_junglist || '',
             }));
+          }
+        })
+        .catch(() => {});
+      // Quiénes copiaron el código (campaña + orgánico).
+      setCopiers([]);
+      setCopiersAgg({ total: 0, fromCampaign: 0, organic: 0 });
+      fetch(`/api/admin/events?copiesFor=${ev.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.copiers) {
+            setCopiers(d.copiers);
+            setCopiersAgg({ total: d.total, fromCampaign: d.fromCampaign, organic: d.organic });
           }
         })
         .catch(() => {});
@@ -512,6 +529,56 @@ export default function EventosClient() {
                 Dejá ambos vacíos para quitar el descuento. Pueden ser el mismo código.
               </p>
             </div>
+
+            {/* Quiénes copiaron el código (por evento+usuario) — campaña + orgánico. */}
+            {editing !== 'new' && (form.coupon_new || form.coupon_existing) && (
+              <div className="sm:col-span-2 border-4 border-black p-4">
+                <p className="font-black uppercase mb-1">
+                  Copiaron el código: {copiersAgg.total}
+                </p>
+                <p className="mono text-[11px] text-gray-500 mb-3">
+                  {copiersAgg.fromCampaign} desde campaña · {copiersAgg.organic} orgánico (sin campaña)
+                </p>
+                {copiers.length > 0 ? (
+                  <div className="max-h-64 overflow-auto border-2 border-black">
+                    <table className="w-full mono text-[11px]">
+                      <thead className="bg-black text-white sticky top-0">
+                        <tr>
+                          <th className="text-left p-2">Correo</th>
+                          <th className="text-left p-2">Cuándo</th>
+                          <th className="text-center p-2">Origen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {copiers.map((c) => (
+                          <tr key={c.email} className="border-b border-gray-200 odd:bg-gray-50">
+                            <td className="p-2 truncate max-w-[240px]">{c.email}</td>
+                            <td className="p-2 whitespace-nowrap">
+                              {dayjs(c.copied_at).format('DD MMM · HH:mm')}
+                            </td>
+                            <td className="p-2 text-center">
+                              <span
+                                className={`inline-block border-2 border-black px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                                  c.fromCampaign
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {c.fromCampaign ? 'Campaña' : 'Orgánico'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="mono text-[11px] text-gray-500">
+                    Nadie copió el código todavía.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="sm:col-span-2">
               <label className={labelCls}>Flyer</label>

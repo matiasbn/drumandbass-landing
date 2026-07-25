@@ -27,7 +27,10 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
 }
 
 
-// GET — lista todos los junglists (solo admin). RLS ya permite al admin ver todo.
+// GET — lista TODOS los junglists (solo admin). Un DJ SIEMPRE es junglist
+// (DJ ⊃ junglist), pero vive en pk_profiles, no en la tabla junglists. Así que la
+// lista = junglists ∪ pk_profiles, deduplicada por email. Si un email está en las
+// dos, es DJ (el DJ manda). Cada fila trae `isDj` para diferenciarlos en la UI.
 export async function GET() {
   const cookieStore = await cookies();
   const supabase = createSupabaseServer(cookieStore);
@@ -37,16 +40,56 @@ export async function GET() {
     return NextResponse.json({ junglists: [], error: 'No autorizado' }, { status: 403 });
   }
 
-  const { data, error } = await supabase
-    .from('junglists')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const [{ data: junglists, error }, { data: pkProfiles }, { data: presskits }] = await Promise.all([
+    supabase.from('junglists').select('*'),
+    supabase.from('pk_profiles').select('user_id, email, created_at, slug'),
+    supabase.from('presskits').select('user_id, artist_name, real_name, socials'),
+  ]);
 
   if (error) {
     return NextResponse.json({ junglists: [], error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ junglists: data || [] });
+  // presskit por user_id (para nombre/instagram del DJ).
+  const pkByUser = new Map(
+    (presskits || []).map((p) => [p.user_id as string, p as Record<string, unknown>])
+  );
+
+  // Merge por email en minúscula. El junglist trae datos ricos (nombre/instagram
+  // que el usuario cargó); el DJ, los del presskit.
+  const byEmail = new Map<string, Record<string, unknown>>();
+  for (const j of junglists || []) {
+    byEmail.set(String(j.email).toLowerCase(), { ...j, isDj: false });
+  }
+  for (const pk of pkProfiles || []) {
+    const email = String(pk.email || '').toLowerCase();
+    if (!email) continue;
+    const existing = byEmail.get(email);
+    if (existing) {
+      existing.isDj = true; // es junglist Y dj → dj
+      continue;
+    }
+    const presskit = pkByUser.get(pk.user_id as string);
+    const socials = (presskit?.socials as { platform?: string; url?: string }[]) || [];
+    const ig = socials.find((s) => /instagram/i.test(s.platform || ''));
+    byEmail.set(email, {
+      id: pk.user_id, // sin fila en junglists → no borrable acá
+      user_id: pk.user_id,
+      name: (presskit?.artist_name as string) || '', // nombre de DJ (artístico)
+      last_name: (presskit?.real_name as string) || '', // nombre real
+      email: pk.email,
+      instagram: ig?.url || '',
+      slug: pk.slug || null,
+      created_at: pk.created_at,
+      isDj: true,
+    });
+  }
+
+  const merged = [...byEmail.values()].sort((a, b) =>
+    String(a.created_at) < String(b.created_at) ? 1 : -1
+  );
+
+  return NextResponse.json({ junglists: merged });
 }
 
 // DELETE — un admin elimina un junglist por id.
