@@ -638,7 +638,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         {/* ── Reproductor (centro) ─────────────────────────────────────── */}
         <div
           ref={playerRef}
-          className="order-1 lg:order-2 lg:sticky lg:top-6 sticky top-16 z-20 bg-white brutalist-border brutalist-shadow-soundcloud"
+          className="order-1 lg:order-2 lg:sticky lg:top-6 lg:z-20 bg-white brutalist-border brutalist-shadow-soundcloud"
         >
           <div className="flex items-center gap-1.5 p-3 border-b-4 border-black">
             <button
