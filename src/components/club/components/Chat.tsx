@@ -1,12 +1,26 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, ChatMessage } from '../../../lib/supabase';
 import { RiSendPlaneFill, RiChat1Line, RiCloseLine, RiUserLine } from '@remixicon/react';
 import { Facehash } from 'facehash';
 import { useMultiplayer } from '../MultiplayerContext';
 import { useScore } from '../ScoreContext';
 import { clubTitleFor, clubTitleColor } from './SessionSummary';
+
+// En móvil (<768) el chat va a pantalla completa (igual que LiveChat).
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return isMobile;
+}
 
 // Chip de título cosmético (M15) junto al username, según best_club_drops
 // histórico del perfil (≥1 Warm-up, ≥3 Selector, ≥5 Hype Master).
@@ -34,6 +48,9 @@ export const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
+  const isMobile = useIsMobile();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Títulos cosméticos por username (M15) — cache incremental, 1 query por
   // tanda de usernames nuevos. Si la columna best_club_drops aún no está
@@ -227,6 +244,104 @@ export const Chat: React.FC = () => {
           </p>
         </div>
       </div>
+    );
+  }
+
+  // Layout MÓVIL: cerrado = ícono chico; abierto = pantalla completa con CERRAR
+  // siempre visible (igual que LiveChat).
+  if (isMobile) {
+    return (
+      <>
+        {!isOpen && mounted && createPortal(
+          <button
+            onClick={() => setIsOpen(true)}
+            className="fixed z-[9999] touch-auto flex items-center justify-center w-12 h-12 rounded-full bg-black/70 backdrop-blur border border-[#00ccff]/40 active:bg-[#00ccff]/20 transition-colors"
+            style={{ bottom: '92px', right: '16px' }}
+            aria-label="Abrir chat"
+          >
+            <RiChat1Line className="w-6 h-6 text-[#00ccff]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#ff0055] text-white text-[10px] font-bold rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </button>,
+          document.body,
+        )}
+
+        {isOpen && mounted && createPortal(
+          <div className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur touch-auto">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#00ccff]/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <RiChat1Line className="w-5 h-5 text-[#00ccff] shrink-0" />
+                <span className="font-mono text-sm text-white">CHAT</span>
+                <span className="font-mono text-xs text-[#00ccff] truncate">· {username}</span>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border border-white/20 text-white/80 active:bg-white/10 transition-colors"
+                aria-label="Cerrar chat"
+              >
+                <RiCloseLine className="w-5 h-5" />
+                <span className="font-mono text-xs">CERRAR</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {messages.length === 0 ? (
+                <p className="text-white/30 text-sm font-mono text-center py-8">
+                  No hay mensajes aún. ¡Di algo!
+                </p>
+              ) : (
+                messages.map((msg) => (
+                  <div key={msg.id} className={`text-sm ${msg.username === username ? 'text-right' : ''}`}>
+                    <div
+                      className={`inline-block max-w-[80%] px-3 py-1.5 ${
+                        msg.username === username
+                          ? 'bg-[#00ccff]/20 border border-[#00ccff]/30'
+                          : 'bg-white/5 border border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <Facehash name={msg.username} size={16} interactive={false} showInitial={false} variant="gradient" intensity3d="subtle" />
+                        <span className={`font-bold text-xs ${msg.username === username ? 'text-[#00ccff]' : 'text-[#ff0055]'}`}>
+                          {msg.username}
+                        </span>
+                        <TitleChip title={titles[msg.username]} />
+                        <span className="text-white/30 text-[10px] font-mono">{formatTime(msg.created_at)}</span>
+                      </div>
+                      <p className="text-white/90 break-words">{msg.message}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={handleSendMessage} className="shrink-0 p-3 border-t border-[#00ccff]/30 bg-black">
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Escribe un mensaje..."
+                  maxLength={500}
+                  className="flex-1 bg-black/50 border border-white/20 text-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ccff] transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={!newMessage.trim() || isLoading}
+                  className="px-4 py-2 bg-[#00ccff]/20 border border-[#00ccff]/50 text-[#00ccff] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#00ccff]/30 transition-colors"
+                >
+                  <RiSendPlaneFill className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
+          </div>,
+          document.body,
+        )}
+      </>
     );
   }
 
