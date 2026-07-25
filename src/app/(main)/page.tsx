@@ -91,6 +91,9 @@ const Home = async () => {
         <CommunityZone />
       </section>
 
+      {/* Releases Nacionales — carga client-side (siempre fresco), antes de El Sótano */}
+      <NationalReleasesSection />
+
       {/* Videos de El Sótano (YouTube) */}
       {sotanoVideos.length > 0 && (
         <section className="p-6 lg:p-12 border-b-4 border-black">
@@ -102,9 +105,6 @@ const Home = async () => {
           <YoutubeVideos videos={sotanoVideos} />
         </section>
       )}
-
-      {/* Releases Nacionales — carga client-side (siempre fresco), tras El Sótano */}
-      <NationalReleasesSection />
     </main>
   );
 };
