@@ -121,8 +121,9 @@ const NightclubSceneInner: React.FC = () => {
             pantalla — el stream en vivo o el video por defecto — y tener dos
             fuentes de audio a la vez se pisaba.) */}
 
-        {/* Controls hint - desktop: bottom left */}
-        <div className="absolute bottom-4 left-4 z-10 hidden md:block">
+        {/* Controls hint - solo desktop (≥lg). En mobile las instrucciones viven
+            en el botón "?" del HUD táctil; con md se solapaban con el joystick. */}
+        <div className="absolute bottom-4 left-4 z-10 hidden lg:block">
           <div className="px-3 py-1.5 bg-black/50 backdrop-blur border border-white/10 text-white/60 font-mono text-[10px] space-y-0.5">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-[#00ff41]" />

@@ -66,7 +66,7 @@ export default function DevLogout() {
           ? `Sesión: ${email} — solo dev: cierra sesión y limpia el token`
           : 'Solo dev: cierra sesión y limpia el token de Supabase'
       }
-      style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, maxWidth: 260 }}
+      style={{ position: 'fixed', bottom: 150, right: 12, zIndex: 9999, maxWidth: 260 }}
       className="mono text-[10px] font-black uppercase bg-black text-white border-2 border-[#ff0000] px-3 py-2 text-left disabled:opacity-50"
     >
       {busy ? (

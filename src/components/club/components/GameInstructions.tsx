@@ -20,11 +20,19 @@ export const GameInstructions: React.FC = () => {
     }
   }, []);
 
+  // Permite reabrir las instrucciones desde otros lados (p. ej. el botón "?" del
+  // HUD mobile en MobileControls, donde no hay un botón "?" de desktop).
+  useEffect(() => {
+    const open = () => setIsOpen(true);
+    window.addEventListener('club:open-instructions', open);
+    return () => window.removeEventListener('club:open-instructions', open);
+  }, []);
+
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="absolute bottom-4 right-4 z-50 w-8 h-8 bg-black/50 backdrop-blur border border-white/20 text-white/60 hover:text-[#00ccff] hover:border-[#00ccff]/40 transition-colors duration-150 flex items-center justify-center md:flex hidden"
+        className="absolute bottom-4 right-4 z-50 w-8 h-8 bg-black/50 backdrop-blur border border-white/20 text-white/60 hover:text-[#00ccff] hover:border-[#00ccff]/40 transition-colors duration-150 lg:flex hidden items-center justify-center"
       >
         <RiQuestionLine className="w-4 h-4" />
       </button>
@@ -69,6 +77,13 @@ export const GameInstructions: React.FC = () => {
               <Row keys="6-0" desc="Movimientos especiales (según los que tengas desbloqueados)" />
               <Row keys="Q" desc="Saludar a un jugador cercano" />
               <Row keys="ESC" desc="Soltar el mouse" />
+            </div>
+            <div className="mt-2 leading-relaxed text-white/60 lg:hidden">
+              <span className="text-[#00ccff]">En móvil:</span> joystick izquierdo para moverte
+              y girar. En la mitad derecha: <b className="text-white/80">arrastra</b> para mirar,{' '}
+              <b className="text-white/80">tap</b> para disparar y{' '}
+              <b className="text-white/80">mantén presionado</b> para cargar la Bomba de Bajo.
+              Los botones de abajo son saltar, bailes, especiales y saludar.
             </div>
           </section>
 

@@ -231,7 +231,9 @@ export const Chat: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-20 w-80">
+    // z-40 para quedar sobre los controles táctiles (z-30); en mobile se sube
+    // por encima del botón de saltar (bottom-24), en desktop vuelve a bottom-4.
+    <div className="fixed bottom-24 lg:bottom-4 right-4 z-40 w-80">
       <div className="bg-black/85 backdrop-blur border border-[#00ccff]/30 flex flex-col">
         <button
           onClick={() => setIsOpen(!isOpen)}

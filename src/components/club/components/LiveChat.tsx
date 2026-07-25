@@ -439,7 +439,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
         createPortal(
           <div
             className="fixed z-[9999] touch-auto"
-            style={isOpen ? { bottom: '8px', left: '16px', right: '16px' } : { bottom: '16px', right: '16px' }}
+            style={isOpen ? { bottom: '8px', left: '16px', right: '16px' } : { bottom: '92px', right: '16px' }}
           >
             <button
               onClick={() => setIsOpen(!isOpen)}
