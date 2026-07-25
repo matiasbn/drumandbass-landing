@@ -19,6 +19,46 @@ const STAGE_UI: Record<EnergyStage, { color: string; label: string }> = {
   bajon: { color: '#ff0055', label: 'EL BAJÓN' },
 };
 
+// Barra de energía MÍNIMA para móvil (el panel completo de arriba es md:block).
+// Solo se muestra en pantallas chicas (md:hidden), donde el HUD de desktop no
+// aparece. Se actualiza por rAF escribiendo al DOM directo (cero setState/frame).
+const MobileEnergyBar: React.FC = () => {
+  const { energyRef, umbralRef, stageRef } = useEnergy();
+  const fillRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState<EnergyStage>(stageRef.current);
+
+  useEffect(() => {
+    let raf = 0;
+    let lastPct = -1;
+    let lastStage = stageRef.current;
+    const tick = () => {
+      const pct = Math.max(0, Math.min(100, Math.round((energyRef.current / umbralRef.current) * 100)));
+      if (pct !== lastPct) {
+        lastPct = pct;
+        if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+      }
+      if (stageRef.current !== lastStage) {
+        lastStage = stageRef.current;
+        setStage(stageRef.current);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [energyRef, umbralRef, stageRef]);
+
+  const color = STAGE_UI[stage].color;
+  return (
+    <div className="md:hidden absolute top-0 left-0 right-0 z-40 h-1.5 bg-black/50 pointer-events-none">
+      <div
+        ref={fillRef}
+        className="h-full"
+        style={{ width: '0%', backgroundColor: color, boxShadow: `0 0 6px ${color}`, transition: 'background-color 300ms ease' }}
+      />
+    </div>
+  );
+};
+
 const ClubEnergyHUD: React.FC = () => {
   const { energyRef, umbralRef, stageRef, chillRef, dropActiveRef, dropEndsAtRef, subscribe } = useEnergy();
   const { liveTitle } = useLive();
@@ -322,6 +362,23 @@ export const ScoreHUD: React.FC = () => {
     <>
       {/* Energía del Club: barra por etapas + banners (WS-4) */}
       <ClubEnergyHUD />
+
+      {/* HUD móvil (md:hidden): barra de energía mínima arriba + puntaje arriba
+          a la derecha. En desktop se usa el panel completo de arriba. */}
+      <MobileEnergyBar />
+      <div className="md:hidden absolute top-3 right-3 z-40 pointer-events-none font-mono text-right">
+        <div className="bg-black/60 backdrop-blur border border-[#00ff41]/40 px-2 py-1 leading-none">
+          <div className="text-[8px] text-white/50">PUNTAJE</div>
+          <div className="text-sm text-[#00ff41] tabular-nums mt-0.5">
+            {sessionScore.toLocaleString()}
+          </div>
+        </div>
+        {combo > 1 && (
+          <div className="text-[9px] text-[#ffff00] tabular-nums mt-1 animate-pulse">
+            COMBO {combo}{comboMult > 1 ? ` · x${comboMult}` : ''}
+          </div>
+        )}
+      </div>
 
       {/* Score popups - floating text */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">

@@ -359,25 +359,55 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
     );
   }
 
-  // Mobile layout — portaled elements to avoid iframe touch capture
+  // Mobile layout — portaled para no quedar capturado por el iframe del stream.
   return (
     <>
-      {/* Backdrop to close chat on outside tap */}
-      {isOpen && mounted && createPortal(
-        <div
-          className="fixed inset-0 z-30"
-          onClick={() => { setIsOpen(false); setShowEmojiPicker(false); setShowGifPicker(false); }}
-        />,
-        document.body,
-      )}
+      {/* Cerrado: botón ÍCONO chico (arriba del botón de saltar) */}
+      {!isOpen &&
+        mounted &&
+        createPortal(
+          <button
+            onClick={() => setIsOpen(true)}
+            className="fixed z-[9999] touch-auto flex items-center justify-center w-12 h-12 rounded-full bg-black/70 backdrop-blur border border-[#ff0055]/40 active:bg-[#ff0055]/20 transition-colors"
+            style={{ bottom: '92px', right: '16px' }}
+            aria-label="Abrir chat"
+          >
+            <RiChat1Line className="w-6 h-6 text-[#ff0055]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#ff0055] text-white text-[10px] font-bold rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </button>,
+          document.body,
+        )}
 
-      {/* Messages panel */}
-      {isOpen && (
-        <div
-          className="fixed left-4 right-4 z-40 touch-auto"
-          style={{ top: '35%', bottom: '140px' }}
-        >
-          <div className="bg-black/85 backdrop-blur border border-[#ff0055]/30 h-full flex flex-col">
+      {/* Abierto: PANTALLA COMPLETA — header con cerrar siempre visible,
+          mensajes que ocupan todo el alto e input abajo. */}
+      {isOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur touch-auto">
+            {/* Header fijo con botón CERRAR siempre visible */}
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#ff0055]/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <RiChat1Line className="w-5 h-5 text-[#ff0055] shrink-0" />
+                <span className="font-mono text-sm text-white">CHAT</span>
+                {username && (
+                  <span className="font-mono text-xs text-[#ff0055] truncate">· {username}</span>
+                )}
+              </div>
+              <button
+                onClick={() => { setIsOpen(false); setShowEmojiPicker(false); setShowGifPicker(false); }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border border-white/20 text-white/80 active:bg-white/10 transition-colors"
+                aria-label="Cerrar chat"
+              >
+                <RiCloseLine className="w-5 h-5" />
+                <span className="font-mono text-xs">CERRAR</span>
+              </button>
+            </div>
+
+            {/* Mensajes (ocupan todo el alto disponible) */}
             <div ref={mobileScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
               {messages.length === 0 ? (
                 <p className="text-white/30 text-sm font-mono text-center py-8">
@@ -408,60 +438,21 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
                         </span>
                       </div>
                       {isGifMessage(msg.message) ? (
-                <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
-              ) : (
-                <p className="text-white/90 break-words">{msg.message}</p>
-              )}
+                        <img src={decodeGifUrl(msg.message)} alt="GIF" className="max-w-[200px] rounded mt-1" loading="lazy" onLoad={scrollToBottom} />
+                      ) : (
+                        <p className="text-white/90 break-words">{msg.message}</p>
+                      )}
                     </div>
                   </div>
                 ))
               )}
               <div ref={messagesEndRef} />
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Input — portaled, below chat */}
-      {isOpen &&
-        mounted &&
-        createPortal(
-          <div className="fixed left-4 right-4 z-[9999] touch-auto" style={{ bottom: '60px' }}>
-            <div className="bg-black border border-[#ff0055]/30">
+            {/* Input abajo */}
+            <div className="shrink-0 border-t border-[#ff0055]/30 bg-black">
               {inputContent}
             </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Toggle button — portaled, below input when open */}
-      {mounted &&
-        createPortal(
-          <div
-            className="fixed z-[9999] touch-auto"
-            style={isOpen ? { bottom: '8px', left: '16px', right: '16px' } : { bottom: '92px', right: '16px' }}
-          >
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className={`flex items-center justify-between px-4 py-2 bg-black/85 backdrop-blur border border-[#ff0055]/30 transition-all ${
-                isOpen ? 'w-full bg-black/50' : 'hover:bg-white/5'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <RiChat1Line className="w-4 h-4 text-[#ff0055]" />
-                <span className="font-mono text-sm text-white">
-                  {isOpen ? 'CERRAR CHAT' : 'CHAT'}
-                </span>
-                {unreadCount > 0 && !isOpen && (
-                  <span className="bg-[#ff0055] text-white text-xs px-1.5 py-0.5 font-bold">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-              <RiCloseLine
-                className={`w-4 h-4 text-white/40 ml-2 transition-transform ${isOpen ? 'rotate-0' : 'rotate-45'}`}
-              />
-            </button>
           </div>,
           document.body,
         )}

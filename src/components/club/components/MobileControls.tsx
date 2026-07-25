@@ -3,6 +3,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { RiArrowUpLine, RiMusic2Line, RiFlashlightFill, RiQuestionLine } from '@remixicon/react';
 import { useCamera } from '../CameraContext';
+import { useScore } from '../ScoreContext';
 
 function dispatchKey(key: string, type: 'keydown' | 'keyup') {
   window.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true }));
@@ -16,10 +17,10 @@ const JOYSTICK_SIZE = 120;
 const THUMB_SIZE = 48;
 const DEADZONE = 10;
 
-// Zona derecha (mirar / disparar / granada)
-const LOOK_SENSITIVITY = 0.006;
-const AIM_MOVE_THRESHOLD = 10; // px de arrastre para tratarlo como "mirar" y no un tap
-const GRENADE_HOLD_MS = 220; // mantener quieto el dedo este tiempo empieza a cargar la granada
+// Stick derecho (mirar): velocidad de giro a fondo (rad/s)
+const YAW_RATE = 2.4;
+const PITCH_RATE = 1.7;
+const GRENADE_HOLD_MS = 220; // mantener quieto el stick derecho carga la granada
 
 // Movimientos especiales (mismas teclas que en desktop: 6-0)
 const SPECIALS = ['Onda', 'Spotlight', 'Confetti', 'Levitar', 'Terremoto'];
@@ -32,22 +33,24 @@ export const MobileControls: React.FC = () => {
   const [danceMenuOpen, setDanceMenuOpen] = useState(false);
   const [specialMenuOpen, setSpecialMenuOpen] = useState(false);
   const { cameraYawRef, cameraPitchRef } = useCamera();
+  const { specialCharges } = useScore(); // cargas de especial listas → badge en el botón
 
-  // Joystick refs
-  const joystickRef = useRef<HTMLDivElement>(null);
-  const thumbRef = useRef<HTMLDivElement>(null);
-  const activeKeysRef = useRef<Set<string>>(new Set());
-  const touchIdRef = useRef<number | null>(null);
+  // --- Stick izquierdo (moverse: WASD, con strafe en A/D) ---
+  const leftJoyRef = useRef<HTMLDivElement>(null);
+  const leftThumbRef = useRef<HTMLDivElement>(null);
+  const leftKeysRef = useRef<Set<string>>(new Set());
+  const leftTouchIdRef = useRef<number | null>(null);
 
-  // Zona derecha: mirar (arrastrar) · disparar (tap) · granada (mantener)
-  const aimTouchIdRef = useRef<number | null>(null);
-  const aimLastXRef = useRef(0);
-  const aimLastYRef = useRef(0);
-  const aimStartXRef = useRef(0);
-  const aimStartYRef = useRef(0);
-  const aimMovedRef = useRef(false);
+  // --- Stick derecho (mirar + disparar/granada) ---
+  const rightJoyRef = useRef<HTMLDivElement>(null);
+  const rightThumbRef = useRef<HTMLDivElement>(null);
+  const rightTouchIdRef = useRef<number | null>(null);
+  const rightOffsetRef = useRef({ x: 0, y: 0 }); // -1..1 desde el centro
+  const rightMovedRef = useRef(false); // ¿se empujó el stick? (entonces es "mirar", no tap)
   const grenadeChargingRef = useRef(false);
   const grenadeHoldTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTsRef = useRef(0);
 
   useEffect(() => {
     const checkLayout = () => {
@@ -64,10 +67,10 @@ export const MobileControls: React.FC = () => {
     };
   }, []);
 
-  // --- Joystick (izquierda): arriba/abajo = avanzar/retroceder, lados = GIRAR ---
-  const updateJoystick = useCallback((clientX: number, clientY: number) => {
-    const el = joystickRef.current;
-    const thumb = thumbRef.current;
+  // ═══ Stick izquierdo: moverse ═══
+  const updateLeftStick = useCallback((clientX: number, clientY: number) => {
+    const el = leftJoyRef.current;
+    const thumb = leftThumbRef.current;
     if (!el || !thumb) return;
 
     const rect = el.getBoundingClientRect();
@@ -77,69 +80,64 @@ export const MobileControls: React.FC = () => {
 
     let dx = clientX - cx;
     let dy = clientY - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = Math.hypot(dx, dy);
     if (dist > maxR) {
       dx = (dx / dist) * maxR;
       dy = (dy / dist) * maxR;
     }
-
     thumb.style.transform = `translate(${dx}px, ${dy}px)`;
 
-    // Los lados mandan ArrowLeft/ArrowRight, que en el juego GIRAN la cámara (no
-    // strafean); arriba/abajo mandan ArrowUp/ArrowDown (avanzar/retroceder).
+    // W/A/S/D: adelante/atrás con W/S, strafe con A/D (FPS de consola).
     const newKeys = new Set<string>();
     if (dist > DEADZONE) {
-      if (dy < -DEADZONE) newKeys.add('ArrowUp');
-      if (dy > DEADZONE) newKeys.add('ArrowDown');
-      if (dx < -DEADZONE) newKeys.add('ArrowLeft');
-      if (dx > DEADZONE) newKeys.add('ArrowRight');
+      if (dy < -DEADZONE) newKeys.add('w');
+      if (dy > DEADZONE) newKeys.add('s');
+      if (dx < -DEADZONE) newKeys.add('a');
+      if (dx > DEADZONE) newKeys.add('d');
     }
-
-    for (const k of activeKeysRef.current) {
+    for (const k of leftKeysRef.current) {
       if (!newKeys.has(k)) dispatchKey(k, 'keyup');
     }
     for (const k of newKeys) {
-      if (!activeKeysRef.current.has(k)) dispatchKey(k, 'keydown');
+      if (!leftKeysRef.current.has(k)) dispatchKey(k, 'keydown');
     }
-    activeKeysRef.current = newKeys;
+    leftKeysRef.current = newKeys;
   }, []);
 
-  const resetJoystick = useCallback(() => {
-    if (thumbRef.current) thumbRef.current.style.transform = 'translate(0px, 0px)';
-    for (const k of activeKeysRef.current) dispatchKey(k, 'keyup');
-    activeKeysRef.current = new Set();
-    touchIdRef.current = null;
+  const resetLeftStick = useCallback(() => {
+    if (leftThumbRef.current) leftThumbRef.current.style.transform = 'translate(0px, 0px)';
+    for (const k of leftKeysRef.current) dispatchKey(k, 'keyup');
+    leftKeysRef.current = new Set();
+    leftTouchIdRef.current = null;
   }, []);
 
-  const onJoystickTouchStart = useCallback((e: React.TouchEvent) => {
+  const onLeftStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    const touch = e.changedTouches[0];
-    touchIdRef.current = touch.identifier;
-    updateJoystick(touch.clientX, touch.clientY);
-  }, [updateJoystick]);
+    const t = e.changedTouches[0];
+    leftTouchIdRef.current = t.identifier;
+    updateLeftStick(t.clientX, t.clientY);
+  }, [updateLeftStick]);
 
-  const onJoystickTouchMove = useCallback((e: React.TouchEvent) => {
+  const onLeftMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     for (let i = 0; i < e.changedTouches.length; i++) {
-      if (e.changedTouches[i].identifier === touchIdRef.current) {
-        updateJoystick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+      if (e.changedTouches[i].identifier === leftTouchIdRef.current) {
+        updateLeftStick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
         return;
       }
     }
-  }, [updateJoystick]);
+  }, [updateLeftStick]);
 
-  const onJoystickTouchEnd = useCallback((e: React.TouchEvent) => {
+  const onLeftEnd = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
-      if (e.changedTouches[i].identifier === touchIdRef.current) {
-        resetJoystick();
+      if (e.changedTouches[i].identifier === leftTouchIdRef.current) {
+        resetLeftStick();
         return;
       }
     }
-  }, [resetJoystick]);
+  }, [resetLeftStick]);
 
-  // --- Zona derecha: mirar / disparar / granada ---
-  // Arrastrar = mirar (yaw + pitch). Tap = disparar. Mantener el dedo quieto =
-  // cargar la Bomba de Bajo; al soltar se lanza.
+  // ═══ Stick derecho: mirar (continuo), tap = disparar, mantener = granada ═══
   const clearGrenadeTimer = useCallback(() => {
     if (grenadeHoldTimerRef.current !== null) {
       window.clearTimeout(grenadeHoldTimerRef.current);
@@ -147,83 +145,132 @@ export const MobileControls: React.FC = () => {
     }
   }, []);
 
-  const onAimTouchStart = useCallback((e: React.TouchEvent) => {
-    if (aimTouchIdRef.current !== null) return;
-    const touch = e.changedTouches[0];
-    aimTouchIdRef.current = touch.identifier;
-    aimStartXRef.current = touch.clientX;
-    aimStartYRef.current = touch.clientY;
-    aimLastXRef.current = touch.clientX;
-    aimLastYRef.current = touch.clientY;
-    aimMovedRef.current = false;
-    // Si el dedo se queda quieto, empieza a cargar la granada.
+  // Bucle que gira la cámara según cuánto se empuje el stick (rate-based, como
+  // el stick derecho de una consola).
+  const lookLoop = useCallback(() => {
+    const now = performance.now();
+    const dt = Math.min((now - lastTsRef.current) / 1000, 0.05);
+    lastTsRef.current = now;
+    const { x, y } = rightOffsetRef.current;
+    if (x !== 0) cameraYawRef.current -= x * YAW_RATE * dt;
+    if (y !== 0) {
+      cameraPitchRef.current = Math.max(-0.3, Math.min(1.2, cameraPitchRef.current + y * PITCH_RATE * dt));
+    }
+    rafRef.current = requestAnimationFrame(lookLoop);
+  }, [cameraYawRef, cameraPitchRef]);
+
+  const startLookLoop = useCallback(() => {
+    if (rafRef.current == null) {
+      lastTsRef.current = performance.now();
+      rafRef.current = requestAnimationFrame(lookLoop);
+    }
+  }, [lookLoop]);
+
+  const stopLookLoop = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    rightOffsetRef.current = { x: 0, y: 0 };
+  }, []);
+
+  const updateRightStick = useCallback((clientX: number, clientY: number) => {
+    const el = rightJoyRef.current;
+    const thumb = rightThumbRef.current;
+    if (!el || !thumb) return;
+
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const maxR = JOYSTICK_SIZE / 2 - THUMB_SIZE / 2;
+
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) {
+      dx = (dx / dist) * maxR;
+      dy = (dy / dist) * maxR;
+    }
+    thumb.style.transform = `translate(${dx}px, ${dy}px)`;
+
+    if (dist > DEADZONE) {
+      rightOffsetRef.current = { x: dx / maxR, y: dy / maxR };
+      if (!rightMovedRef.current) {
+        // Empujar el stick = mirar → ya no es tap ni granada.
+        rightMovedRef.current = true;
+        clearGrenadeTimer();
+      }
+    } else {
+      rightOffsetRef.current = { x: 0, y: 0 };
+    }
+  }, [clearGrenadeTimer]);
+
+  const onRightStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (rightTouchIdRef.current !== null) return;
+    const t = e.changedTouches[0];
+    rightTouchIdRef.current = t.identifier;
+    rightMovedRef.current = false;
+    rightOffsetRef.current = { x: 0, y: 0 };
+    startLookLoop();
+    // Mantener el stick quieto → carga la granada.
     clearGrenadeTimer();
     grenadeHoldTimerRef.current = window.setTimeout(() => {
-      if (!aimMovedRef.current) {
+      if (!rightMovedRef.current) {
         grenadeChargingRef.current = true;
         dispatchMouse(2, 'mousedown');
       }
     }, GRENADE_HOLD_MS);
-  }, [clearGrenadeTimer]);
+  }, [startLookLoop, clearGrenadeTimer]);
 
-  const onAimTouchMove = useCallback((e: React.TouchEvent) => {
+  const onRightMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
     for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier !== aimTouchIdRef.current) continue;
-      const dx = touch.clientX - aimLastXRef.current;
-      const dy = touch.clientY - aimLastYRef.current;
-      // Mirar: arrastrar mueve la cámara (yaw + pitch → mirar a los lados y arriba/abajo).
-      cameraYawRef.current -= dx * LOOK_SENSITIVITY;
-      cameraPitchRef.current = Math.max(-0.3, Math.min(1.2, cameraPitchRef.current + dy * LOOK_SENSITIVITY));
-      aimLastXRef.current = touch.clientX;
-      aimLastYRef.current = touch.clientY;
-      // ¿Se movió lo suficiente para ser un arrastre (y no un tap)?
-      if (!aimMovedRef.current) {
-        const totX = touch.clientX - aimStartXRef.current;
-        const totY = touch.clientY - aimStartYRef.current;
-        if (Math.hypot(totX, totY) > AIM_MOVE_THRESHOLD) {
-          aimMovedRef.current = true;
-          // Si todavía no empezó a cargar, este gesto es "mirar": cancela la granada.
-          if (!grenadeChargingRef.current) clearGrenadeTimer();
-        }
+      if (e.changedTouches[i].identifier === rightTouchIdRef.current) {
+        updateRightStick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        return;
       }
-      return;
     }
-  }, [cameraYawRef, cameraPitchRef, clearGrenadeTimer]);
+  }, [updateRightStick]);
 
-  const onAimTouchEnd = useCallback((e: React.TouchEvent) => {
+  const onRightEnd = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
-      if (e.changedTouches[i].identifier !== aimTouchIdRef.current) continue;
+      if (e.changedTouches[i].identifier !== rightTouchIdRef.current) continue;
       clearGrenadeTimer();
+      stopLookLoop();
+      if (rightThumbRef.current) rightThumbRef.current.style.transform = 'translate(0px, 0px)';
       if (grenadeChargingRef.current) {
-        // Estaba cargando la granada → soltar la lanza.
         grenadeChargingRef.current = false;
-        dispatchMouse(2, 'mouseup');
-      } else if (!aimMovedRef.current) {
-        // Tap sin arrastre → disparo de energía.
-        dispatchMouse(0, 'mousedown');
+        dispatchMouse(2, 'mouseup'); // lanzar granada
+      } else if (!rightMovedRef.current) {
+        dispatchMouse(0, 'mousedown'); // tap → disparar
         setTimeout(() => dispatchMouse(0, 'mouseup'), 40);
       }
-      aimTouchIdRef.current = null;
-      aimMovedRef.current = false;
+      rightTouchIdRef.current = null;
+      rightMovedRef.current = false;
       return;
     }
-  }, [clearGrenadeTimer]);
+  }, [clearGrenadeTimer, stopLookLoop]);
 
-  const resetAim = useCallback(() => {
+  const resetRight = useCallback(() => {
     clearGrenadeTimer();
+    stopLookLoop();
+    if (rightThumbRef.current) rightThumbRef.current.style.transform = 'translate(0px, 0px)';
     if (grenadeChargingRef.current) {
       grenadeChargingRef.current = false;
       dispatchMouse(2, 'mouseup');
     }
-    aimTouchIdRef.current = null;
-    aimMovedRef.current = false;
+    rightTouchIdRef.current = null;
+    rightMovedRef.current = false;
+  }, [clearGrenadeTimer, stopLookLoop]);
+
+  // Limpieza si el componente se desmonta a medio gesto.
+  useEffect(() => () => {
+    clearGrenadeTimer();
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
   }, [clearGrenadeTimer]);
 
-  // Limpia el timer de la granada si el componente se desmonta a medio gesto.
-  useEffect(() => () => clearGrenadeTimer(), [clearGrenadeTimer]);
-
-  // --- Botones de acción ---
+  // --- Botones ---
   const onJump = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     dispatchKey(' ', 'keydown');
@@ -239,7 +286,6 @@ export const MobileControls: React.FC = () => {
 
   const onSpecial = useCallback((index: number) => (e: React.TouchEvent) => {
     e.preventDefault();
-    // 6-0 → especiales 0..4 (misma tecla que en desktop)
     const key = index === 4 ? '0' : String(index + 6);
     dispatchKey(key, 'keydown');
     setTimeout(() => dispatchKey(key, 'keyup'), 50);
@@ -277,58 +323,70 @@ export const MobileControls: React.FC = () => {
 
   const btnClass =
     'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border select-none active:bg-white/20 transition-colors touch-none';
+  const stickClass =
+    'rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none relative';
+  const thumbStyle = {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+    top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
+  } as const;
 
   return (
     <div className="fixed inset-0 z-30 pointer-events-none touch-none">
-      {/* Zona derecha — mirar (arrastrar) · disparar (tap) · granada (mantener).
-          Va PRIMERA (debajo) para que los botones de arriba capten sus taps. */}
-      <div
-        className="pointer-events-auto absolute touch-none"
-        style={{ top: 0, right: 0, bottom: 0, width: '50%' }}
-        onTouchStart={onAimTouchStart}
-        onTouchMove={onAimTouchMove}
-        onTouchEnd={onAimTouchEnd}
-        onTouchCancel={resetAim}
-      />
-
-      {/* Izquierda — Joystick */}
+      {/* Stick izquierdo — moverse */}
       <div className="pointer-events-auto absolute bottom-6 left-4 touch-none">
         <div
-          ref={joystickRef}
-          className="rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none relative"
+          ref={leftJoyRef}
+          className={stickClass}
           style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
-          onTouchStart={onJoystickTouchStart}
-          onTouchMove={onJoystickTouchMove}
-          onTouchEnd={onJoystickTouchEnd}
-          onTouchCancel={resetJoystick}
+          onTouchStart={onLeftStart}
+          onTouchMove={onLeftMove}
+          onTouchEnd={onLeftEnd}
+          onTouchCancel={resetLeftStick}
         >
-          <div
-            ref={thumbRef}
-            className="absolute rounded-full bg-white/40 border border-white/60"
-            style={{
-              width: THUMB_SIZE,
-              height: THUMB_SIZE,
-              left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-              top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-            }}
-          />
+          <div ref={leftThumbRef} className="absolute rounded-full bg-white/40 border border-white/60" style={thumbStyle} />
         </div>
       </div>
 
-      {/* Menús (fila abajo-centro): bailes · especiales · saludo · ayuda.
-          Van entre el joystick (izq) y el botón de saltar (der) para no solaparse
-          con ninguno; los desplegables se abren hacia ARRIBA. */}
-      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-row gap-2 touch-none">
+      {/* Abajo-derecha: botón de saltar + stick derecho (mirar/disparar/granada) */}
+      <div className="pointer-events-auto absolute bottom-6 right-4 flex items-end gap-4 touch-none">
+        {/* Saltar — a la izquierda del stick derecho */}
+        <button
+          className={`${btnClass} w-14 h-14 border-[#00ff41]/40 text-[#00ff41] mb-6`}
+          onTouchStart={onJump}
+          aria-label="Saltar"
+        >
+          <RiArrowUpLine className="w-7 h-7" />
+        </button>
+
+        {/* Stick derecho */}
+        <div
+          ref={rightJoyRef}
+          className={`${stickClass} border-[#ff0055]/30`}
+          style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
+          onTouchStart={onRightStart}
+          onTouchMove={onRightMove}
+          onTouchEnd={onRightEnd}
+          onTouchCancel={resetRight}
+        >
+          <div ref={rightThumbRef} className="absolute rounded-full bg-[#ff0055]/40 border border-[#ff0055]/60" style={thumbStyle} />
+        </div>
+      </div>
+
+      {/* Menús (fila abajo-centro, entre los dos sticks): bailes · especiales · saludo · ayuda.
+          Los desplegables se abren hacia ARRIBA. */}
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-row gap-1.5 touch-none">
         {/* Bailes (1-5) */}
         <div className="relative">
           <button
-            className={`${btnClass} w-11 h-11 ${danceMenuOpen ? 'border-[#ff0055]/60 text-[#ff0055] bg-[#ff0055]/10' : 'border-white/20 text-white/60'}`}
+            className={`${btnClass} w-10 h-10 ${danceMenuOpen ? 'border-[#ff0055]/60 text-[#ff0055] bg-[#ff0055]/10' : 'border-white/20 text-white/60'}`}
             onTouchStart={(e) => { e.preventDefault(); setSpecialMenuOpen(false); setDanceMenuOpen(o => !o); }}
           >
             <RiMusic2Line className="w-5 h-5" />
           </button>
           {danceMenuOpen && (
-            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 bg-black/85 backdrop-blur border border-white/10 p-2 rounded-lg">
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 bg-black/85 backdrop-blur border border-white/10 p-2 rounded-lg">
               {DANCES.map((name, i) => (
                 <button
                   key={i}
@@ -342,16 +400,28 @@ export const MobileControls: React.FC = () => {
           )}
         </div>
 
-        {/* Especiales (6-0) */}
+        {/* Especiales (6-0) — cuando hay cargas listas: dorado, anillo pulsante y contador */}
         <div className="relative">
+          {specialCharges > 0 && (
+            <span className="absolute inset-0 rounded-full border-2 border-[#ffdd00] animate-ping pointer-events-none" />
+          )}
           <button
-            className={`${btnClass} w-11 h-11 ${specialMenuOpen ? 'border-[#ffdd00]/60 text-[#ffdd00] bg-[#ffdd00]/10' : 'border-white/20 text-white/60'}`}
+            className={`${btnClass} relative w-10 h-10 ${
+              specialMenuOpen || specialCharges > 0
+                ? 'border-[#ffdd00]/70 text-[#ffdd00] bg-[#ffdd00]/10'
+                : 'border-white/20 text-white/60'
+            }`}
             onTouchStart={(e) => { e.preventDefault(); setDanceMenuOpen(false); setSpecialMenuOpen(o => !o); }}
           >
             <RiFlashlightFill className="w-5 h-5" />
+            {specialCharges > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-[#ffdd00] text-black text-[10px] font-bold rounded-full leading-none">
+                {specialCharges}
+              </span>
+            )}
           </button>
           {specialMenuOpen && (
-            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 bg-black/85 backdrop-blur border border-white/10 p-2 rounded-lg">
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 bg-black/85 backdrop-blur border border-white/10 p-2 rounded-lg">
               {SPECIALS.map((name, i) => (
                 <button
                   key={i}
@@ -367,7 +437,7 @@ export const MobileControls: React.FC = () => {
 
         {/* Saludar (Q) */}
         <button
-          className={`${btnClass} w-11 h-11 border-white/20 text-lg`}
+          className={`${btnClass} w-10 h-10 border-white/20 text-base`}
           onTouchStart={onWave}
           aria-label="Saludar"
         >
@@ -376,22 +446,11 @@ export const MobileControls: React.FC = () => {
 
         {/* Instrucciones */}
         <button
-          className={`${btnClass} w-11 h-11 border-white/20 text-white/60`}
+          className={`${btnClass} w-10 h-10 border-white/20 text-white/60`}
           onTouchStart={openInstructions}
           aria-label="Cómo jugar"
         >
           <RiQuestionLine className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Abajo-derecha — Saltar (disparo y granada viven en la zona derecha) */}
-      <div className="pointer-events-auto absolute bottom-6 right-4 touch-none">
-        <button
-          className={`${btnClass} w-16 h-16 border-[#00ff41]/40 text-[#00ff41]`}
-          onTouchStart={onJump}
-          aria-label="Saltar"
-        >
-          <RiArrowUpLine className="w-7 h-7" />
         </button>
       </div>
     </div>
