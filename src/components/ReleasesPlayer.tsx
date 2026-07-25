@@ -97,23 +97,33 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   const [dl, setDl] = useState<Record<string, DlInfo>>({});
 
   const [shuffle, setShuffle] = useState(false);
+  const [onlyDl, setOnlyDl] = useState(false); // filtro (aparte del de artista): solo descargables
   const [listOpen, setListOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
 
+  // Items reproducibles. Si `onlyDl`, deja solo los descargables (por track).
   const items = useMemo<PlayItem[]>(() => {
     const out: PlayItem[] = [];
     view.forEach((r, ri) => {
-      const tracks = r.isEp ? epTracks[r.url] : undefined;
-      if (r.isEp && Array.isArray(tracks) && tracks.length) {
-        tracks.forEach((t) =>
-          out.push({ url: t.url, title: t.title, artist: r.artistName, releaseIdx: ri, epTitle: r.title, isEpTrack: true, downloadable: t.downloadable, downloadUrl: t.downloadUrl })
-        );
+      if (r.isEp) {
+        const tracks = epTracks[r.url];
+        if (Array.isArray(tracks)) {
+          tracks.forEach((t) => {
+            if (onlyDl && !t.downloadable) return;
+            out.push({ url: t.url, title: t.title, artist: r.artistName, releaseIdx: ri, epTitle: r.title, isEpTrack: true, downloadable: t.downloadable, downloadUrl: t.downloadUrl });
+          });
+        } else if (!onlyDl) {
+          // Tracklist del EP aún no cargada → placeholder (no lo mostramos si filtramos por descarga).
+          out.push({ url: r.url, title: r.title, artist: r.artistName, releaseIdx: ri, epTitle: null, isEpTrack: false, downloadable: false, downloadUrl: null });
+        }
       } else {
+        if (onlyDl && dl[r.url]?.downloadable !== true) return;
         out.push({ url: r.url, title: r.title, artist: r.artistName, releaseIdx: ri, epTitle: null, isEpTrack: false, downloadable: false, downloadUrl: null });
       }
     });
     return out;
-  }, [view, epTracks]);
+  }, [view, epTracks, onlyDl, dl]);
+  const shownReleaseIdx = useMemo(() => new Set(items.map((it) => it.releaseIdx)), [items]);
   const itemsRef = useRef<PlayItem[]>(items);
   itemsRef.current = items;
 
@@ -490,6 +500,20 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         })}
       </div>
 
+      {/* ── Filtro por descarga (aparte del de artista) ───────────────────── */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="mono text-[11px] font-black uppercase opacity-60 mr-1">Descarga:</span>
+        <button
+          onClick={() => setOnlyDl((v) => !v)}
+          aria-pressed={onlyDl}
+          className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border inline-flex items-center gap-1 ${onlyDl ? 'bg-[#00b341] text-white' : 'bg-white hover:bg-gray-100'}`}
+        >
+          <RiDownloadLine className="w-3.5 h-3.5" />
+          Solo descargables
+          {onlyDl && <span aria-hidden className="opacity-80">×</span>}
+        </button>
+      </div>
+
       <div className="flex flex-col lg:grid lg:grid-cols-2 xl:grid-cols-[minmax(240px,300px)_1fr_minmax(200px,280px)] lg:gap-4 lg:items-start">
         {/* ── Lista de tracks ──────────────────────────────────────────── */}
         <div className="order-3 lg:order-1 mt-4 lg:mt-0">
@@ -498,11 +522,13 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
             aria-expanded={listOpen}
             className="lg:hidden w-full flex items-center justify-between px-3 py-2.5 brutalist-border bg-black text-white mono text-xs font-black uppercase mb-2"
           >
-            <span>Tracks ({view.length})</span>
+            <span>Tracks ({onlyDl ? shownReleaseIdx.size : view.length})</span>
             <RiArrowDownSLine className={`w-5 h-5 transition-transform ${listOpen ? 'rotate-180' : ''}`} />
           </button>
           <div className={`${listOpen ? 'block' : 'hidden'} lg:block space-y-2 lg:overflow-y-auto lg:pr-1`} style={sideStyle}>
             {view.map((r, vi) => {
+              // Con el filtro de descarga, oculta releases sin ningún track descargable.
+              if (onlyDl && !shownReleaseIdx.has(vi)) return null;
               const isCurrent = currentReleaseIdx === vi;
               // Un track suelto en curso pinta toda la tarjeta; en un EP NO (solo
               // se resalta el track específico que suena, en la lista anidada).
@@ -583,7 +609,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                         <p className="mono text-[11px] uppercase opacity-60 p-2">Sin tracks.</p>
                       ) : (
                         <ul>
-                          {tracks.map((t, ti) => {
+                          {(onlyDl ? tracks.filter((t) => t.downloadable) : tracks).map((t, ti) => {
                             const isThis = currentItem && sameUrl(currentItem.url, t.url);
                             return (
                               <li key={t.url} className={`flex items-center gap-1 px-2 border-t border-black/20 ${isThis ? 'bg-[#FF5500] text-white' : ''}`}>
@@ -617,6 +643,9 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
               );
             })}
             {view.length === 0 && <p className="mono text-xs uppercase opacity-50 p-2">Sin releases de este artista.</p>}
+            {view.length > 0 && onlyDl && shownReleaseIdx.size === 0 && (
+              <p className="mono text-xs uppercase opacity-50 p-2">Ninguno tiene descarga disponible.</p>
+            )}
           </div>
         </div>
 
