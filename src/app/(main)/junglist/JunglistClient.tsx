@@ -10,6 +10,7 @@ import { createClient, Junglist } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { WHATSAPP_LINK } from '@/src/constants';
 import BrutalistButton from '@/src/components/BigButton';
+import JunglistDiscountsCard from '@/src/components/JunglistDiscountsCard';
 
 type View = 'loading' | 'anon' | 'form' | 'welcome' | 'redirecting' | 'profile' | 'dj';
 
@@ -59,10 +60,28 @@ export default function JunglistClient() {
   const welcomeRef = useRef<HTMLHeadingElement>(null);
   // Página desde la que llegó (?next=), para volver ahí al terminar.
   const [nextUrl, setNextUrl] = useState<string | null>(null);
+  // Eventos vigentes donde este junglist ya tiene descuento (para destacarlos).
+  const [discounts, setDiscounts] = useState<{ id: string; title: string; date: string }[]>([]);
 
   useEffect(() => {
     setNextUrl(readNext());
   }, []);
+
+  // Al ser junglist/DJ, traemos los descuentos activos para vos. Se muestran en la
+  // bienvenida (recién inscrito) y en el perfil.
+  useEffect(() => {
+    if (view !== 'profile' && view !== 'dj' && view !== 'welcome') return;
+    let alive = true;
+    fetch('/api/junglist/discounts')
+      .then((r) => (r.ok ? r.json() : { discounts: [] }))
+      .then((d) => {
+        if (alive) setDiscounts(d.discounts || []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [view]);
 
   // El toast (p. ej. "Cambios guardados") se auto-oculta.
   useEffect(() => {
@@ -281,6 +300,9 @@ export default function JunglistClient() {
               Como DJ ya eres parte de la comunidad, con los mismos beneficios que un junglist.
               No necesitas registrarte aparte. Administra tu presskit cuando quieras.
             </p>
+
+            <JunglistDiscountsCard discounts={discounts} source="junglist_dj" />
+
             <div className="flex flex-col sm:flex-row gap-3">
               <BrutalistButton variant="club" className="flex-1 text-lg py-5" href="/pk/edit">
                 Editar mi presskit
@@ -364,6 +386,8 @@ export default function JunglistClient() {
               Ya estás en la lista: preventas, sorteos y avisos antes que nadie.
             </p>
 
+            <JunglistDiscountsCard discounts={discounts} source="junglist_welcome" />
+
             <p className="mono text-sm font-black uppercase mb-3">Ahora sí, ven a saludarnos:</p>
             <BrutalistButton variant="whatsapp" className="w-full text-xl py-6 mb-6" href={WHATSAPP_LINK}>
               <RiWhatsappLine /> Únete al grupo de WhatsApp
@@ -390,6 +414,8 @@ export default function JunglistClient() {
             <div className="mono text-xs font-black uppercase tracking-widest bg-[#0000ff] text-white px-3 py-1.5 inline-block mb-6">
               Junglist desde el {dayjs(junglist.created_at).format('D MMM YYYY')}
             </div>
+
+            <JunglistDiscountsCard discounts={discounts} source="junglist_profile" />
 
             <div className="flex flex-col gap-4">
               <div>

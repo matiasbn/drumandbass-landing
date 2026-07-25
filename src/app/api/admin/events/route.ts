@@ -2,7 +2,7 @@ import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createSupabaseServer } from '@/src/lib/supabase-server';
-import type { CmsEventRow } from '@/src/lib/cms';
+import { type CmsEventRow, CMS_EVENT_SELECT } from '@/src/lib/cms';
 import { verifyAdmin as verifyAdminCore } from '@/src/lib/authz';
 
 // CRUD de eventos del CMS propio (tabla cms_events). Solo admins: además del
@@ -51,16 +51,63 @@ function eventFieldsFromBody(body: Record<string, unknown>): EventPayload {
   };
 }
 
-// GET — lista todos los eventos (incluidos pasados) para el admin.
-export async function GET() {
+// Código de cupón normalizado a MAYÚSCULA (igual que en campañas); null si vacío.
+const normalizeCode = (v: unknown) =>
+  typeof v === 'string' && v.trim() !== '' ? v.trim().toUpperCase() : null;
+
+// Campos de cupón para escribir en cms_events, con coupon_set_at SET-ONCE (el
+// corte nuevo/antiguo se fija la 1ª vez y NO se mueve). Devuelve null si el body
+// no trae campos de cupón (para no pisar los códigos al editar sin tocarlos).
+async function couponFieldsFor(
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>,
+  eventId: string | null,
+  body: Record<string, unknown>
+) {
+  if (!('coupon_junglist_new' in body) && !('coupon_junglist' in body)) return null;
+  const newCode = normalizeCode(body.coupon_junglist_new);
+  const existingCode = normalizeCode(body.coupon_junglist);
+  const hasAny = Boolean(newCode || existingCode);
+  let setAt: string | null = null;
+  if (eventId) {
+    const { data } = await supabase
+      .from('cms_events')
+      .select('coupon_set_at')
+      .eq('id', eventId)
+      .maybeSingle();
+    setAt = (data?.coupon_set_at as string | null) ?? null;
+  }
+  return {
+    coupon_junglist_new: newCode,
+    coupon_junglist: existingCode,
+    coupon_set_at: setAt ?? (hasAny ? new Date().toISOString() : null),
+  };
+}
+
+// GET — lista todos los eventos, o (con ?couponFor=<id>) los CÓDIGOS de cupón de
+// un evento (no vienen en la lista por seguridad; se leen vía función admin).
+export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServer();
   if (!(await verifyAdmin(supabase))) {
     return NextResponse.json({ events: [], error: 'No autorizado' }, { status: 403 });
   }
 
+  const couponFor = new URL(request.url).searchParams.get('couponFor');
+  if (couponFor) {
+    const { data, error } = await supabase.rpc('admin_event_coupons', { p_event_id: couponFor });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const row = Array.isArray(data) ? data[0] : data;
+    return NextResponse.json({
+      coupon: {
+        coupon_junglist_new: row?.coupon_junglist_new ?? '',
+        coupon_junglist: row?.coupon_junglist ?? '',
+        coupon_set_at: row?.coupon_set_at ?? null,
+      },
+    });
+  }
+
   const { data, error } = await supabase
     .from('cms_events')
-    .select('*')
+    .select(CMS_EVENT_SELECT)
     .order('date', { ascending: false });
 
   if (error) {
@@ -84,10 +131,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Título y fecha son obligatorios' }, { status: 400 });
   }
 
+  const coupon = await couponFieldsFor(supabase, null, body);
   const { data, error } = await supabase
     .from('cms_events')
-    .insert(fields)
-    .select()
+    .insert(coupon ? { ...fields, ...coupon } : fields)
+    .select(CMS_EVENT_SELECT)
     .single();
 
   if (error) {
@@ -112,17 +160,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Título y fecha son obligatorios' }, { status: 400 });
   }
 
+  const coupon = await couponFieldsFor(supabase, String(body.id), body);
   const { data, error } = await supabase
     .from('cms_events')
-    .update(fields)
+    .update(coupon ? { ...fields, ...coupon } : fields)
     .eq('id', body.id)
-    .select()
+    .select(CMS_EVENT_SELECT)
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   revalidateSite();
+  if (coupon) revalidatePath(`/evento/${body.id}`);
   return NextResponse.json({ event: data });
 }
 

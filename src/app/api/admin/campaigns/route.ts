@@ -166,27 +166,38 @@ export async function GET(request: NextRequest) {
     // Conteo real (línea completa) de a cuántos les reenviaría el botón "insistir".
     const t = await computeResendTargets(supabase, campaignId);
     const resendTarget = t.source ? t.targets.size : 0;
-    // Acciones registradas (log genérico). Hoy: quién copió el cupón y cuándo.
-    const { data: copyRows } = await supabase
-      .from('campaign_actions')
-      .select('recipient_id, at, campaign_recipients!inner(campaign_id)')
-      .eq('action', 'coupon_copy')
-      .eq('campaign_recipients.campaign_id', campaignId);
-    const copyByRecipient = new Map<string, string>();
-    for (const r of copyRows ?? []) copyByRecipient.set(r.recipient_id as string, r.at as string);
-    const couponCopies = copyByRecipient.size;
-    const firstCouponCopyAt = couponCopies
-      ? [...copyByRecipient.values()].reduce((a, b) => (a < b ? a : b))
-      : null;
-    // Adjuntamos coupon_copy_at por destinatario (para verlo fila por fila).
+    // "Copió código" por EVENTO + email, sin importar la vía (campaña / orgánico /
+    // tras registrarse). Se cruzan los copiadores del evento con los destinatarios
+    // por email. El cupón vive en el evento, así que esto mide lo que importa.
+    const copyByEmail = new Map<string, string>();
+    if (campaign.event_id) {
+      const { data: copies } = await supabase
+        .from('event_coupon_copies')
+        .select('email, copied_at')
+        .eq('event_id', campaign.event_id);
+      for (const c of copies ?? []) {
+        if (c.email) copyByEmail.set(String(c.email).toLowerCase(), c.copied_at as string);
+      }
+    }
     const recipientsOut = (recipients ?? []).map((r) => ({
       email: r.email,
       status: r.status,
       segment: r.segment,
       visited_at: r.visited_at,
       visit_count: r.visit_count,
-      coupon_copy_at: copyByRecipient.get(r.id as string) ?? null,
+      coupon_copy_at: copyByEmail.get(String(r.email).toLowerCase()) ?? null,
     }));
+    // Agregado: de los destinatarios de ESTA campaña, cuántos copiaron (por cualquier vía) + 1ª vez.
+    let couponCopies = 0;
+    let firstCouponCopyAt: string | null = null;
+    for (const r of recipientsOut) {
+      if (r.coupon_copy_at) {
+        couponCopies++;
+        if (!firstCouponCopyAt || r.coupon_copy_at < firstCouponCopyAt) {
+          firstCouponCopyAt = r.coupon_copy_at;
+        }
+      }
+    }
     return NextResponse.json({
       campaign,
       recipients: recipientsOut,

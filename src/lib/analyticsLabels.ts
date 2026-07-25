@@ -50,6 +50,8 @@ export const EVENT_LABELS: Record<string, string> = {
   junglist_coupon_view: 'Cupones Junglist revelados',
   junglist_coupon_copy: 'Cupones Junglist copiados',
   junglist_coupon_dismiss: 'Descartaron el descuento Junglist',
+  junglist_discount_highlight_view: 'Vieron el destaque de descuentos (perfil)',
+  junglist_discount_event_click: 'Clic a un evento desde el destaque de descuentos',
 };
 export const eventLabel = (name: string) => EVENT_LABELS[name] ?? name;
 
@@ -98,6 +100,8 @@ export const EVENT_TIPS: Record<string, string> = {
   junglist_coupon_view: 'Un junglist con sesión iniciada vio su código de descuento en la landing de un evento.',
   junglist_coupon_copy: 'Alguien copió su código de descuento Junglist al portapapeles.',
   junglist_coupon_dismiss: 'Alguien eligió seguir al evento sin inscribirse como Junglist. Mide cuánta gente prefiere no registrarse.',
+  junglist_discount_highlight_view: 'Un junglist vio el destaque de sus descuentos activos (perfil, bienvenida o home).',
+  junglist_discount_event_click: 'Un junglist entró a un evento desde el destaque de descuentos.',
 };
 export const eventTip = (name: string) => EVENT_TIPS[name] ?? 'Evento registrado en Google Analytics.';
 
@@ -145,4 +149,6 @@ export const HIDDEN_ACTIONS = [
   'junglist_coupon_view',
   'junglist_coupon_copy',
   'junglist_coupon_dismiss',
+  'junglist_discount_highlight_view',
+  'junglist_discount_event_click',
 ];

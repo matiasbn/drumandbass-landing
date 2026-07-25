@@ -109,6 +109,8 @@ export const SITE_EVENT_NAMES = [
   'junglist_coupon_view',
   'junglist_coupon_copy',
   'junglist_coupon_dismiss',
+  'junglist_discount_highlight_view',
+  'junglist_discount_event_click',
 ];
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

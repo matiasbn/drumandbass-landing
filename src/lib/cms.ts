@@ -15,6 +15,15 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
+// Columnas legibles de cms_events. NO se puede usar `select('*')`: los CÓDIGOS de
+// cupón (coupon_junglist_new / coupon_junglist) están revocados por columna a
+// anon/authenticated (seguridad), y `*` intenta leerlos → "permission denied for
+// table". Por eso se listan explícitamente las columnas permitidas.
+// ⚠️ Al agregar una columna nueva a cms_events, sumala acá Y al GRANT de la
+// migración 20260730 (si no, no la verá el front).
+export const CMS_EVENT_SELECT =
+  'id, title, venue, address, date, end_date, description_html, tickets, info, flyer_url, flyer_width, flyer_height, created_at, updated_at, ticket_links, coupon_set_at, has_coupon_new, has_coupon_existing';
+
 // Filas tal como están en la DB (snake_case). Los mappers de abajo las
 // convierten a los tipos camelCase que consume la UI.
 export interface CmsEventRow {
@@ -31,8 +40,14 @@ export interface CmsEventRow {
   flyer_url: string | null;
   flyer_width: number | null;
   flyer_height: number | null;
-  coupon_junglist_new: string | null;
-  coupon_junglist: string | null;
+  // Los CÓDIGOS ya no llegan al front público (grants por columna en Supabase):
+  // solo llegan estos booleanos derivados. El código real se sirve vía
+  // get_event_coupon (SECURITY DEFINER, contra sesión). Los `coupon_*` quedan como
+  // opcionales por compatibilidad (p. ej. lectura admin) pero no vienen en la lectura anon.
+  has_coupon_new?: boolean | null;
+  has_coupon_existing?: boolean | null;
+  coupon_junglist_new?: string | null;
+  coupon_junglist?: string | null;
   coupon_set_at: string | null;
   created_at: string;
   updated_at: string;
@@ -67,9 +82,11 @@ export function mapEventRow(row: CmsEventRow): CmsEvent {
           height: row.flyer_height ?? 0,
         }
       : undefined,
-    // Solo booleanos — el código se sirve aparte, contra sesión.
-    couponForNew: Boolean(row.coupon_junglist_new),
-    couponForExisting: Boolean(row.coupon_junglist),
+    // Solo booleanos — el código se sirve aparte, contra sesión. Se lee de las
+    // columnas derivadas (públicas); fallback al código por si aún no se aplicó la
+    // migración que oculta los códigos.
+    couponForNew: Boolean(row.has_coupon_new ?? row.coupon_junglist_new),
+    couponForExisting: Boolean(row.has_coupon_existing ?? row.coupon_junglist),
   };
 }
 
@@ -86,7 +103,7 @@ export function mapStreamingRow(row: CmsStreamingRow): CmsStreaming {
 export async function getEvents(): Promise<CmsEvent[]> {
   const { data, error } = await supabase
     .from('cms_events')
-    .select('*')
+    .select(CMS_EVENT_SELECT)
     .order('date', { ascending: true });
 
   if (error) {
@@ -101,7 +118,7 @@ export async function getEvents(): Promise<CmsEvent[]> {
 export async function getEventById(id: string): Promise<CmsEvent | null> {
   const { data, error } = await supabase
     .from('cms_events')
-    .select('*')
+    .select(CMS_EVENT_SELECT)
     .eq('id', id)
     .maybeSingle();
 

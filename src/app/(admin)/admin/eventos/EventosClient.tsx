@@ -11,6 +11,7 @@ import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { createClient } from '@/src/lib/supabase';
 import type { CmsEventRow } from '@/src/lib/cms';
 import dayjs from '@/src/lib/date';
+import JunglistDiscountBadge from '@/src/components/JunglistDiscountBadge';
 
 // CMS de eventos (reemplazo de Contentful): tabla cms_events + bucket 'flyers'.
 // El flyer se sube directo al bucket desde el browser (la RLS de storage exige
@@ -24,6 +25,10 @@ const EMPTY_FORM = {
   end_date: '',
   tickets: '',
   info: '',
+  // Descuento Junglist (se guarda en el evento). Códigos: junglist nuevo / ya
+  // registrado. Al editar se cargan por separado (no vienen en la lista por seguridad).
+  coupon_new: '',
+  coupon_existing: '',
 };
 
 type FormFields = typeof EMPTY_FORM;
@@ -147,7 +152,22 @@ export default function EventosClient() {
         end_date: ev.end_date ?? '',
         tickets: ev.tickets ?? '',
         info: ev.info ?? '',
+        coupon_new: '',
+        coupon_existing: '',
       });
+      // Los códigos de cupón no vienen en la lista (seguridad): se cargan aparte.
+      fetch(`/api/admin/events?couponFor=${ev.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.coupon) {
+            setForm((prev) => ({
+              ...prev,
+              coupon_new: d.coupon.coupon_junglist_new || '',
+              coupon_existing: d.coupon.coupon_junglist || '',
+            }));
+          }
+        })
+        .catch(() => {});
       setTicketLinks(
         ev.ticket_links && ev.ticket_links.length
           ? ev.ticket_links
@@ -252,6 +272,9 @@ export default function EventosClient() {
     const payload = {
       ...(editing !== 'new' && editing ? { id: editing.id } : {}),
       ...form,
+      // Mapear los campos del cupón a las columnas de cms_events.
+      coupon_junglist_new: form.coupon_new,
+      coupon_junglist: form.coupon_existing,
       ticket_links: ticketLinks,
       description_html: html === '<p></p>' ? '' : html,
       flyer_url: flyer?.url ?? '',
@@ -453,6 +476,41 @@ export default function EventosClient() {
                 )}
                 <EditorContent editor={editor} />
               </div>
+            </div>
+
+            {/* Descuento Junglist: vive en el evento. La campaña lo precarga desde acá. */}
+            <div className="sm:col-span-2 border-4 border-black p-4">
+              <div className="mb-2">
+                <JunglistDiscountBadge />
+              </div>
+              <p className="mono text-[11px] text-gray-500 mb-3 leading-tight">
+                Códigos que ve el junglist en la landing de este evento (nunca viajan en el
+                correo). El corte &quot;nuevo vs ya registrado&quot; se fija la primera vez y no
+                se mueve.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Código junglist nuevo</label>
+                  <input
+                    value={form.coupon_new}
+                    onChange={set('coupon_new')}
+                    className={`${inputCls} uppercase`}
+                    placeholder="DNBCL10"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Código junglist ya registrado</label>
+                  <input
+                    value={form.coupon_existing}
+                    onChange={set('coupon_existing')}
+                    className={`${inputCls} uppercase`}
+                    placeholder="DNBCL10"
+                  />
+                </div>
+              </div>
+              <p className="mono text-[10px] text-gray-500 mt-2 leading-tight">
+                Dejá ambos vacíos para quitar el descuento. Pueden ser el mismo código.
+              </p>
             </div>
 
             <div className="sm:col-span-2">

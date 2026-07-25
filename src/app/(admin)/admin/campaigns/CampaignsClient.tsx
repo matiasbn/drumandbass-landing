@@ -298,6 +298,9 @@ export default function CampaignsClient() {
   const [syncingLive, setSyncingLive] = useState(false);
   // Filtro de la tabla de destinatarios por estado ('all' = todos).
   const [recipientFilter, setRecipientFilter] = useState<'all' | RecipientStatus>('all');
+  // Orden de la tabla de destinatarios (click en el encabezado).
+  const [sortBy, setSortBy] = useState<'email' | 'estado' | 'visito' | 'copio'>('email');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // Reenvío a los que no interactuaron (crea nueva campaña "· Reenvío N").
   const [resendingUnopened, setResendingUnopened] = useState(false);
   const [confirmResendUnopened, setConfirmResendUnopened] = useState(false);
@@ -447,6 +450,36 @@ export default function CampaignsClient() {
     setFirstCouponCopyAt(data.firstCouponCopyAt || null);
   };
 
+  // Ordenar la tabla de destinatarios por una columna (toggle asc/desc). Para
+  // Visitó/Copió el default es desc (los que interactuaron arriba).
+  const toggleSort = (col: typeof sortBy) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortDir(col === 'visito' || col === 'copio' ? 'desc' : 'asc');
+    }
+  };
+
+  // Destinatarios filtrados + ordenados según el estado actual.
+  const sortedRecipients = (() => {
+    const filtered = recipients.filter(
+      (r) => recipientFilter === 'all' || normalizeStatus(r.status) === recipientFilter
+    );
+    const key = (r: CampaignRecipient): string | number => {
+      if (sortBy === 'estado') return STATUS_ORDER.indexOf(normalizeStatus(r.status));
+      if (sortBy === 'visito') return r.visited_at || '';
+      if (sortBy === 'copio') return r.coupon_copy_at || '';
+      return r.email.toLowerCase();
+    };
+    return [...filtered].sort((a, b) => {
+      const ka = key(a);
+      const kb = key(b);
+      const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  })();
+
   // Núcleo del sync: consulta Resend en vivo (no envía) y actualiza estados de
   // entrega. El backend resuelve toda la campaña por llamada; un par de rondas
   // por si quedan pendientes que Resend aún reporta como 'sent'. Devuelve cuántos
@@ -471,6 +504,8 @@ export default function CampaignsClient() {
     setOpenCampaign(c);
     setRecipients([]);
     setRecipientFilter('all');
+    setSortBy('email');
+    setSortDir('asc');
     setConfirmResendUnopened(false);
     setRecipientsLoading(true);
     try {
@@ -627,6 +662,36 @@ export default function CampaignsClient() {
       // sin localStorage no hay nada que limpiar
     }
     setDraftSeed(n => n + 1);
+
+    // Descuento: el evento es la fuente de verdad. Reseteamos y, si el evento YA
+    // tiene descuento configurado, lo precargamos (para no re-tipearlo). Si no,
+    // queda apagado y lo que configures acá se guardará en el evento al enviar.
+    setCouponEnabled(false);
+    setCouponNewCode('');
+    setCouponExistingCode('');
+    setCouponTarget('both');
+    setCouponSameForAll(true);
+    fetch(`/api/admin/events?couponFor=${ev.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const c = d?.coupon;
+        if (!c) return;
+        const newC = (c.coupon_junglist_new || '').trim();
+        const exC = (c.coupon_junglist || '').trim();
+        if (!newC && !exC) return; // el evento no tiene descuento
+        setCouponEnabled(true);
+        setCouponNewCode(newC);
+        setCouponExistingCode(exC);
+        if (newC && exC) {
+          setCouponTarget('both');
+          setCouponSameForAll(newC === exC);
+        } else if (newC) {
+          setCouponTarget('new_only');
+        } else {
+          setCouponTarget('existing_only');
+        }
+      })
+      .catch(() => {});
   };
 
   const step1Valid = template === 'custom' || (template === 'evento' && !!chosenEventId);
@@ -1941,23 +2006,45 @@ export default function CampaignsClient() {
                               <table className="w-full mono text-[11px]">
                                 <thead className="bg-black text-white sticky top-0">
                                   <tr>
-                                    <th className="text-left p-2">Email</th>
+                                    <th className="text-left p-2">
+                                      <button
+                                        onClick={() => toggleSort('email')}
+                                        className="uppercase font-bold cursor-pointer hover:text-gray-300"
+                                      >
+                                        Email{sortBy === 'email' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                      </button>
+                                    </th>
                                     <th className="text-left p-2">Segmento</th>
-                                    <th className="text-left p-2">Estado</th>
-                                    <th className="text-center p-2">Visitó</th>
+                                    <th className="text-left p-2">
+                                      <button
+                                        onClick={() => toggleSort('estado')}
+                                        className="uppercase font-bold cursor-pointer hover:text-gray-300"
+                                      >
+                                        Estado{sortBy === 'estado' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                      </button>
+                                    </th>
+                                    <th className="text-center p-2">
+                                      <button
+                                        onClick={() => toggleSort('visito')}
+                                        className="uppercase font-bold cursor-pointer hover:text-gray-300"
+                                      >
+                                        Visitó{sortBy === 'visito' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                      </button>
+                                    </th>
                                     {c.coupon_mode && c.coupon_mode !== 'none' && (
-                                      <th className="text-center p-2">Copió código</th>
+                                      <th className="text-center p-2">
+                                        <button
+                                          onClick={() => toggleSort('copio')}
+                                          className="uppercase font-bold cursor-pointer hover:text-gray-300"
+                                        >
+                                          Copió código{sortBy === 'copio' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                        </button>
+                                      </th>
                                     )}
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {recipients
-                                    .filter(
-                                      (r) =>
-                                        recipientFilter === 'all' ||
-                                        normalizeStatus(r.status) === recipientFilter
-                                    )
-                                    .map((r) => {
+                                  {sortedRecipients.map((r) => {
                                     const meta = STATUS_META[normalizeStatus(r.status)];
                                     return (
                                       <tr key={r.email} className="border-b border-gray-200 odd:bg-gray-50">

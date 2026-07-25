@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { CmsEvent } from '../types/types';
 import TicketButton from './TicketButton';
 import ProximityBadge from './ProximityBadge';
+import JunglistDiscountBadge from './JunglistDiscountBadge';
 
 interface EventItemProps {
   event: CmsEvent;
@@ -56,6 +57,9 @@ const EventItem: React.FC<EventItemProps> = ({ event, index }) => {
                 <div className="mono text-[12px] lg:text-base font-black bg-black text-white px-2 py-1 inline-block">
                   {formattedDate}
                 </div>
+                {(event.couponForNew || event.couponForExisting) && (
+                  <JunglistDiscountBadge href={`/evento/${id}#descuento-junglist`} />
+                )}
               </div>
               <h3 className="text-3xl lg:text-7xl font-black uppercase leading-none tracking-tighter italic mt-1 lg:mt-2">
                 {event.title}
