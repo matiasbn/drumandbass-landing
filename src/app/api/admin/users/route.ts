@@ -27,7 +27,7 @@ function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) 
 }
 
 
-const EDITABLE_FIELDS = ['name', 'username', 'email', 'score', 'high_score', 'is_admin', 'player_color', 'costume_id', 'accessory_id', 'face_type'];
+const EDITABLE_FIELDS = ['name', 'username', 'email', 'score', 'high_score', 'is_admin', 'beta_tester', 'player_color', 'costume_id', 'accessory_id', 'face_type'];
 
 export async function GET() {
   const cookieStore = await cookies();

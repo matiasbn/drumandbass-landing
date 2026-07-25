@@ -13,8 +13,9 @@ const NightclubScene = dynamic(() => import('../../../components/club/NightclubS
 
 /**
  * BETA: el club nuevo (SUBIDÓN) está en pruebas y sólo pueden entrar los
- * admins (profiles.is_admin). El resto ve la pantalla de "club no disponible"
- * de siempre, así el público no percibe nada a medio terminar.
+ * admins (profiles.is_admin) y los beta testers (profiles.beta_tester). El
+ * resto ve la pantalla de "club no disponible" de siempre, así el público no
+ * percibe nada a medio terminar.
  *
  * Para abrirlo a todo el mundo basta con poner esto en false.
  */
@@ -82,6 +83,8 @@ function ClubOfflineScreen() {
 function ClubContent() {
   const { user, profile, loading: authLoading, needsProfile } = useAuth();
   const isAdmin = profile?.is_admin === true;
+  // Acceso a la beta: admins o beta testers designados desde /admin/users.
+  const canPlayBeta = isAdmin || profile?.beta_tester === true;
   const [subscribeSeen, setSubscribeSeen] = useState(true);
   const [liveStatus, setLiveStatus] = useState<{ isLive: boolean; title?: string } | null>(null);
 
@@ -117,15 +120,15 @@ function ClubContent() {
     );
   }
 
-  // BETA (sólo admins): quien ya tiene sesión y NO es admin ve la pantalla de
-  // "no disponible", aunque haya transmisión.
-  if (CLUB_BETA_ADMINS_ONLY && user && !needsProfile && !isAdmin) {
+  // BETA: quien ya tiene sesión y NO puede entrar a la beta (ni admin ni beta
+  // tester) ve la pantalla de "no disponible", aunque haya transmisión.
+  if (CLUB_BETA_ADMINS_ONLY && user && !needsProfile && !canPlayBeta) {
     return <ClubOfflineScreen />;
   }
 
-  // Show offline screen before auth gate. Un admin puede entrar aunque no haya
-  // transmisión, para poder probar el club en cualquier momento.
-  if (!liveStatus.isLive && !isAdmin) {
+  // Show offline screen before auth gate. Admins y beta testers pueden entrar
+  // aunque no haya transmisión, para poder probar el club en cualquier momento.
+  if (!liveStatus.isLive && !canPlayBeta) {
     return <ClubOfflineScreen />;
   }
 
@@ -152,9 +155,9 @@ function ClubContent() {
     );
   }
 
-  // Show YouTube subscribe screen for first-time users (los admins la saltan
-  // para poder entrar a probar sin fricción)
-  if (!subscribeSeen && !isAdmin) {
+  // Show YouTube subscribe screen for first-time users (admins y beta testers la
+  // saltan para poder entrar a probar sin fricción)
+  if (!subscribeSeen && !canPlayBeta) {
     return (
       <div className="w-full h-screen bg-black flex items-center justify-center">
         <div className="absolute inset-0 overflow-hidden">

@@ -12,6 +12,7 @@ interface EditForm {
   score: number;
   high_score: number;
   is_admin: boolean;
+  beta_tester: boolean;
 }
 
 export default function UsersClient() {
@@ -55,6 +56,7 @@ export default function UsersClient() {
       score: u.score ?? 0,
       high_score: u.high_score ?? 0,
       is_admin: u.is_admin ?? false,
+      beta_tester: u.beta_tester ?? false,
     });
     setSaveError(null);
   };
@@ -181,6 +183,7 @@ export default function UsersClient() {
                   <th className="text-left p-3 mono text-xs uppercase font-bold">Email</th>
                   <th className="text-left p-3 mono text-xs uppercase font-bold">Score</th>
                   <th className="text-left p-3 mono text-xs uppercase font-bold">Admin</th>
+                  <th className="text-left p-3 mono text-xs uppercase font-bold">Beta</th>
                   <th className="text-left p-3 mono text-xs uppercase font-bold">Registro</th>
                   <th className="text-left p-3 mono text-xs uppercase font-bold"></th>
                 </tr>
@@ -196,6 +199,15 @@ export default function UsersClient() {
                       {u.is_admin ? (
                         <span className="bg-black text-white px-2 py-0.5 text-xs font-bold uppercase">
                           Admin
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {u.beta_tester ? (
+                        <span className="bg-[#7C3AED] text-white px-2 py-0.5 text-xs font-bold uppercase">
+                          Beta
                         </span>
                       ) : (
                         <span className="text-gray-400 text-xs">-</span>
@@ -297,6 +309,19 @@ export default function UsersClient() {
                 />
                 <label htmlFor="is_admin" className="mono text-xs uppercase font-bold">
                   Administrador
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="beta_tester"
+                  checked={editForm.beta_tester}
+                  onChange={(e) => setEditForm({ ...editForm, beta_tester: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <label htmlFor="beta_tester" className="mono text-xs uppercase font-bold">
+                  Beta tester (acceso al club)
                 </label>
               </div>
             </div>

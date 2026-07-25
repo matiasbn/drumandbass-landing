@@ -71,6 +71,7 @@ export interface UserProfile {
   score?: number;
   high_score?: number;
   is_admin?: boolean;
+  beta_tester?: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -100,6 +100,9 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS best_club_drops INTEGER DEFAULT 0;
 -- Migration: Add admin column to profiles
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
 
+-- Migration: Beta testers del club (gate acepta is_admin OR beta_tester)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS beta_tester BOOLEAN NOT NULL DEFAULT false;
+
 -- Create index for leaderboard queries
 CREATE INDEX IF NOT EXISTS profiles_score_idx ON profiles(score DESC);
 
