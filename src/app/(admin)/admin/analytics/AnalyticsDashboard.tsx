@@ -58,7 +58,7 @@ const CHANNEL_TIPS: Record<string, string> = {
     'Llegaron sin un origen rastreable: escribieron la URL, un marcador, o un link sin etiqueta (apps, algunos emails). Suele ser gente que ya conoce el sitio.',
   'Organic Social': 'Vinieron desde redes sociales (Instagram, TikTok, etc.) sin publicidad pagada.',
   'Organic Search': 'Llegaron desde resultados de buscadores (Google, etc.) sin anuncios.',
-  Referral: 'Un enlace en otro sitio web los trajo hasta acá.',
+  Referral: 'Un enlace en otro sitio web los trajo hasta aquí.',
   'Organic Video': 'Vinieron desde videos (YouTube, etc.) sin pago.',
   Email: 'Llegaron desde un enlace en un correo.',
   'Paid Search': 'Llegaron desde anuncios en buscadores.',

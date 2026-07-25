@@ -701,7 +701,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
             {playbackError && (
               <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-center gap-3 p-6">
                 <p className="mono text-xs uppercase opacity-80 leading-relaxed">
-                  No se pudo reproducir «{playbackError.title}» acá.
+                  No se pudo reproducir «{playbackError.title}» aquí.
                   <br />
                   Escúchalo en SoundCloud.
                 </p>

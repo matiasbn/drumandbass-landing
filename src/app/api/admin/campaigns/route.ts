@@ -7,6 +7,189 @@ import { buildEmailHtml } from '@/src/lib/emailTemplate';
 import { resolveCoupon, segmentBody, segmentSubject } from '@/src/lib/campaignCopy';
 import { BASE_URL } from '@/src/constants';
 import { verifyAdmin } from '@/src/lib/authz';
+import { fetchSoundcloudTrackMeta, isSoundcloudUrl } from '@/src/lib/soundcloud';
+
+// ── Campaña "Releases sin descarga" ──────────────────────────────────────────
+// Tipo de campaña distinto: contenido PERSONALIZADO por DJ. Le avisamos a cada
+// DJ cuáles de sus releases publicados (featured en Releases Nacionales) no
+// tienen link de descarga (ni nativo de SoundCloud ni gate externo). La descarga
+// se chequea EN VIVO (no está en la DB).
+interface DjTrack {
+  title: string;
+  url: string;
+}
+interface DjNoDownload {
+  email: string;
+  artistName: string;
+  slug: string | null;
+  tracks: DjTrack[];
+}
+
+async function computeDjsWithoutDownload(
+  supabase: ReturnType<typeof createSupabaseServer>
+): Promise<DjNoDownload[]> {
+  const [{ data: presskits }, { data: profiles }] = await Promise.all([
+    supabase.from('presskits').select('user_id, artist_name, mixes').eq('published', true),
+    supabase.from('pk_profiles').select('user_id, email, slug'),
+  ]);
+  const profByUser = new Map((profiles || []).map((p) => [p.user_id as string, p]));
+
+  // Junta todos los releases featured (de DJs con email) y chequea la descarga
+  // EN PARALELO (evita timeouts por scrapear ~20 tracks en secuencial).
+  type Row = { email: string; artistName: string; slug: string | null; title: string; url: string };
+  const rows: Row[] = [];
+  for (const pk of presskits || []) {
+    const prof = profByUser.get(pk.user_id as string);
+    if (!prof?.email) continue;
+    const mixes = Array.isArray(pk.mixes) ? (pk.mixes as { featured?: boolean; type?: string; url?: string; title?: string }[]) : [];
+    for (const m of mixes) {
+      if (m.featured && m.type === 'release' && isSoundcloudUrl(m.url || '') && (m.title || '').trim()) {
+        rows.push({
+          email: String(prof.email),
+          artistName: (pk.artist_name as string) || String(prof.email),
+          slug: (prof.slug as string) || null,
+          title: m.title as string,
+          url: m.url as string,
+        });
+      }
+    }
+  }
+
+  const checked = await Promise.all(
+    rows.map(async (r) => ({ r, downloadable: (await fetchSoundcloudTrackMeta(r.url)).downloadable === true }))
+  );
+
+  // Agrupa por DJ los que NO tienen descarga (ni nativa ni gate).
+  const byEmail = new Map<string, DjNoDownload>();
+  for (const { r, downloadable } of checked) {
+    if (downloadable) continue;
+    let dj = byEmail.get(r.email);
+    if (!dj) {
+      dj = { email: r.email, artistName: r.artistName, slug: r.slug, tracks: [] };
+      byEmail.set(r.email, dj);
+    }
+    dj.tracks.push({ title: r.title, url: r.url });
+  }
+  return [...byEmail.values()];
+}
+
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Cuerpo (HTML) personalizado del correo a un DJ con sus releases sin descarga.
+function noDownloadEmailBody(dj: DjNoDownload): string {
+  const items = dj.tracks
+    .map(
+      (t) =>
+        `<li style="margin-bottom:8px;"><a href="${esc(t.url)}" style="color:#ff0055;font-weight:700;text-decoration:none;">${esc(t.title)}</a></li>`
+    )
+    .join('');
+  return `
+    <p>Hola <strong>${esc(dj.artistName)}</strong>,</p>
+    <p>Vimos que ${dj.tracks.length === 1 ? 'este release tuyo' : 'estos releases tuyos'} en
+    <strong>Releases Nacionales</strong> de Drum and Bass Chile ${dj.tracks.length === 1 ? 'no tiene' : 'no tienen'}
+    link de descarga:</p>
+    <ul style="padding-left:18px;">${items}</ul>
+    <p>Si quieres que la gente pueda <strong>bajar tu música</strong> desde el reproductor, tienes dos opciones en SoundCloud:</p>
+    <ol style="padding-left:18px;">
+      <li style="margin-bottom:6px;">Activa la <strong>descarga nativa</strong> del track (en la edición del track, "Enable downloads").</li>
+      <li>O pon un link de <strong>descarga/compra</strong> (Hypeddit, etc.) en el campo "Buy/Download".</li>
+    </ol>
+    <p>Apenas lo hagas, aparece el botón de descarga automáticamente en tu track del reproductor. 🙌</p>
+  `;
+}
+
+async function sendNoDownloadCampaign(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  apiKey: string
+) {
+  const djs = await computeDjsWithoutDownload(supabase);
+  if (djs.length === 0) {
+    return NextResponse.json({ success: true, sent: 0, failed: 0, total: 0, message: 'No hay DJs con releases sin descarga.' });
+  }
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
+  const resend = new Resend(apiKey);
+  const appOrigin = process.env.NODE_ENV === 'development' ? 'http://localhost:3600' : BASE_URL;
+  const subject = 'Tus releases sin link de descarga · Drum and Bass Chile';
+
+  // Persistimos la campaña (para el historial + sync de entrega).
+  const { data: campaign, error: campaignError } = await supabase
+    .from('campaigns')
+    .insert({
+      name: 'Releases sin descarga',
+      template: 'no_download',
+      subject,
+      title: 'Releases sin descarga',
+      coupon_mode: 'none',
+      audiences: [],
+      recipients: djs.length,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (campaignError || !campaign) {
+    return NextResponse.json({ error: `No se pudo guardar la campaña: ${campaignError?.message ?? 'desconocido'}` }, { status: 500 });
+  }
+  const campaignId = campaign.id as string;
+  const unsubUrl = (email: string) => `${appOrigin}/api/unsubscribe?email=${encodeURIComponent(email)}`;
+
+  const BATCH_SIZE = 100;
+  const results = { sent: 0, failed: 0, errors: [] as string[] };
+  const recipientRows: { id: string; campaign_id: string; email: string; resend_id: string | null; status: string; segment: string }[] = [];
+
+  for (let i = 0; i < djs.length; i += BATCH_SIZE) {
+    const batch = djs.slice(i, i + BATCH_SIZE);
+    const recIds = batch.map(() => crypto.randomUUID());
+    const payload = batch.map((dj) => ({
+      from: fromEmail,
+      to: dj.email,
+      subject,
+      html: buildEmailHtml({
+        title: 'Releases sin descarga',
+        body: noDownloadEmailBody(dj),
+        buttonText: 'Ver Releases Nacionales',
+        buttonUrl: `${appOrigin}/releases?utm_source=email&utm_campaign=${campaignId}`,
+        unsubscribeUrl: unsubUrl(dj.email),
+      }),
+    }));
+    const push = (ids: { id: string }[] | null, status: string) =>
+      batch.forEach((dj, j) =>
+        recipientRows.push({ id: recIds[j], campaign_id: campaignId, email: dj.email, resend_id: ids?.[j]?.id ?? null, status, segment: 'no_junglist' })
+      );
+    try {
+      const { data, error } = await resend.batch.send(payload);
+      if (error) {
+        results.failed += batch.length;
+        results.errors.push(error.message);
+        push(null, 'failed');
+      } else {
+        const ids = data?.data ?? [];
+        results.sent += ids.length || batch.length;
+        push(ids, 'sent');
+      }
+    } catch (err) {
+      results.failed += batch.length;
+      results.errors.push(err instanceof Error ? err.message : 'Error desconocido');
+      push(null, 'failed');
+    }
+  }
+
+  for (let i = 0; i < recipientRows.length; i += 500) {
+    await supabase.from('campaign_recipients').insert(recipientRows.slice(i, i + 500));
+  }
+  await supabase.from('campaigns').update({ sent_count: results.sent, failed_count: results.failed }).eq('id', campaignId);
+
+  return NextResponse.json({
+    success: results.failed === 0,
+    campaignId,
+    sent: results.sent,
+    failed: results.failed,
+    total: djs.length,
+    errors: results.errors,
+  });
+}
 
 function createSupabaseServer(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -685,6 +868,19 @@ export async function POST(request: NextRequest) {
   // Reenviar el mismo correo a quienes no interactuaron → nueva campaña "· Reenvío N".
   if (body.resendUnopenedCampaignId) {
     return resendToUnopened(supabase, apiKey, String(body.resendUnopenedCampaignId));
+  }
+
+  // Campaña "Releases sin descarga": preview (computa, no envía) o send.
+  if (body.noDownloadAction === 'preview') {
+    const djs = await computeDjsWithoutDownload(supabase);
+    return NextResponse.json({
+      djs,
+      totalDjs: djs.length,
+      totalTracks: djs.reduce((n, d) => n + d.tracks.length, 0),
+    });
+  }
+  if (body.noDownloadAction === 'send') {
+    return sendNoDownloadCampaign(supabase, apiKey);
   }
 
   const {
