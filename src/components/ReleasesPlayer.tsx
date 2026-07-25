@@ -142,6 +142,10 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   const pendingLoadRef = useRef<(() => void) | null>(null);
   const loadedUrlRef = useRef<string | null>(releases[0]?.url ?? null);
   const hasPlayedRef = useRef(false);
+  // Posición dentro del set en curso (para EP), en refs → siguiente/anterior por
+  // track del EP es SÍNCRONO dentro del tap (clave para el autoplay en móvil).
+  const soundIndexRef = useRef(0);
+  const soundsCountRef = useRef(1);
 
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -278,6 +282,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     w.bind(E.PLAY, () => {
       setPlaying(true);
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      w.getCurrentSoundIndex((i) => (soundIndexRef.current = i));
       refreshSound();
     });
     w.bind(E.PAUSE, () => {
@@ -331,11 +336,14 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
           return;
         }
         loadedUrlRef.current = playUrl;
+        soundIndexRef.current = typeof skipTo === 'number' ? skipTo : 0;
+        soundsCountRef.current = 1;
         w.load(playUrl, {
           auto_play: true,
           visual: true,
           callback: () => {
             if (typeof skipTo === 'number') w.skip(skipTo);
+            w.getSounds((s) => (soundsCountRef.current = s.length || 1));
             w.play();
             refreshSound();
           },
@@ -367,33 +375,25 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     if (queuePosRef.current > 0) playQueue(queuePosRef.current - 1);
   }, [playQueue]);
 
-  // Siguiente/anterior EP-aware: dentro de un EP recorre sus tracks; al borde salta de release.
+  // Siguiente/anterior EP-aware. Usa los refs de posición (síncrono, dentro del
+  // tap → autoplay OK en móvil). Dentro de un EP recorre sus tracks; al borde
+  // salta de release.
   const playNext = useCallback(() => {
     const w = widgetRef.current;
     const rel = viewRef.current[indexRef.current];
-    if (w && rel?.isEp) {
-      w.getSounds((sounds) =>
-        w.getCurrentSoundIndex((si) => {
-          if (sounds.length > 1 && si < sounds.length - 1) {
-            w.skip(si + 1);
-            refreshSound();
-          } else nextRelease();
-        })
-      );
+    if (w && rel?.isEp && soundIndexRef.current < soundsCountRef.current - 1) {
+      w.skip(soundIndexRef.current + 1);
+      soundIndexRef.current += 1;
+      refreshSound();
     } else nextRelease();
   }, [nextRelease, refreshSound]);
   const playPrev = useCallback(() => {
     const w = widgetRef.current;
     const rel = viewRef.current[indexRef.current];
-    if (w && rel?.isEp) {
-      w.getSounds((sounds) =>
-        w.getCurrentSoundIndex((si) => {
-          if (sounds.length > 1 && si > 0) {
-            w.skip(si - 1);
-            refreshSound();
-          } else prevRelease();
-        })
-      );
+    if (w && rel?.isEp && soundIndexRef.current > 0) {
+      w.skip(soundIndexRef.current - 1);
+      soundIndexRef.current -= 1;
+      refreshSound();
     } else prevRelease();
   }, [prevRelease, refreshSound]);
   nextRef.current = playNext;
@@ -429,26 +429,29 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     [epTracks, loadEp]
   );
 
-  // Atajos de teclado: espacio = play/pausa, ← / → = anterior/siguiente.
+  // Atajos de teclado: espacio = play/pausa (o arranca el primero), ← / → =
+  // anterior/siguiente. Solo se ignoran los campos de texto — NO botones/links,
+  // porque tras un click el foco queda en el botón y bloquearía todas las teclas.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (current < 0) return;
       const t = e.target as HTMLElement;
-      if (t?.closest('input,textarea,select,a,button')) return;
+      if (t?.closest('input,textarea,select,[contenteditable="true"]')) return;
       if (e.code === 'Space') {
         e.preventDefault();
-        toggle();
-      } else if (e.code === 'ArrowRight') {
+        if (current < 0) {
+          if (queue.length) playQueue(0);
+        } else toggle();
+      } else if (e.code === 'ArrowRight' && current >= 0) {
         e.preventDefault();
         playNext();
-      } else if (e.code === 'ArrowLeft') {
+      } else if (e.code === 'ArrowLeft' && current >= 0) {
         e.preventDefault();
         playPrev();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, toggle, playNext, playPrev]);
+  }, [current, toggle, playNext, playPrev, playQueue, queue]);
 
   const progressRatio = duration ? position / duration : 0;
   const sideStyle = isDesktop && playerHeight ? { maxHeight: playerHeight } : undefined;
