@@ -223,3 +223,121 @@ export async function enrichFeaturedReleaseDates(
     })
   );
 }
+
+// ── Stream propio (reproductor nativo) ───────────────────────────────────────
+// Reproducimos con un <audio> nuestro en vez del widget de SoundCloud, para
+// tener la mejor UX (controles nativos del celular, auto-avance, sin gate). Esto
+// resuelve la URL de audio real de un track: saca el `client_id` del JS de
+// SoundCloud (cacheado, se refresca si expira) y resuelve el transcoding
+// progresivo (MP3). Es frágil por naturaleza (depende de la web de SoundCloud);
+// si cambia, se reimplementa. Solo devuelve datos públicos.
+
+let cachedClientId: string | null = null;
+
+async function scrapeClientId(): Promise<string | null> {
+  try {
+    const res = await fetch('https://soundcloud.com/discover', {
+      headers: { 'User-Agent': SC_DESKTOP_UA, Accept: 'text/html' },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const scripts = [...html.matchAll(/src="(https:\/\/[^"']*sndcdn[^"']*\.js)"/g)].map((m) => m[1]);
+    // El client_id suele estar en uno de los últimos bundles.
+    for (const src of scripts.reverse()) {
+      try {
+        const jt = await (await fetch(src, { headers: { 'User-Agent': SC_DESKTOP_UA } })).text();
+        const m = jt.match(/client_id\s*[:=]\s*"([a-zA-Z0-9]{20,})"/);
+        if (m) return m[1];
+      } catch {
+        // siguiente script
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function getClientId(force = false): Promise<string | null> {
+  if (cachedClientId && !force) return cachedClientId;
+  cachedClientId = await scrapeClientId();
+  return cachedClientId;
+}
+
+export interface SoundcloudStream {
+  streamUrl: string;
+  protocol: 'progressive' | 'hls';
+  title: string;
+  artist: string;
+  artwork: string | null;
+  durationMs: number | null;
+  permalinkUrl: string | null;
+}
+
+interface Transcoding {
+  url?: string;
+  format?: { protocol?: string; mime_type?: string };
+}
+
+/**
+ * Resuelve la URL de audio real de un track de SoundCloud para reproducir con un
+ * <audio> propio. Prefiere MP3 progresivo (funciona en todos lados); si solo hay
+ * HLS, lo devuelve igual (Safari/iOS lo reproduce nativo). Null si falla.
+ */
+export async function resolveSoundcloudStream(url: string): Promise<SoundcloudStream | null> {
+  if (!isSoundcloudUrl(url)) return null;
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': SC_DESKTOP_UA, Accept: 'text/html' } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/window\.__sc_hydration\s*=\s*(\[[\s\S]*?\]);/);
+    if (!match) return null;
+    const hydration = JSON.parse(match[1]) as Array<{
+      hydratable?: string;
+      data?: {
+        title?: string;
+        permalink_url?: string;
+        artwork_url?: string | null;
+        duration?: number;
+        user?: { username?: string; avatar_url?: string | null };
+        media?: { transcodings?: Transcoding[] };
+      };
+    }>;
+    const sound = hydration.find((h) => h.hydratable === 'sound');
+    const d = sound?.data;
+    const transcodings = d?.media?.transcodings || [];
+    const chosen =
+      transcodings.find((t) => t.format?.protocol === 'progressive') ||
+      transcodings.find((t) => t.format?.protocol === 'hls');
+    if (!d || !chosen?.url) return null;
+
+    const resolveWith = async (cid: string) => {
+      const r = await fetch(`${chosen.url}?client_id=${cid}`, { headers: { 'User-Agent': SC_DESKTOP_UA } });
+      return r;
+    };
+    let cid = await getClientId();
+    if (!cid) return null;
+    let r = await resolveWith(cid);
+    if (r.status === 401 || r.status === 403) {
+      // client_id expirado/rotado → refrescar y reintentar una vez.
+      cid = await getClientId(true);
+      if (!cid) return null;
+      r = await resolveWith(cid);
+    }
+    if (!r.ok) return null;
+    const j = (await r.json()) as { url?: string };
+    if (!j.url) return null;
+
+    return {
+      streamUrl: j.url,
+      protocol: chosen.format?.protocol === 'hls' ? 'hls' : 'progressive',
+      title: d.title || '',
+      artist: d.user?.username || '',
+      artwork: d.artwork_url || d.user?.avatar_url || null,
+      durationMs: typeof d.duration === 'number' ? d.duration : null,
+      permalinkUrl: d.permalink_url || null,
+    };
+  } catch {
+    return null;
+  }
+}
