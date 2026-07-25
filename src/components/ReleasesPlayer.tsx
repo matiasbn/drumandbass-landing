@@ -345,6 +345,16 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     ms.setActionHandler('pause', () => audioRef.current?.pause());
     ms.setActionHandler('previoustrack', () => prevRef.current());
     ms.setActionHandler('nexttrack', () => nextRef.current());
+    // iOS muestra por defecto los botones de ±10s (seek). Para que muestre
+    // SIGUIENTE/ANTERIOR de playlist hay que deshabilitar explícitamente esos.
+    for (const a of ['seekbackward', 'seekforward'] as const) {
+      try {
+        ms.setActionHandler(a, null);
+      } catch {
+        // acción no soportada
+      }
+    }
+    // Scrubber de la pantalla bloqueada (no agrega botones de skip).
     try {
       ms.setActionHandler('seekto', (d: MediaSessionActionDetails) => {
         if (audioRef.current && typeof d.seekTime === 'number') audioRef.current.currentTime = d.seekTime;
