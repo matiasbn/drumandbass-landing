@@ -207,6 +207,7 @@ interface CampaignRecipient {
   email: string;
   status: string;
   segment: string | null;
+  is_dj?: boolean;
   visited_at: string | null;
   visit_count: number;
   coupon_copy_at: string | null;
@@ -1885,13 +1886,14 @@ export default function CampaignsClient() {
                               {[
                                 { label: 'Destinatarios', value: recipients.length, accent: 'border-l-black' },
                                 {
+                                  // Un DJ es siempre junglist (DJ ⊃ junglist).
                                   label: 'Junglists',
-                                  value: recipients.filter((r) => r.segment === 'junglist').length,
+                                  value: recipients.filter((r) => r.is_dj || r.segment === 'junglist').length,
                                   accent: 'border-l-[#ff0055]',
                                 },
                                 {
                                   label: 'No junglists',
-                                  value: recipients.filter((r) => r.segment === 'no_junglist').length,
+                                  value: recipients.filter((r) => !r.is_dj && r.segment === 'no_junglist').length,
                                   accent: 'border-l-[#0000ff]',
                                 },
                               ].map((t) => (
@@ -2239,7 +2241,14 @@ export default function CampaignsClient() {
                                       <tr key={r.email} className="border-b border-gray-200 odd:bg-gray-50">
                                         <td className="p-2 truncate max-w-[220px]">{r.email}</td>
                                         <td className="p-2">
-                                          {r.segment === 'junglist' ? (
+                                          {/* DJ manda: un DJ es siempre junglist (DJ ⊃ junglist). Se recalcula
+                                              en vivo contra pk_profiles, no del segmento guardado. */}
+                                          {r.is_dj ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="inline-block w-2 h-2 bg-[#7C3AED]" />
+                                              DJ
+                                            </span>
+                                          ) : r.segment === 'junglist' ? (
                                             <span className="inline-flex items-center gap-1.5">
                                               <span className="inline-block w-2 h-2 bg-[#ff0055]" />
                                               Junglist

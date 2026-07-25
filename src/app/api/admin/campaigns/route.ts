@@ -376,10 +376,18 @@ export async function GET(request: NextRequest) {
         if (c.email) copyByEmail.set(String(c.email).toLowerCase(), c.copied_at as string);
       }
     }
+    // Estado EN VIVO de DJ: un email que está en pk_profiles es DJ (y un DJ es
+    // siempre junglist). Se recalcula al abrir el detalle, así el segmento no
+    // depende de lo que se guardó al enviar (que podía estar desactualizado).
+    const { data: djProfiles } = await supabase.from('pk_profiles').select('email');
+    const djSet = new Set(
+      (djProfiles || []).map((p) => String(p.email || '').toLowerCase()).filter(Boolean)
+    );
     const recipientsOut = (recipients ?? []).map((r) => ({
       email: r.email,
       status: r.status,
       segment: r.segment,
+      is_dj: djSet.has(String(r.email).toLowerCase()),
       visited_at: r.visited_at,
       visit_count: r.visit_count,
       coupon_copy_at: copyByEmail.get(String(r.email).toLowerCase()) ?? null,
