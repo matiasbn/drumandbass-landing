@@ -167,9 +167,10 @@ async function sendNoDownloadCampaign(
         unsubscribeUrl: unsubUrl(dj.email),
       }),
     }));
+    // Los destinatarios son DJs, y un DJ SIEMPRE es junglist (DJ ⊃ junglist).
     const push = (ids: { id: string }[] | null, status: string) =>
       batch.forEach((dj, j) =>
-        recipientRows.push({ id: recIds[j], campaign_id: campaignId, email: dj.email, resend_id: ids?.[j]?.id ?? null, status, segment: 'no_junglist' })
+        recipientRows.push({ id: recIds[j], campaign_id: campaignId, email: dj.email, resend_id: ids?.[j]?.id ?? null, status, segment: 'junglist' })
       );
     try {
       const { data, error } = await resend.batch.send(payload);
