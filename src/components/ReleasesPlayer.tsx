@@ -16,60 +16,8 @@ import dayjs from '@/src/lib/date';
 import { event } from '@/src/lib/gtag';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 
-// ── SoundCloud Widget API ────────────────────────────────────────────────────
-const SC_API = 'https://w.soundcloud.com/player/api.js';
-
-interface ScWidget {
-  bind(ev: string, cb: (e?: { currentPosition?: number }) => void): void;
-  load(url: string, opts: { auto_play?: boolean; visual?: boolean; callback?: () => void }): void;
-  play(): void;
-  pause(): void;
-  toggle(): void;
-  seekTo(ms: number): void;
-  getDuration(cb: (ms: number) => void): void;
-  getCurrentSound(cb: (s: ScSound) => void): void;
-}
-interface ScSound {
-  title?: string;
-  permalink_url?: string;
-  artwork_url?: string | null;
-  user?: { username?: string };
-}
-type ScGlobal = { Widget: ((el: HTMLIFrameElement) => ScWidget) & { Events: Record<string, string> } };
-function scGlobal(): ScGlobal | undefined {
-  return (window as unknown as Record<string, unknown>).SC as ScGlobal | undefined;
-}
-function loadScApi(): Promise<ScGlobal> {
-  return new Promise((resolve, reject) => {
-    const ready = scGlobal();
-    if (ready) return resolve(ready);
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${SC_API}"]`);
-    const onload = () => {
-      const sc = scGlobal();
-      if (sc) resolve(sc);
-      else reject(new Error('SC no cargó'));
-    };
-    if (existing) {
-      existing.addEventListener('load', onload);
-      existing.addEventListener('error', () => reject(new Error('SC error')));
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = SC_API;
-    s.async = true;
-    s.onload = onload;
-    s.onerror = () => reject(new Error('SC error'));
-    document.head.appendChild(s);
-  });
-}
-
-function playerUrl(trackUrl: string): string {
-  return `https://w.soundcloud.com/player/?url=${encodeURIComponent(
-    trackUrl
-  )}&auto_play=false&visual=true&show_comments=false&hide_related=true`;
-}
 function fmt(ms: number): string {
-  if (!ms || ms < 0) return '0:00';
+  if (!ms || ms < 0 || !isFinite(ms)) return '0:00';
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
@@ -77,6 +25,7 @@ function downloadHref(downloadUrl: string | null, fallbackScUrl: string): string
   return downloadUrl || fallbackScUrl;
 }
 const sameUrl = (a: string, b: string) => a.split('?')[0] === b.split('?')[0];
+const bigArt = (art: string | null) => (art ? art.replace('-large', '-t500x500') : null);
 
 interface SetTrack {
   title: string;
@@ -86,23 +35,29 @@ interface SetTrack {
   durationMs: number | null;
 }
 type DlInfo = { downloadable: boolean; downloadUrl: string | null; canonicalUrl?: string | null };
+interface Stream {
+  streamUrl: string;
+  protocol: 'progressive' | 'hls';
+  title: string;
+  artist: string;
+  artwork: string | null;
+  durationMs: number | null;
+  permalinkUrl: string | null;
+}
 
-// Unidad reproducible: un track suelto O un track dentro de un EP. La cola opera
-// sobre estos ítems, así los tracks de un EP se barajan individualmente (no en
-// bloque) y aparecen sueltos en "Próximos".
+// Unidad reproducible: track suelto O track de un EP (así el shuffle los intercala).
 interface PlayItem {
   url: string;
   title: string;
   artist: string;
-  releaseIdx: number; // índice dentro de `view` (para resaltar la tarjeta)
-  epTitle: string | null; // nombre del EP si el ítem es un track de EP
+  releaseIdx: number;
+  epTitle: string | null;
   isEpTrack: boolean;
   downloadable: boolean;
   downloadUrl: string | null;
 }
 
-// Orden de reproducción (índices de `items`). En shuffle baraja y deja el ítem
-// actual al frente; secuencial devuelve el orden natural.
+// Orden de reproducción (índices de `items`). Shuffle baraja y deja el actual al frente.
 function buildQueue(len: number, shuffle: boolean, curIdx: number): { queue: number[]; pos: number } {
   const idxs = Array.from({ length: len }, (_, i) => i);
   if (!shuffle) return { queue: idxs, pos: curIdx };
@@ -122,6 +77,10 @@ function buildQueue(len: number, shuffle: boolean, curIdx: number): { queue: num
 }
 
 // ── Componente ───────────────────────────────────────────────────────────────
+// Reproductor PROPIO: reproduce con un <audio> nativo (stream resuelto desde
+// SoundCloud), no con el widget. Da la mejor UX: controles nativos del celular
+// (Media Session), auto-avance, shuffle, sin gate. Es frágil por depender de la
+// web de SoundCloud; si cambia, se reimplementa.
 export default function ReleasesPlayer({ releases }: { releases: NationalRelease[] }) {
   const [filterArtist, setFilterArtist] = useState<string>('');
   const artists = useMemo(
@@ -136,46 +95,21 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   const [expanded, setExpanded] = useState<string | null>(null);
   const [epTracks, setEpTracks] = useState<Record<string, SetTrack[] | 'loading' | 'error'>>({});
   const [dl, setDl] = useState<Record<string, DlInfo>>({});
-  const dlRef = useRef<Record<string, DlInfo>>({});
-  dlRef.current = dl;
 
   const [shuffle, setShuffle] = useState(false);
-  const shuffleRef = useRef(false);
-  shuffleRef.current = shuffle;
-
   const [listOpen, setListOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
 
-  // Ítems reproducibles: cada track suelto y cada track de EP por separado.
   const items = useMemo<PlayItem[]>(() => {
     const out: PlayItem[] = [];
     view.forEach((r, ri) => {
       const tracks = r.isEp ? epTracks[r.url] : undefined;
       if (r.isEp && Array.isArray(tracks) && tracks.length) {
         tracks.forEach((t) =>
-          out.push({
-            url: t.url,
-            title: t.title,
-            artist: r.artistName,
-            releaseIdx: ri,
-            epTitle: r.title,
-            isEpTrack: true,
-            downloadable: t.downloadable,
-            downloadUrl: t.downloadUrl,
-          })
+          out.push({ url: t.url, title: t.title, artist: r.artistName, releaseIdx: ri, epTitle: r.title, isEpTrack: true, downloadable: t.downloadable, downloadUrl: t.downloadUrl })
         );
       } else {
-        // Track suelto (o EP cuya lista aún no cargó → se trata como un ítem).
-        out.push({
-          url: r.url,
-          title: r.title,
-          artist: r.artistName,
-          releaseIdx: ri,
-          epTitle: null,
-          isEpTrack: false,
-          downloadable: false,
-          downloadUrl: null,
-        });
+        out.push({ url: r.url, title: r.title, artist: r.artistName, releaseIdx: ri, epTitle: null, isEpTrack: false, downloadable: false, downloadUrl: null });
       }
     });
     return out;
@@ -190,17 +124,15 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   queueRef.current = queue;
   queuePosRef.current = queuePos;
 
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const widgetRef = useRef<ScWidget | null>(null);
-  const readyRef = useRef(false);
-  const pendingLoadRef = useRef<(() => void) | null>(null);
-  const loadedUrlRef = useRef<string | null>(releases[0]?.url ?? null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const streamCache = useRef<Record<string, Stream>>({});
+  const loadedUrlRef = useRef<string | null>(null); // track url en curso
   const hasPlayedRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [sound, setSound] = useState<{ title: string; artist: string; artwork: string | null; permalink: string } | null>(null);
+  const [nowPlaying, setNowPlaying] = useState<{ title: string; artist: string; artwork: string | null; permalink: string } | null>(null);
 
   const current = queuePos >= 0 && queue[queuePos] != null ? queue[queuePos] : -1;
   const currentItem = current >= 0 ? items[current] : null;
@@ -238,15 +170,13 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
       setEpTracks((p) => ({ ...p, [url]: 'error' }));
     }
   }, []);
-
-  // Precarga la lista de tracks de TODOS los EPs para poder barajarlos por track.
   useEffect(() => {
     view.forEach((r) => {
       if (r.isEp && epTracks[r.url] === undefined) void loadEp(r.url);
     });
   }, [view, epTracks, loadEp]);
 
-  // Descarga EN VIVO (por release suelto). Los EP traen su descarga por track.
+  // Descarga en vivo (release suelto). Los EP traen su descarga por track.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -271,12 +201,8 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     };
   }, [releases]);
 
-  // (Re)construye la cola cuando cambian los ítems (filtro / EP cargado) o el
-  // shuffle, manteniendo el ítem en curso.
   useEffect(() => {
-    const curIdx = hasPlayedRef.current
-      ? items.findIndex((it) => sameUrl(it.url, loadedUrlRef.current || ''))
-      : -1;
+    const curIdx = hasPlayedRef.current ? items.findIndex((it) => sameUrl(it.url, loadedUrlRef.current || '')) : -1;
     const built = buildQueue(items.length, shuffle, curIdx);
     setQueue(built.queue);
     setQueuePos(built.pos);
@@ -284,82 +210,55 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     queuePosRef.current = built.pos;
   }, [items, shuffle]);
 
-  const updateMediaSession = useCallback((s: ScSound) => {
+  // ── Stream propio ──────────────────────────────────────────────────────────
+  const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
+    if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
+    try {
+      const res = await fetch(`/api/pk/soundcloud/stream?url=${encodeURIComponent(trackUrl)}`);
+      if (!res.ok) return null;
+      const s = (await res.json()) as Stream;
+      streamCache.current[trackUrl] = s;
+      return s;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const updateMediaSession = useCallback((s: Stream) => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-    const art = s.artwork_url || null;
+    const art = bigArt(s.artwork);
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: s.title || '',
-        artist: s.user?.username || '',
+        title: s.title,
+        artist: s.artist,
         album: 'Releases Nacionales · Drum and Bass Chile',
-        artwork: art
-          ? [
-              { src: art.replace('-large', '-t120x120'), sizes: '120x120', type: 'image/jpeg' },
-              { src: art.replace('-large', '-t500x500'), sizes: '500x500', type: 'image/jpeg' },
-            ]
-          : [],
+        artwork: art ? [{ src: art, sizes: '500x500', type: 'image/jpeg' }] : [],
       });
     } catch {
       // MediaMetadata puede no existir.
     }
   }, []);
 
-  const refreshSound = useCallback(() => {
-    const w = widgetRef.current;
-    if (!w) return;
-    w.getCurrentSound((s) => {
-      if (!s) return;
-      setSound({
-        title: s.title || '',
-        artist: s.user?.username || '',
-        artwork: s.artwork_url ? s.artwork_url.replace('-large', '-t120x120') : null,
-        permalink: s.permalink_url || '',
+  const applyStream = useCallback(
+    (s: Stream, item: PlayItem) => {
+      const a = audioRef.current;
+      if (!a) return;
+      loadedUrlRef.current = item.url;
+      a.src = s.streamUrl;
+      void a.play().catch(() => {});
+      setNowPlaying({
+        title: s.title || item.title,
+        artist: s.artist || item.artist,
+        artwork: s.artwork,
+        permalink: s.permalinkUrl || item.url,
       });
       updateMediaSession(s);
-    });
-    w.getDuration((ms) => setDuration(ms));
-  }, [updateMediaSession]);
+    },
+    [updateMediaSession]
+  );
 
-  const ensureWidget = useCallback(async (): Promise<ScWidget | null> => {
-    if (widgetRef.current) return widgetRef.current;
-    if (!iframeRef.current) return null;
-    const SC = await loadScApi();
-    const w = SC.Widget(iframeRef.current);
-    widgetRef.current = w;
-    const E = SC.Widget.Events;
-    w.bind(E.READY, () => {
-      readyRef.current = true;
-      if (pendingLoadRef.current) {
-        const fn = pendingLoadRef.current;
-        pendingLoadRef.current = null;
-        fn();
-      }
-    });
-    w.bind(E.PLAY, () => {
-      setPlaying(true);
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-      refreshSound();
-    });
-    w.bind(E.PAUSE, () => {
-      setPlaying(false);
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-    });
-    w.bind(E.PLAY_PROGRESS, (e) => {
-      if (e?.currentPosition != null) setPosition(e.currentPosition);
-    });
-    w.bind(E.FINISH, () => nextRef.current());
-    if ('mediaSession' in navigator) {
-      const ms = navigator.mediaSession;
-      ms.setActionHandler('play', () => w.play());
-      ms.setActionHandler('pause', () => w.pause());
-      ms.setActionHandler('previoustrack', () => prevRef.current());
-      ms.setActionHandler('nexttrack', () => nextRef.current());
-    }
-    return w;
-  }, [refreshSound]);
-
-  // Reproduce la posición `qp` de la cola. SÍNCRONO: el load()/play() debe ocurrir
-  // dentro del gesto de usuario o SoundCloud bloquea el autoplay (móvil).
+  // Reproduce la posición `qp` de la cola. Si el stream ya está cacheado, arranca
+  // SÍNCRONO dentro del gesto (clave para el autoplay en móvil).
   const playQueue = useCallback(
     (qp: number) => {
       const ii = queueRef.current[qp];
@@ -370,32 +269,17 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
       queuePosRef.current = qp;
       setPosition(0);
       event('release_play', { release_title: item.title, artist: item.artist });
-      const playUrl = dlRef.current[item.url]?.canonicalUrl || item.url;
-      const doLoad = () => {
-        const w = widgetRef.current;
-        if (!w) return;
-        if (loadedUrlRef.current && sameUrl(loadedUrlRef.current, playUrl)) {
-          w.play();
-          refreshSound();
-          return;
-        }
-        loadedUrlRef.current = playUrl;
-        w.load(playUrl, {
-          auto_play: true,
-          visual: true,
-          callback: () => {
-            w.play();
-            refreshSound();
-          },
+      const cached = streamCache.current[item.url];
+      if (cached) {
+        applyStream(cached, item);
+      } else {
+        setNowPlaying({ title: item.title, artist: item.artist, artwork: null, permalink: item.url });
+        resolveStream(item.url).then((s) => {
+          if (s && queuePosRef.current === qp) applyStream(s, item);
         });
-      };
-      if (widgetRef.current && readyRef.current) doLoad();
-      else {
-        pendingLoadRef.current = doLoad;
-        void ensureWidget();
       }
     },
-    [ensureWidget, refreshSound]
+    [applyStream, resolveStream]
   );
 
   const playItemIdx = useCallback(
@@ -419,7 +303,6 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     },
     [playItemIdx]
   );
-
   const playNext = useCallback(() => {
     if (queuePosRef.current < queueRef.current.length - 1) playQueue(queuePosRef.current + 1);
   }, [playQueue]);
@@ -429,12 +312,37 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   nextRef.current = playNext;
   prevRef.current = playPrev;
 
-  useEffect(() => {
-    void ensureWidget();
-  }, [ensureWidget]);
-
   const toggle = useCallback(() => {
-    widgetRef.current?.toggle();
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) void a.play().catch(() => {});
+    else a.pause();
+  }, []);
+
+  // Precarga (resuelve) el stream del actual y el siguiente → "siguiente" instantáneo.
+  useEffect(() => {
+    const cur = queuePos >= 0 ? queuePos : 0;
+    [queue[cur], queue[cur + 1]].forEach((ii) => {
+      const it = items[ii];
+      if (it) void resolveStream(it.url);
+    });
+  }, [queue, queuePos, items, resolveStream]);
+
+  // Controles nativos del celular (Media Session): una sola vez.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler('play', () => audioRef.current?.play().catch(() => {}));
+    ms.setActionHandler('pause', () => audioRef.current?.pause());
+    ms.setActionHandler('previoustrack', () => prevRef.current());
+    ms.setActionHandler('nexttrack', () => nextRef.current());
+    try {
+      ms.setActionHandler('seekto', (d: MediaSessionActionDetails) => {
+        if (audioRef.current && typeof d.seekTime === 'number') audioRef.current.currentTime = d.seekTime;
+      });
+    } catch {
+      // seekto puede no estar soportado.
+    }
   }, []);
 
   const toggleExpand = useCallback(
@@ -469,20 +377,66 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     return () => window.removeEventListener('keydown', onKey);
   }, [current, toggle, playNext, playPrev, playQueue, queue]);
 
+  // ── Handlers del <audio> ─────────────────────────────────────────────────
+  const onEnded = () => nextRef.current();
+  const onError = () => {
+    // La URL firmada pudo expirar: la re-resolvemos y reintentamos una vez.
+    const url = loadedUrlRef.current;
+    if (!url) return;
+    delete streamCache.current[url];
+    const item = itemsRef.current.find((it) => sameUrl(it.url, url));
+    resolveStream(url).then((s) => {
+      if (s && item && loadedUrlRef.current === url) applyStream(s, item);
+    });
+  };
+  const onTimeUpdate = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    setPosition(a.currentTime * 1000);
+    if ('mediaSession' in navigator && a.duration && isFinite(a.duration)) {
+      try {
+        navigator.mediaSession.setPositionState({ duration: a.duration, position: a.currentTime, playbackRate: 1 });
+      } catch {
+        // no-op
+      }
+    }
+  };
+  const onLoadedMetadata = () => {
+    const a = audioRef.current;
+    if (a && isFinite(a.duration)) setDuration(a.duration * 1000);
+  };
+
   const progressRatio = duration ? position / duration : 0;
   const sideStyle = isDesktop && playerHeight ? { maxHeight: playerHeight } : undefined;
+  const artwork = bigArt(nowPlaying?.artwork ?? null);
 
-  // Info de descarga de un ítem: EP-track la trae en sí; suelto la lee de `dl`.
   const itemDl = (it: PlayItem): DlInfo =>
     it.isEpTrack ? { downloadable: it.downloadable, downloadUrl: it.downloadUrl } : dl[it.url] || { downloadable: false, downloadUrl: null };
 
-  // Próximos: ítems (tracks individuales) después del actual; si no empezó, toda la cola.
   const upcoming = (queuePos >= 0 ? queue.slice(queuePos + 1) : queue)
     .map((ii) => ({ item: items[ii], qp: queue.indexOf(ii) }))
     .filter((x) => x.item);
 
   return (
     <div>
+      {/* audio propio (oculto; controlamos con nuestra UI) */}
+      <audio
+        ref={audioRef}
+        preload="none"
+        onPlay={() => {
+          setPlaying(true);
+          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        }}
+        onPause={() => {
+          setPlaying(false);
+          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        }}
+        onEnded={onEnded}
+        onError={onError}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onLoadedMetadata}
+      />
+
       {/* ── Filtro por artista ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <span className="mono text-[11px] font-black uppercase opacity-60 mr-1">Artista:</span>
@@ -492,19 +446,24 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         >
           Todos ({releases.length})
         </button>
-        {artists.map((a) => (
-          <button
-            key={a}
-            onClick={() => setFilterArtist(a)}
-            className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border ${filterArtist === a ? 'bg-[#FF5500] text-white' : 'bg-white hover:bg-gray-100'}`}
-          >
-            {a}
-          </button>
-        ))}
+        {artists.map((a) => {
+          const active = filterArtist === a;
+          return (
+            <button
+              key={a}
+              onClick={() => setFilterArtist(active ? '' : a)}
+              aria-pressed={active}
+              className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border inline-flex items-center gap-1 ${active ? 'bg-[#FF5500] text-white' : 'bg-white hover:bg-gray-100'}`}
+            >
+              {a}
+              {active && <span aria-hidden className="opacity-80">×</span>}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex flex-col lg:grid lg:grid-cols-2 xl:grid-cols-[minmax(240px,300px)_1fr_minmax(200px,280px)] lg:gap-4 lg:items-start">
-        {/* ── Lista de tracks (izquierda en desktop; última en móvil) ───── */}
+        {/* ── Lista de tracks ──────────────────────────────────────────── */}
         <div className="order-3 lg:order-1 mt-4 lg:mt-0">
           <button
             onClick={() => setListOpen((o) => !o)}
@@ -631,13 +590,13 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         </div>
 
         {/* ── Reproductor (centro) ─────────────────────────────────────── */}
-        <div ref={playerRef} className="order-1 lg:order-2 lg:sticky lg:top-6 lg:z-20 bg-white brutalist-border brutalist-shadow-soundcloud">
-          <div className="flex items-center gap-1.5 p-3 border-b-4 border-black">
+        <div ref={playerRef} className="order-1 lg:order-2 lg:sticky lg:top-6 lg:z-20 bg-black text-white brutalist-border brutalist-shadow-soundcloud">
+          <div className="flex items-center gap-1.5 p-3 border-b-4 border-[#FF5500]">
             <button
               onClick={() => setShuffle((s) => !s)}
               aria-label="Modo aleatorio"
               aria-pressed={shuffle}
-              className={`p-1.5 border-2 border-black ${shuffle ? 'bg-[#FF5500] text-black' : 'bg-white hover:bg-gray-100'}`}
+              className={`p-1.5 border-2 ${shuffle ? 'bg-[#FF5500] text-black border-[#FF5500]' : 'border-white/40 hover:bg-white/10'}`}
               title="Aleatorio"
             >
               <RiShuffleLine className="w-4 h-4" />
@@ -649,7 +608,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
               onClick={() => (current < 0 ? (queue.length ? playQueue(0) : undefined) : toggle())}
               disabled={items.length === 0}
               aria-label={playing ? 'Pausar' : 'Reproducir'}
-              className="w-10 h-10 flex items-center justify-center bg-[#FF5500] text-black hover:bg-black hover:text-[#FF5500] disabled:opacity-30 shrink-0"
+              className="w-10 h-10 flex items-center justify-center bg-[#FF5500] text-black hover:bg-white disabled:opacity-30 shrink-0"
             >
               {playing ? <RiPauseFill className="w-6 h-6" /> : <RiPlayFill className="w-6 h-6" />}
             </button>
@@ -658,15 +617,15 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
             </button>
 
             <div className="min-w-0 flex-1 px-1">
-              <p className="font-black uppercase text-sm leading-tight truncate">{sound?.title || currentItem?.title || 'Elige un track'}</p>
+              <p className="font-black uppercase text-sm leading-tight truncate">{nowPlaying?.title || 'Elige un track'}</p>
               <p className="mono text-[11px] uppercase opacity-60 truncate">
-                {sound ? `${sound.artist} · ${fmt(position)} / ${fmt(duration)}` : 'Reproductor de releases'}
+                {nowPlaying ? `${nowPlaying.artist} · ${fmt(position)} / ${fmt(duration)}` : 'Reproductor de releases'}
               </p>
             </div>
 
             {currentItem && itemDl(currentItem).downloadable && (
               <a
-                href={downloadHref(itemDl(currentItem).downloadUrl, sound?.permalink || currentItem.url)}
+                href={downloadHref(itemDl(currentItem).downloadUrl, nowPlaying?.permalink || currentItem.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Descargar"
@@ -676,35 +635,44 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                 <RiDownloadLine className="w-5 h-5" />
               </a>
             )}
-            {sound?.permalink && (
-              <a href={sound.permalink} target="_blank" rel="noopener noreferrer" aria-label="Abrir en SoundCloud" className="p-1.5 hover:text-[#FF5500] shrink-0">
+            {nowPlaying?.permalink && (
+              <a href={nowPlaying.permalink} target="_blank" rel="noopener noreferrer" aria-label="Abrir en SoundCloud" className="p-1.5 hover:text-[#FF5500] shrink-0">
                 <RiSoundcloudLine className="w-5 h-5" />
               </a>
             )}
           </div>
 
+          {/* Barra de progreso (clickeable) */}
           <button
             aria-label="Buscar en la pista"
-            className="block w-full h-1.5 bg-black/10"
+            className="block w-full h-2 bg-white/15"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              const w = widgetRef.current;
-              if (w && duration) w.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration);
+              const a = audioRef.current;
+              if (a && duration) a.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * (duration / 1000);
             }}
           >
             <span className="block h-full bg-[#FF5500]" style={{ width: `${progressRatio * 100}%` }} />
           </button>
 
-          <iframe
-            ref={iframeRef}
-            title="Reproductor de SoundCloud"
-            src={releases[0] ? playerUrl(releases[0].url) : undefined}
-            allow="autoplay; encrypted-media"
-            className="block w-full h-[200px] sm:h-[280px] lg:h-[360px] xl:h-[400px] border-0"
-          />
+          {/* Carátula (visual limpio, nuestro) */}
+          <div className="relative w-full aspect-square max-h-[240px] sm:max-h-[300px] lg:max-h-[420px] bg-neutral-900 overflow-hidden flex items-center justify-center">
+            {artwork ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={artwork} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <RiSoundcloudLine className="w-16 h-16 text-[#FF5500] opacity-40" />
+            )}
+            {nowPlaying && (
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
+                <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
+                <p className="mono text-xs uppercase opacity-80">{nowPlaying.artist}</p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ── Próximos (derecha en desktop; antes de la lista en móvil) ─── */}
+        {/* ── Próximos ─────────────────────────────────────────────────── */}
         <div className="order-2 lg:order-3 lg:col-span-2 xl:col-span-1 mt-4 lg:mt-0 xl:mt-0 brutalist-border bg-white lg:overflow-hidden">
           <button
             onClick={() => setQueueOpen((o) => !o)}
