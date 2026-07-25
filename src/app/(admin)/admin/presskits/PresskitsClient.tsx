@@ -3,7 +3,18 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
-import { PresskitMix } from '@/src/types/presskit';
+import { PresskitMix, PresskitSocial, PresskitLink } from '@/src/types/presskit';
+import { socialToHandle, socialToUrl } from '@/src/lib/socials';
+
+// Handle de Instagram de un presskit (guardado en socials como usuario).
+const igOf = (pk: { socials?: { platform?: string; url?: string }[] }): string => {
+  const ig = (pk.socials || []).find((s) => /instagram/i.test(s.platform || ''));
+  return ig ? socialToHandle('Instagram', ig.url || '') : '';
+};
+
+// Mismas opciones que el formulario del DJ (pk/edit): Instagram va aparte.
+const SOCIAL_PLATFORM_OPTIONS = ['SoundCloud', 'Spotify', 'YouTube', 'TikTok', 'Facebook', 'Bandcamp', 'Mixcloud', 'Beatport', 'Web'];
+const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
 
 interface PresskitItem {
   id: string;
@@ -19,13 +30,23 @@ interface PresskitItem {
   slug: string | null;
   email: string | null;
   created_at: string;
+  socials: PresskitSocial[];
+  links: PresskitLink[];
   mixes: PresskitMix[];
 }
 
-// Un release cuenta como "publicado en Releases Nacionales" si está marcado como
-// featured, es tipo release y de SoundCloud (misma regla que el home).
-function isFeaturedRelease(m: PresskitMix): boolean {
-  return !!m.featured && m.type === 'release' && m.platform === 'SoundCloud';
+interface EditForm {
+  artist_name: string;
+  real_name: string;
+  city: string;
+  country: string;
+  bio: string;
+  published: boolean;
+  genres: string; // separado por comas
+  instagram: string; // handle dedicado
+  socials: PresskitSocial[]; // sin Instagram
+  mixes: PresskitMix[];
+  links: PresskitLink[];
 }
 
 type SortKey = 'artist_name' | 'real_name' | 'city' | 'published' | 'created_at';
@@ -35,9 +56,11 @@ export default function PresskitsClient() {
   const [presskits, setPresskits] = useState<PresskitItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ artist_name: '', real_name: '', city: '', country: '', bio: '', published: false });
+  const [editForm, setEditForm] = useState<EditForm>({
+    artist_name: '', real_name: '', city: '', country: '', bio: '', published: false,
+    genres: '', instagram: '', socials: [], mixes: [], links: [],
+  });
   const [saving, setSaving] = useState(false);
-  const [unfeaturingKey, setUnfeaturingKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -57,6 +80,29 @@ export default function PresskitsClient() {
   useEffect(() => {
     if (isAdmin) fetchPresskits();
   }, [isAdmin, fetchPresskits]);
+
+  // Al llegar desde "Editar presskit" (?slug=…), abre ese presskit y hace scroll.
+  // Solo una vez, cuando ya cargaron los presskits. Debe ir ANTES de los return
+  // tempranos para no romper el orden de hooks. startEdit se define más abajo,
+  // así que lo alcanzamos vía ref.
+  const startEditRef = useRef<((pk: PresskitItem) => void) | null>(null);
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenedRef.current || presskits.length === 0) return;
+    const slug = new URLSearchParams(window.location.search).get('slug');
+    if (!slug) {
+      autoOpenedRef.current = true;
+      return;
+    }
+    const pk = presskits.find((p) => p.slug === slug);
+    if (pk) {
+      autoOpenedRef.current = true;
+      startEditRef.current?.(pk);
+      setTimeout(() => {
+        document.getElementById(`pk-${pk.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [presskits]);
 
   if (loading) {
     return (
@@ -102,6 +148,8 @@ export default function PresskitsClient() {
 
   const startEdit = (pk: PresskitItem) => {
     setEditingId(pk.id);
+    const socials = pk.socials || [];
+    const ig = socials.find((s) => /instagram/i.test(s.platform || ''));
     setEditForm({
       artist_name: pk.artist_name || '',
       real_name: pk.real_name || '',
@@ -109,29 +157,30 @@ export default function PresskitsClient() {
       country: pk.country || '',
       bio: pk.bio || '',
       published: pk.published,
+      genres: (pk.genres || []).join(', '),
+      instagram: ig ? socialToHandle('Instagram', ig.url) : '',
+      socials: socials.filter((s) => !/instagram/i.test(s.platform || '')),
+      mixes: (pk.mixes || []).map((m) => ({ ...m })),
+      links: (pk.links || []).map((l) => ({ ...l })),
     });
   };
+  startEditRef.current = startEdit;
 
-  // Al llegar desde "Editar presskit" (?slug=…), abre ese presskit y hace scroll.
-  // Solo una vez, cuando ya cargaron los presskits.
-  const autoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (autoOpenedRef.current || presskits.length === 0) return;
-    const slug = new URLSearchParams(window.location.search).get('slug');
-    if (!slug) {
-      autoOpenedRef.current = true;
-      return;
-    }
-    const pk = presskits.find((p) => p.slug === slug);
-    if (pk) {
-      autoOpenedRef.current = true;
-      startEdit(pk);
-      setTimeout(() => {
-        document.getElementById(`pk-${pk.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 150);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presskits]);
+  // Helpers de edición para las listas del formulario.
+  const setField = <K extends keyof EditForm>(key: K, value: EditForm[K]) =>
+    setEditForm((f) => ({ ...f, [key]: value }));
+  const updateSocial = (i: number, patch: Partial<PresskitSocial>) =>
+    setEditForm((f) => ({ ...f, socials: f.socials.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
+  const addSocial = () => setEditForm((f) => ({ ...f, socials: [...f.socials, { platform: 'SoundCloud', url: '' }] }));
+  const removeSocial = (i: number) => setEditForm((f) => ({ ...f, socials: f.socials.filter((_, idx) => idx !== i) }));
+  const updateMix = (i: number, patch: Partial<PresskitMix>) =>
+    setEditForm((f) => ({ ...f, mixes: f.mixes.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) }));
+  const addMix = () => setEditForm((f) => ({ ...f, mixes: [...f.mixes, { title: '', platform: 'SoundCloud', url: '', type: 'set' }] }));
+  const removeMix = (i: number) => setEditForm((f) => ({ ...f, mixes: f.mixes.filter((_, idx) => idx !== i) }));
+  const updateLink = (i: number, patch: Partial<PresskitLink>) =>
+    setEditForm((f) => ({ ...f, links: f.links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)) }));
+  const addLink = () => setEditForm((f) => ({ ...f, links: [...f.links, { title: '', url: '' }] }));
+  const removeLink = (i: number) => setEditForm((f) => ({ ...f, links: f.links.filter((_, idx) => idx !== i) }));
 
   const cancelEdit = () => {
     setEditingId(null);
@@ -139,12 +188,34 @@ export default function PresskitsClient() {
 
   const saveEdit = async () => {
     if (!editingId) return;
+    // Instagram (handle) va primero; el resto de redes detrás, guardadas como
+    // handle/usuario (no URL), igual que el formulario del DJ.
+    const igHandle = socialToHandle('Instagram', editForm.instagram);
+    const socials = [
+      ...(igHandle ? [{ platform: 'Instagram', url: igHandle }] : []),
+      ...editForm.socials
+        .filter((s) => s.url.trim())
+        .map((s) => ({ platform: s.platform, url: socialToHandle(s.platform, s.url) })),
+    ];
+    const payload = {
+      id: editingId,
+      artist_name: editForm.artist_name,
+      real_name: editForm.real_name,
+      city: editForm.city,
+      country: editForm.country,
+      bio: editForm.bio,
+      published: editForm.published,
+      genres: editForm.genres.split(',').map((g) => g.trim()).filter(Boolean),
+      socials,
+      mixes: editForm.mixes.filter((m) => m.title.trim() && m.url.trim()),
+      links: editForm.links.filter((l) => l.title.trim() && l.url.trim()),
+    };
     setSaving(true);
     try {
       const res = await fetch('/api/admin/presskits', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingId, ...editForm }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.presskit) {
@@ -175,31 +246,6 @@ export default function PresskitsClient() {
       }
     } catch {
       // ignore
-    }
-  };
-
-  // Desmarca un release publicado (featured=false) y persiste el array completo.
-  const unfeatureTrack = async (pk: PresskitItem, mixIndex: number) => {
-    const newMixes = pk.mixes.map((m, i) =>
-      i === mixIndex ? { ...m, featured: false } : m
-    );
-    setUnfeaturingKey(`${pk.id}:${mixIndex}`);
-    try {
-      const res = await fetch('/api/admin/presskits', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: pk.id, mixes: newMixes }),
-      });
-      const data = await res.json();
-      if (data.presskit) {
-        setPresskits((prev) =>
-          prev.map((p) => (p.id === pk.id ? { ...p, mixes: data.presskit.mixes } : p))
-        );
-      }
-    } catch {
-      // ignore
-    } finally {
-      setUnfeaturingKey(null);
     }
   };
 
@@ -245,7 +291,7 @@ export default function PresskitsClient() {
                 <tr className="border-b-4 border-black">
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('artist_name')}>Artista{sortArrow('artist_name')}</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('real_name')}>Nombre Real{sortArrow('real_name')}</th>
-                  <th className="text-left py-2 pr-4">Email</th>
+                  <th className="text-left py-2 pr-4">Instagram</th>
                   <th className="text-left py-2 pr-4">Slug</th>
                   <th className="text-left py-2 pr-4 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('published')}>Estado{sortArrow('published')}</th>
                   <th className="text-left py-2">Acciones</th>
@@ -253,9 +299,6 @@ export default function PresskitsClient() {
               </thead>
               <tbody>
                 {sortedPresskits.map((pk) => {
-                  const featured = (pk.mixes || [])
-                    .map((m, idx) => ({ m, idx }))
-                    .filter(({ m }) => isFeaturedRelease(m));
                   return (
                   <Fragment key={pk.id}>
                   <tr id={`pk-${pk.id}`} className="border-b border-gray-300 scroll-mt-24">
@@ -277,8 +320,10 @@ export default function PresskitsClient() {
                             placeholder="Nombre real"
                           />
                         </td>
-                        {/* Email es de solo lectura (viene de pk_profiles). */}
-                        <td className="py-2 pr-4 text-gray-500">{pk.email || '-'}</td>
+                        {/* Instagram (el usuario se edita en el panel de abajo). */}
+                        <td className="py-2 pr-4 text-gray-500">
+                          {igOf(pk) ? `@${igOf(pk)}` : '-'}
+                        </td>
                         <td className="py-2 pr-4 text-gray-500">{pk.slug || '-'}</td>
                         <td className="py-2 pr-4">
                           <button
@@ -310,7 +355,18 @@ export default function PresskitsClient() {
                       <>
                         <td className="py-2 pr-4 font-bold">{pk.artist_name}</td>
                         <td className="py-2 pr-4">{pk.real_name || '-'}</td>
-                        <td className="py-2 pr-4">{pk.email || '-'}</td>
+                        <td className="py-2 pr-4">
+                          {igOf(pk) ? (
+                            <a
+                              href={socialToUrl('Instagram', igOf(pk))}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-gray-600"
+                            >
+                              @{igOf(pk)}
+                            </a>
+                          ) : '-'}
+                        </td>
                         <td className="py-2 pr-4">
                           {pk.slug ? (
                             <a href={`/pk/${pk.slug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
@@ -347,69 +403,170 @@ export default function PresskitsClient() {
                   </tr>
                   {editingId === pk.id && (
                     <tr className="border-b border-gray-300 bg-gray-50">
-                      <td colSpan={6} className="py-3 px-2">
-                        <div className="flex flex-wrap gap-6 mb-4 items-end">
+                      <td colSpan={6} className="py-4 px-3">
+                        {/* Datos del formulario (todo salvo imágenes) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                           <label className="mono text-xs font-bold uppercase">
                             Ciudad
                             <input
                               value={editForm.city}
-                              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                              className="block mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                              onChange={(e) => setField('city', e.target.value)}
+                              className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
                               placeholder="Ciudad"
                             />
                           </label>
-                          <span className="mono text-xs text-gray-600 uppercase">
-                            Registrado:{' '}
-                            <strong>{new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
-                          </span>
+                          <label className="mono text-xs font-bold uppercase">
+                            País
+                            <input
+                              value={editForm.country}
+                              onChange={(e) => setField('country', e.target.value)}
+                              className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                              placeholder="País"
+                            />
+                          </label>
+                          <label className="mono text-xs font-bold uppercase">
+                            Instagram (usuario)
+                            <input
+                              value={editForm.instagram}
+                              onChange={(e) => setField('instagram', e.target.value)}
+                              className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                              placeholder="usuario"
+                            />
+                          </label>
+                          <label className="mono text-xs font-bold uppercase">
+                            Géneros (separados por coma)
+                            <input
+                              value={editForm.genres}
+                              onChange={(e) => setField('genres', e.target.value)}
+                              className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                              placeholder="Neurofunk, Jungle…"
+                            />
+                          </label>
                         </div>
-                        <p className="mono text-xs font-bold uppercase mb-2">
-                          Releases publicados en Releases Nacionales
-                        </p>
-                        {featured.length === 0 ? (
-                          <p className="mono text-xs text-gray-500">
-                            Este DJ no tiene releases publicados.
-                          </p>
-                        ) : (
-                          <ul className="space-y-2">
-                            {featured.map(({ m, idx }) => {
-                              const key = `${pk.id}:${idx}`;
-                              return (
-                                <li
-                                  key={idx}
-                                  className="flex items-center justify-between gap-3 border-2 border-black bg-white px-3 py-2"
+                        <label className="block mono text-xs font-bold uppercase mb-4">
+                          Bio
+                          <textarea
+                            value={editForm.bio}
+                            onChange={(e) => setField('bio', e.target.value)}
+                            rows={3}
+                            className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                            placeholder="Bio del artista"
+                          />
+                        </label>
+
+                        {/* Redes (sin Instagram, que va arriba) */}
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="mono text-xs font-bold uppercase">Redes</p>
+                          <button onClick={addSocial} className="border-2 border-black px-2 py-0.5 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer">+ Red</button>
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          {editForm.socials.length === 0 && <p className="mono text-xs text-gray-500">Sin otras redes.</p>}
+                          {editForm.socials.map((s, i) => (
+                            <div key={i} className="flex flex-wrap gap-2 items-center">
+                              <select
+                                value={s.platform}
+                                onChange={(e) => updateSocial(i, { platform: e.target.value })}
+                                className="border-2 border-black px-2 py-1 text-sm"
+                              >
+                                {SOCIAL_PLATFORM_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                              <input
+                                value={s.url}
+                                onChange={(e) => updateSocial(i, { url: e.target.value })}
+                                className="flex-1 min-w-[160px] border-2 border-black px-2 py-1 text-sm"
+                                placeholder="usuario o URL"
+                              />
+                              <button onClick={() => removeSocial(i)} className="border-2 border-red-600 text-red-600 px-2 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer">×</button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Tracks / Sets & Releases (incluye los de SoundCloud) */}
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="mono text-xs font-bold uppercase">Sets &amp; Releases</p>
+                          <button onClick={addMix} className="border-2 border-black px-2 py-0.5 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer">+ Track</button>
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          {editForm.mixes.length === 0 && <p className="mono text-xs text-gray-500">Sin tracks.</p>}
+                          {editForm.mixes.map((m, i) => (
+                            <div key={i} className="border-2 border-black bg-white p-2 space-y-2">
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <input
+                                  value={m.title}
+                                  onChange={(e) => updateMix(i, { title: e.target.value })}
+                                  className="flex-1 min-w-[160px] border-2 border-black px-2 py-1 text-sm"
+                                  placeholder="Título"
+                                />
+                                <select
+                                  value={m.platform}
+                                  onChange={(e) => updateMix(i, { platform: e.target.value })}
+                                  className="border-2 border-black px-2 py-1 text-sm"
                                 >
-                                  <div className="min-w-0">
-                                    <a
-                                      href={m.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="mono text-xs font-bold underline hover:text-gray-600 truncate block"
-                                    >
-                                      {m.title}
-                                    </a>
-                                    {m.released_at && (
-                                      <span className="mono text-[10px] text-gray-500">
-                                        {new Date(m.released_at).toLocaleDateString('es-CL', {
-                                          day: '2-digit',
-                                          month: 'short',
-                                          year: 'numeric',
-                                        })}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => unfeatureTrack(pk, idx)}
-                                    disabled={unfeaturingKey === key}
-                                    className="border-2 border-red-600 text-red-600 px-3 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer disabled:opacity-50 shrink-0"
-                                  >
-                                    {unfeaturingKey === key ? '...' : 'Desmarcar'}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
+                                  {MIX_PLATFORM_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <select
+                                  value={m.type || 'set'}
+                                  onChange={(e) => updateMix(i, { type: e.target.value as 'set' | 'release' })}
+                                  className="border-2 border-black px-2 py-1 text-sm"
+                                >
+                                  <option value="set">Set</option>
+                                  <option value="release">Release</option>
+                                </select>
+                                <button onClick={() => removeMix(i)} className="border-2 border-red-600 text-red-600 px-2 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer">×</button>
+                              </div>
+                              <div className="flex flex-wrap gap-3 items-center">
+                                <input
+                                  value={m.url}
+                                  onChange={(e) => updateMix(i, { url: e.target.value })}
+                                  className="flex-1 min-w-[220px] border-2 border-black px-2 py-1 text-sm"
+                                  placeholder="URL"
+                                />
+                                {/* Featured solo aplica a releases de SoundCloud (Releases Nacionales) */}
+                                {m.type === 'release' && m.platform === 'SoundCloud' && (
+                                  <label className="mono text-xs font-bold uppercase flex items-center gap-1 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!m.featured}
+                                      onChange={(e) => updateMix(i, { featured: e.target.checked })}
+                                    />
+                                    Releases Nacionales
+                                  </label>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Links */}
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="mono text-xs font-bold uppercase">Links</p>
+                          <button onClick={addLink} className="border-2 border-black px-2 py-0.5 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer">+ Link</button>
+                        </div>
+                        <div className="space-y-2 mb-2">
+                          {editForm.links.length === 0 && <p className="mono text-xs text-gray-500">Sin links.</p>}
+                          {editForm.links.map((l, i) => (
+                            <div key={i} className="flex flex-wrap gap-2 items-center">
+                              <input
+                                value={l.title}
+                                onChange={(e) => updateLink(i, { title: e.target.value })}
+                                className="min-w-[140px] border-2 border-black px-2 py-1 text-sm"
+                                placeholder="Título"
+                              />
+                              <input
+                                value={l.url}
+                                onChange={(e) => updateLink(i, { url: e.target.value })}
+                                className="flex-1 min-w-[200px] border-2 border-black px-2 py-1 text-sm"
+                                placeholder="URL"
+                              />
+                              <button onClick={() => removeLink(i)} className="border-2 border-red-600 text-red-600 px-2 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer">×</button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="mono text-[11px] text-gray-500 mt-3">
+                          Registrado: <strong>{new Date(pk.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                          {' · '}Las imágenes las edita el DJ desde su presskit.
+                        </p>
                       </td>
                     </tr>
                   )}

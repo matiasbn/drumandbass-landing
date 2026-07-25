@@ -64,19 +64,37 @@ export async function GET() {
   for (const pk of pkProfiles || []) {
     const email = String(pk.email || '').toLowerCase();
     if (!email) continue;
+    const presskit = pkByUser.get(pk.user_id as string);
+    const djName = (presskit?.artist_name as string)?.trim() || ''; // AKA (artístico)
+    const djRealName = (presskit?.real_name as string)?.trim() || ''; // nombre real
+    // Un DJ solo cuenta como tal si tiene un presskit REAL con lo mínimo (AKA +
+    // nombre real). Tener sólo la cuenta pk_profiles sin presskit no lo hace DJ:
+    // en ese caso queda como junglist (si tiene fila) o simplemente no aparece.
+    const isDj = Boolean(presskit && djName && djRealName);
     const existing = byEmail.get(email);
     if (existing) {
-      existing.isDj = true; // es junglist Y dj → dj
-      continue;
+      if (isDj) {
+        // Es junglist Y dj → dj. Sube los datos del presskit (AKA, nombre real,
+        // slug) por sobre lo que cargó como junglist, así "Editar presskit"
+        // tiene slug y la columna "Nombre de DJ" muestra el AKA, no el nombre.
+        const socials = (presskit?.socials as { platform?: string; url?: string }[]) || [];
+        const ig = socials.find((s) => /instagram/i.test(s.platform || ''));
+        existing.isDj = true;
+        existing.slug = pk.slug || null;
+        existing.name = djName;
+        existing.last_name = djRealName;
+        if (ig?.url) existing.instagram = ig.url;
+      }
+      continue; // sin presskit válido → se queda como junglist
     }
-    const presskit = pkByUser.get(pk.user_id as string);
+    if (!isDj) continue; // cuenta pk_profiles incompleta y sin fila junglist → no se lista
     const socials = (presskit?.socials as { platform?: string; url?: string }[]) || [];
     const ig = socials.find((s) => /instagram/i.test(s.platform || ''));
     byEmail.set(email, {
       id: pk.user_id, // sin fila en junglists → no borrable acá
       user_id: pk.user_id,
-      name: (presskit?.artist_name as string) || '', // nombre de DJ (artístico)
-      last_name: (presskit?.real_name as string) || '', // nombre real
+      name: djName,
+      last_name: djRealName,
       email: pk.email,
       instagram: ig?.url || '',
       slug: pk.slug || null,

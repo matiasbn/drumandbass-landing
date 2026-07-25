@@ -337,23 +337,33 @@ function PresskitEditor() {
     const filteredMixes = mixes.filter((m) => m.title.trim() && m.url.trim());
     const filteredLinks = links.filter((l) => l.title.trim() && l.url.trim());
 
-    // La validación dura (obligatorios, fila vacía, foto) solo aplica al guardado
-    // manual/publicación. El auto-guardado persiste el estado tal cual.
-    if (validate) {
-      if (!artistName.trim() || !realName.trim() || !city.trim() || !country.trim() || !instagram.trim()) {
-        setSaveMessage('Error: Completa AKA de DJ, nombre real, ciudad, país e Instagram');
-        return;
+    // Mínimo obligatorio para que exista un DJ: AKA, nombre real, ciudad, país,
+    // Instagram y al menos una foto. NUNCA se persiste (ni por auto-guardado) un
+    // presskit sin esto, así no quedan perfiles de DJ a medio llenar. En el
+    // guardado manual se explica qué falta; en el auto-guardado se omite en
+    // silencio (queda "sin guardar" hasta completar).
+    const meetsMinimum =
+      artistName.trim() && realName.trim() && city.trim() && country.trim() &&
+      instagram.trim() && photoUrls.length > 0;
+    if (!meetsMinimum) {
+      if (validate) {
+        setSaveMessage(
+          photoUrls.length === 0 && artistName.trim() && realName.trim() && city.trim() && country.trim() && instagram.trim()
+            ? 'Error: Debes subir al menos una foto para tu presskit'
+            : 'Error: Completa AKA de DJ, nombre real, ciudad, país, Instagram y una foto'
+        );
       }
+      return;
+    }
+
+    // Validación adicional (filas vacías, tope de logos) solo en guardado manual.
+    if (validate) {
       if (
         socials.some((s) => !s.url.trim()) ||
         mixes.some((m) => !m.title.trim() || !m.url.trim()) ||
         links.some((l) => !l.title.trim() || !l.url.trim())
       ) {
         setSaveMessage('Error: Completa o elimina los campos vacíos marcados en rojo');
-        return;
-      }
-      if (photoUrls.length === 0) {
-        setSaveMessage('Error: Debes subir al menos una foto para tu presskit');
         return;
       }
       if (logoUrls.length > MAX_LOGOS) {
