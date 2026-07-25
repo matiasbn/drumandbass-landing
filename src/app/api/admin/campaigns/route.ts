@@ -7,7 +7,7 @@ import { buildEmailHtml } from '@/src/lib/emailTemplate';
 import { resolveCoupon, segmentBody, segmentSubject } from '@/src/lib/campaignCopy';
 import { BASE_URL } from '@/src/constants';
 import { verifyAdmin } from '@/src/lib/authz';
-import { fetchSoundcloudTrackMeta, isSoundcloudUrl } from '@/src/lib/soundcloud';
+import { fetchSoundcloudTrackMeta, fetchSoundcloudSetTracks, isSoundcloudUrl } from '@/src/lib/soundcloud';
 
 // ── Campaña "Releases sin descarga" ──────────────────────────────────────────
 // Tipo de campaña distinto: contenido PERSONALIZADO por DJ. Le avisamos a cada
@@ -34,42 +34,55 @@ async function computeDjsWithoutDownload(
   ]);
   const profByUser = new Map((profiles || []).map((p) => [p.user_id as string, p]));
 
-  // Junta todos los releases featured (de DJs con email) y chequea la descarga
-  // EN PARALELO (evita timeouts por scrapear ~20 tracks en secuencial).
-  type Row = { email: string; artistName: string; slug: string | null; title: string; url: string };
-  const rows: Row[] = [];
+  // Junta los releases featured (de DJs con email). Un EP se expande TRACK POR
+  // TRACK (cada track del set tiene su propia descarga); un track suelto va tal cual.
+  type Ref = { email: string; artistName: string; slug: string | null; title: string; url: string; isEp: boolean };
+  const refs: Ref[] = [];
   for (const pk of presskits || []) {
     const prof = profByUser.get(pk.user_id as string);
     if (!prof?.email) continue;
-    const mixes = Array.isArray(pk.mixes) ? (pk.mixes as { featured?: boolean; type?: string; url?: string; title?: string }[]) : [];
+    const mixes = Array.isArray(pk.mixes)
+      ? (pk.mixes as { featured?: boolean; type?: string; url?: string; title?: string; is_ep?: boolean }[])
+      : [];
     for (const m of mixes) {
       if (m.featured && m.type === 'release' && isSoundcloudUrl(m.url || '') && (m.title || '').trim()) {
-        rows.push({
+        refs.push({
           email: String(prof.email),
           artistName: (pk.artist_name as string) || String(prof.email),
           slug: (prof.slug as string) || null,
           title: m.title as string,
           url: m.url as string,
+          isEp: m.is_ep === true || /soundcloud\.com\/[^/]+\/sets\//i.test(m.url as string),
         });
       }
     }
   }
 
-  const checked = await Promise.all(
-    rows.map(async (r) => ({ r, downloadable: (await fetchSoundcloudTrackMeta(r.url)).downloadable === true }))
-  );
-
-  // Agrupa por DJ los que NO tienen descarga (ni nativa ni gate).
+  // Chequea la descarga EN PARALELO (evita timeouts). Para EPs, trae la tracklist
+  // del set (cada track ya viene con su flag de descargable).
   const byEmail = new Map<string, DjNoDownload>();
-  for (const { r, downloadable } of checked) {
-    if (downloadable) continue;
-    let dj = byEmail.get(r.email);
+  const addTrack = (ref: Ref, track: DjTrack) => {
+    let dj = byEmail.get(ref.email);
     if (!dj) {
-      dj = { email: r.email, artistName: r.artistName, slug: r.slug, tracks: [] };
-      byEmail.set(r.email, dj);
+      dj = { email: ref.email, artistName: ref.artistName, slug: ref.slug, tracks: [] };
+      byEmail.set(ref.email, dj);
     }
-    dj.tracks.push({ title: r.title, url: r.url });
-  }
+    dj.tracks.push(track);
+  };
+
+  await Promise.all(
+    refs.map(async (ref) => {
+      if (ref.isEp) {
+        const set = await fetchSoundcloudSetTracks(ref.url);
+        for (const t of set?.tracks || []) {
+          if (!t.downloadable) addTrack(ref, { title: t.title, url: t.url });
+        }
+      } else {
+        const meta = await fetchSoundcloudTrackMeta(ref.url);
+        if (meta.downloadable !== true) addTrack(ref, { title: ref.title, url: ref.url });
+      }
+    })
+  );
   return [...byEmail.values()];
 }
 
