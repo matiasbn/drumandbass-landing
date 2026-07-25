@@ -369,7 +369,9 @@ export const LiveChat: React.FC<LiveChatProps> = ({ videoId }) => {
           <button
             onClick={() => setIsOpen(true)}
             className="fixed z-[9999] touch-auto flex items-center justify-center w-12 h-12 rounded-full bg-black/70 backdrop-blur border border-[#ff0055]/40 active:bg-[#ff0055]/20 transition-colors"
-            style={{ bottom: '92px', right: '16px' }}
+            // Arriba del stick derecho (ocupa hasta ~144px desde el fondo): así
+            // el ícono queda SIEMPRE por encima del joystick, medido desde abajo.
+            style={{ bottom: '156px', right: '16px' }}
             aria-label="Abrir chat"
           >
             <RiChat1Line className="w-6 h-6 text-[#ff0055]" />

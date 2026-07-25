@@ -5,7 +5,7 @@ export const TUNING = {
   /** Bass Cannon (M1) — disparo principal */
   arma: {
     shotCooldownMs: 400, // cooldown entre disparos
-    shotSpeed: 22, // u/s
+    shotSpeed: 34, // u/s — balas más rápidas (antes 22)
     shotLifeS: 1.2, // vida del proyectil
     shotRadius: 0.12, // radio visual/colisión del proyectil
     npcHitRadius: 0.9, // radio de impacto contra NPCs
@@ -142,7 +142,7 @@ export const TUNING = {
 
   /** Física delta-time (M14) — unidades por segundo */
   fisica: {
-    moveSpeed: 8.4, // u/s (antes 0.14/frame)
+    moveSpeed: 6.8, // u/s — un poco más lento (antes 8.4)
     jumpVel: 9, // u/s (antes 0.15/frame)
     doubleJumpVel: 7, // u/s — derivado: conserva el ratio 0.22/0.28 del doble salto actual
     gravity: 21.6, // u/s² (antes 0.006/frame²)

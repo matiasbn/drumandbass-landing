@@ -324,22 +324,33 @@ export const MobileControls: React.FC = () => {
   const btnClass =
     'flex items-center justify-center rounded-full bg-black/50 backdrop-blur border select-none active:bg-white/20 transition-colors touch-none';
   const stickClass =
-    'rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none relative';
-  const thumbStyle = {
+    'rounded-full bg-white/10 backdrop-blur border border-white/20 touch-none select-none relative';
+  // Evita que un long-press sobre el stick seleccione texto o abra el callout de
+  // iOS (eso cancelaba el toque y la granada no se lanzaba).
+  const stickStyle: React.CSSProperties = {
+    width: JOYSTICK_SIZE,
+    height: JOYSTICK_SIZE,
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    WebkitTouchCallout: 'none',
+    touchAction: 'none',
+  };
+  const thumbStyle: React.CSSProperties = {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     left: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
     top: (JOYSTICK_SIZE - THUMB_SIZE) / 2,
-  } as const;
+    pointerEvents: 'none',
+  };
 
   return (
-    <div className="fixed inset-0 z-30 pointer-events-none touch-none">
+    <div className="fixed inset-0 z-30 pointer-events-none touch-none select-none">
       {/* Stick izquierdo — moverse */}
       <div className="pointer-events-auto absolute bottom-6 left-4 touch-none">
         <div
           ref={leftJoyRef}
           className={stickClass}
-          style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
+          style={stickStyle}
           onTouchStart={onLeftStart}
           onTouchMove={onLeftMove}
           onTouchEnd={onLeftEnd}
@@ -364,7 +375,7 @@ export const MobileControls: React.FC = () => {
         <div
           ref={rightJoyRef}
           className={`${stickClass} border-[#ff0055]/30`}
-          style={{ width: JOYSTICK_SIZE, height: JOYSTICK_SIZE }}
+          style={stickStyle}
           onTouchStart={onRightStart}
           onTouchMove={onRightMove}
           onTouchEnd={onRightEnd}
