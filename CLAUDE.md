@@ -52,6 +52,7 @@ Dev/Playwright both bind **port 3600** (`playwright.config.ts` `baseURL`). The R
 - Icons come from `@remixicon/react`. Fonts are Space Grotesk / Space Mono via `next/font`.
 - `src/constants.ts` centralizes socials, WhatsApp link, `BASE_URL`, team.
 - UI copy and commit messages are in **Spanish** — follow suit.
+- **Español de CHILE (tuteo), NUNCA voseo argentino.** Todo el texto visible al usuario (UI, correos de campaña, tooltips, mensajes de error) va en **tuteo chileno**: "quieres" (no "querés"), "puedes" (no "podés"), "tienes" (no "tenés"), "activa/pon/mira/deja" (no "activá/poné/mirá/dejá"), "aquí" (no "acá"). Esto es **crítico**: un correo con voseo salió a producción y fue un problema serio. Antes de mandar cualquier copy nueva (sobre todo correos), revísala por voseo. Los comentarios de código internos son flexibles, pero el texto de cara al usuario NO.
 
 ## Analytics — consider tracking on every change
 
