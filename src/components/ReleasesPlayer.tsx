@@ -133,6 +133,9 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [nowPlaying, setNowPlaying] = useState<{ title: string; artist: string; artwork: string | null; permalink: string } | null>(null);
+  // Track que no se pudo reproducir (HLS no soportado, sin stream, etc.) → aviso.
+  const [playbackError, setPlaybackError] = useState<{ title: string; permalink: string } | null>(null);
+  const errorRetryRef = useRef<string | null>(null); // url que ya reintentamos una vez
 
   const current = queuePos >= 0 && queue[queuePos] != null ? queue[queuePos] : -1;
   const currentItem = current >= 0 ? items[current] : null;
@@ -243,15 +246,17 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
     (s: Stream, item: PlayItem) => {
       const a = audioRef.current;
       if (!a) return;
+      const permalink = s.permalinkUrl || item.url;
+      // Future-proof: si SoundCloud sirviera solo HLS y el navegador no lo
+      // reproduce (Chrome/Firefox desktop), avisamos con link en vez de fallar mudo.
+      if (s.protocol === 'hls' && !a.canPlayType('application/vnd.apple.mpegurl')) {
+        setPlaybackError({ title: s.title || item.title, permalink });
+        return;
+      }
       loadedUrlRef.current = item.url;
       a.src = s.streamUrl;
       void a.play().catch(() => {});
-      setNowPlaying({
-        title: s.title || item.title,
-        artist: s.artist || item.artist,
-        artwork: s.artwork,
-        permalink: s.permalinkUrl || item.url,
-      });
+      setNowPlaying({ title: s.title || item.title, artist: s.artist || item.artist, artwork: s.artwork, permalink });
       updateMediaSession(s);
     },
     [updateMediaSession]
@@ -269,13 +274,17 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
       queuePosRef.current = qp;
       setPosition(0);
       event('release_play', { release_title: item.title, artist: item.artist });
+      setPlaybackError(null);
+      errorRetryRef.current = null;
       const cached = streamCache.current[item.url];
       if (cached) {
         applyStream(cached, item);
       } else {
         setNowPlaying({ title: item.title, artist: item.artist, artwork: null, permalink: item.url });
         resolveStream(item.url).then((s) => {
-          if (s && queuePosRef.current === qp) applyStream(s, item);
+          if (queuePosRef.current !== qp) return;
+          if (s) applyStream(s, item);
+          else setPlaybackError({ title: item.title, permalink: item.url }); // no se pudo resolver
         });
       }
     },
@@ -380,13 +389,21 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
   // ── Handlers del <audio> ─────────────────────────────────────────────────
   const onEnded = () => nextRef.current();
   const onError = () => {
-    // La URL firmada pudo expirar: la re-resolvemos y reintentamos una vez.
     const url = loadedUrlRef.current;
     if (!url) return;
-    delete streamCache.current[url];
     const item = itemsRef.current.find((it) => sameUrl(it.url, url));
+    // Reintento único: la URL firmada pudo expirar → re-resolvemos. Si ya
+    // reintentamos este track, mostramos el aviso (future-proof).
+    if (errorRetryRef.current === url) {
+      setPlaybackError({ title: item?.title || nowPlaying?.title || '', permalink: item?.url || url });
+      return;
+    }
+    errorRetryRef.current = url;
+    delete streamCache.current[url];
     resolveStream(url).then((s) => {
-      if (s && item && loadedUrlRef.current === url) applyStream(s, item);
+      if (loadedUrlRef.current !== url) return;
+      if (s && item) applyStream(s, item);
+      else setPlaybackError({ title: item?.title || '', permalink: item?.url || url });
     });
   };
   const onTimeUpdate = () => {
@@ -425,6 +442,7 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         preload="none"
         onPlay={() => {
           setPlaying(true);
+          setPlaybackError(null);
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         }}
         onPause={() => {
@@ -663,10 +681,36 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
             ) : (
               <RiSoundcloudLine className="w-16 h-16 text-[#FF5500] opacity-40" />
             )}
-            {nowPlaying && (
+            {nowPlaying && !playbackError && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
                 <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
                 <p className="mono text-xs uppercase opacity-80">{nowPlaying.artist}</p>
+              </div>
+            )}
+            {/* Aviso nativo si el track no se puede reproducir acá (p.ej. solo HLS). */}
+            {playbackError && (
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-center gap-3 p-6">
+                <p className="mono text-xs uppercase opacity-80 leading-relaxed">
+                  No se pudo reproducir «{playbackError.title}» acá.
+                  <br />
+                  Escúchalo en SoundCloud.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <a
+                    href={playbackError.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mono text-xs font-black uppercase bg-[#FF5500] text-black px-3 py-1.5 inline-flex items-center gap-1 hover:bg-white"
+                  >
+                    <RiSoundcloudLine className="w-4 h-4" /> Abrir en SoundCloud
+                  </a>
+                  <button
+                    onClick={() => playNext()}
+                    className="mono text-xs font-black uppercase border-2 border-white/50 px-3 py-1.5 hover:bg-white/10"
+                  >
+                    Saltar →
+                  </button>
+                </div>
               </div>
             )}
           </div>
