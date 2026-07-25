@@ -6,7 +6,7 @@ import EventsCarousel from '@/src/components/EventsCarousel';
 import CommunityZone from '@/src/components/CommunityZone';
 import YoutubeVideos from '@/src/components/YoutubeVideos';
 import NationalReleasesSection from '@/src/components/NationalReleasesSection';
-import dayjs from '@/src/lib/date';
+import dayjs, { CHILE_TZ } from '@/src/lib/date';
 import { getEvents } from '@/src/lib/cms';
 import { getSotanoVideos } from '@/src/lib/youtube';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
@@ -47,8 +47,10 @@ const Home = async () => {
   const events = allEvents
     .sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix())
     .filter((event) => {
-      const start = dayjs(event.date);
-      const end = event.endDate ? dayjs(event.endDate) : start;
+      // Las fechas son hora de Chile: se interpretan en esa zona para que la
+      // vigencia sea correcta también en el server (UTC), no solo en local.
+      const start = dayjs.tz(event.date, CHILE_TZ);
+      const end = event.endDate ? dayjs.tz(event.endDate, CHILE_TZ) : start;
       // Usa el más tardío entre inicio y fin (protege datos con endDate < date).
       const effectiveEnd = end.isAfter(start) ? end : start;
       return effectiveEnd.isAfter(now);
