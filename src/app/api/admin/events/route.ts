@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ events: [], error: 'No autorizado' }, { status: 403 });
   }
 
-  const couponFor = new URL(request.url).searchParams.get('couponFor');
+  const sp = new URL(request.url).searchParams;
+  const couponFor = sp.get('couponFor');
   if (couponFor) {
     const { data, error } = await supabase.rpc('admin_event_coupons', { p_event_id: couponFor });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -102,6 +103,42 @@ export async function GET(request: NextRequest) {
         coupon_junglist: row?.coupon_junglist ?? '',
         coupon_set_at: row?.coupon_set_at ?? null,
       },
+    });
+  }
+
+  // Quiénes copiaron el código de descuento de un evento (por evento+usuario, sin
+  // importar la vía). Se clasifica cada uno como "de campaña" (fue destinatario de
+  // alguna campaña de este evento) u "orgánico" (copió sin haber recibido campaña).
+  const copiesFor = sp.get('copiesFor');
+  if (copiesFor) {
+    const { data: copies } = await supabase
+      .from('event_coupon_copies')
+      .select('email, copied_at')
+      .eq('event_id', copiesFor)
+      .order('copied_at', { ascending: false });
+
+    const { data: camps } = await supabase.from('campaigns').select('id').eq('event_id', copiesFor);
+    const campIds = (camps ?? []).map((c) => c.id as string);
+    const campaignEmails = new Set<string>();
+    if (campIds.length) {
+      const { data: recips } = await supabase
+        .from('campaign_recipients')
+        .select('email')
+        .in('campaign_id', campIds);
+      for (const r of recips ?? []) if (r.email) campaignEmails.add(String(r.email).toLowerCase());
+    }
+
+    const copiers = (copies ?? []).map((c) => ({
+      email: c.email as string,
+      copied_at: c.copied_at as string,
+      fromCampaign: campaignEmails.has(String(c.email).toLowerCase()),
+    }));
+    const fromCampaign = copiers.filter((c) => c.fromCampaign).length;
+    return NextResponse.json({
+      copiers,
+      total: copiers.length,
+      fromCampaign,
+      organic: copiers.length - fromCampaign,
     });
   }
 
