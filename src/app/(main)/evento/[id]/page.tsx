@@ -6,6 +6,7 @@ import dayjs from '@/src/lib/date';
 import { getEventById } from '@/src/lib/cms';
 import TicketButton from '@/src/components/TicketButton';
 import ProximityBadge from '@/src/components/ProximityBadge';
+import JunglistDiscountBadge from '@/src/components/JunglistDiscountBadge';
 import TrackOnMount from '@/src/components/TrackOnMount';
 import CampaignVisitBeacon from '@/src/components/CampaignVisitBeacon';
 import EventCouponBlock from '@/src/components/EventCouponBlock';
@@ -45,25 +46,29 @@ export default async function EventoLandingPage({ params }: PageProps) {
   return (
     <main className="grow">
       <TrackOnMount name="landing_evento_view" params={{ event_id: ev.id, event_title: ev.title }} />
-      <CampaignVisitBeacon eventId={ev.id} />
+      <CampaignVisitBeacon />
 
       {/* Descuento Junglist arriba de todo: al llegar, lo primero que ven es qué
           tienen que hacer para obtenerlo. El código se resuelve en el cliente
           contra sesión — nunca viaja en este HTML. */}
       {(ev.couponForNew || ev.couponForExisting) && (
-        <EventCouponBlock
-          eventId={ev.id}
-          eventTitle={ev.title}
-          couponForNew={!!ev.couponForNew}
-          couponForExisting={!!ev.couponForExisting}
-        />
+        <div id="descuento-junglist" className="scroll-mt-24">
+          <EventCouponBlock
+            eventId={ev.id}
+            eventTitle={ev.title}
+            couponForNew={!!ev.couponForNew}
+            couponForExisting={!!ev.couponForExisting}
+          />
+        </div>
       )}
 
       {/* Evento */}
       <section className="border-b-4 border-black">
-        <div className="grid grid-cols-1 lg:grid-cols-2">
+        {/* Desktop: el flyer ocupa menos (40%) y se topa en alto para no estirar la
+            sección; la info toma 60%. Así se escrollea menos y no queda vacío. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr]">
           {/* Flyer */}
-          <div className="bg-black border-b-4 lg:border-b-0 lg:border-r-4 border-black">
+          <div className="bg-black border-b-4 lg:border-b-0 lg:border-r-4 border-black lg:flex lg:items-center lg:justify-center lg:overflow-hidden lg:max-h-[560px]">
             {ev.flyer ? (
               <Image
                 src={ev.flyer.url}
@@ -71,22 +76,25 @@ export default async function EventoLandingPage({ params }: PageProps) {
                 height={ev.flyer.height || 1000}
                 alt={ev.title}
                 priority
-                className="w-full h-auto object-cover"
+                className="w-full h-auto object-cover lg:w-auto lg:h-auto lg:max-h-[560px] lg:max-w-full lg:object-contain"
               />
             ) : (
-              <div className="aspect-square flex items-center justify-center mono font-bold text-white">
+              <div className="aspect-square lg:aspect-auto lg:h-[560px] w-full flex items-center justify-center mono font-bold text-white">
                 SIN FLYER
               </div>
             )}
           </div>
 
           {/* Info */}
-          <div className="p-6 lg:p-12 flex flex-col justify-center gap-4 bg-white">
+          <div className="p-6 lg:p-10 flex flex-col justify-center gap-3 lg:gap-4 bg-white">
             <div className="flex flex-wrap items-center gap-2">
               <ProximityBadge date={ev.date} endDate={ev.endDate} />
               <span className="mono text-xs lg:text-base font-black bg-black text-white px-2 py-1 inline-block">
                 {fecha}
               </span>
+              {(ev.couponForNew || ev.couponForExisting) && (
+                <JunglistDiscountBadge href="#descuento-junglist" />
+              )}
             </div>
 
             <h1 className="text-4xl lg:text-7xl font-black uppercase italic tracking-tighter leading-none">

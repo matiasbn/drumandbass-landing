@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { CmsEvent } from '../types/types';
 import TicketButton from './TicketButton';
 import ProximityBadge from './ProximityBadge';
+import JunglistDiscountBadge from './JunglistDiscountBadge';
 
 interface EventCardProps {
   event: CmsEvent;
@@ -80,12 +81,15 @@ const EventCard: React.FC<EventCardProps> = ({ event, index, featured }) => {
 
       {/* Info: fecha → título → lineup pegados arriba, sin que las acciones los empujen */}
       <div className={`flex flex-col min-w-0 flex-1 overflow-hidden ${pad} ${gap}`}>
-        {/* Fecha */}
-        <span
-          className={`mono font-black bg-black text-white px-2 py-0.5 self-start ${dateCls}`}
-        >
-          {formattedDate}
-        </span>
+        {/* Fecha + sello de descuento (si el evento tiene cupón junglist) */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`mono font-black bg-black text-white px-2 py-0.5 ${dateCls}`}>
+            {formattedDate}
+          </span>
+          {(event.couponForNew || event.couponForExisting) && (
+            <JunglistDiscountBadge href={`/evento/${id}#descuento-junglist`} />
+          )}
+        </div>
 
         {/* Título + venue */}
         <div className="min-w-0">
