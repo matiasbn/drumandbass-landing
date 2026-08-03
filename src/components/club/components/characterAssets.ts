@@ -127,30 +127,45 @@ export function getCharacterTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null; // SSR
   if (_skinTex) return _skinTex;
 
-  const size = 64;
+  const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Degradado vertical → sombreado de forma (arriba brilla, abajo apaga).
-  const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.5, '#ededed');
-  grad.addColorStop(1, '#bfbfbf');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-
-  // Líneas horizontales tenues → "tela"/textura.
-  ctx.globalAlpha = 0.05;
-  ctx.fillStyle = '#000000';
-  for (let y = 0; y < size; y += 3) ctx.fillRect(0, y, size, 1);
-  // Brillo especular falso en una franja superior.
-  ctx.globalAlpha = 0.10;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 2, size, 4);
-  ctx.globalAlpha = 1;
+  // Se pinta píxel a píxel (una sola vez, cacheado) combinando cuatro capas.
+  // Todo en gris: MULTIPLICA al color de instancia (que sí es vívido), así cada
+  // personaje sale llamativo pero con volumen y detalle en vez de plano.
+  const rnd = (x: number, y: number) => {
+    const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    return s - Math.floor(s); // 0..1 determinista
+  };
+  const img = ctx.createImageData(size, size);
+  const d = img.data;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+      // 1) Sombreado CILÍNDRICO: centro claro, bordes oscuros → las cajas se
+      //    leen redondeadas/con volumen aunque el material no tenga luz.
+      const cyl = 1 - Math.pow(Math.abs(u - 0.5) * 2, 2) * 0.55; // ~0.45..1
+      // 2) Sombreado vertical: arriba brilla, abajo apaga.
+      const vert = 1 - v * 0.32;
+      // 3) Tejido diagonal (trama de tela) sutil.
+      const weave = 0.95 + 0.05 * Math.sin((x + y) * 1.35) * Math.sin((x - y) * 1.05);
+      // 4) Grano fino.
+      const grain = 0.975 + 0.025 * rnd(x, y);
+      let g = cyl * vert * weave * grain;
+      // Franja especular en el borde superior.
+      if (y < 5) g += 0.18 * (1 - y / 5);
+      const c = Math.max(0, Math.min(255, Math.round(g * 255)));
+      const idx = (y * size + x) * 4;
+      d[idx] = d[idx + 1] = d[idx + 2] = c;
+      d[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
