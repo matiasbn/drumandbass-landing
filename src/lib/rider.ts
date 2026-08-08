@@ -1,9 +1,11 @@
-// Rider técnico ESTRUCTURADO del presskit. Un rider de DJ estándar cubre:
-// reproductores, mixer, monitores de booth, extras/conexiones y notas.
-// Se guarda como JSON en la columna `presskits.rider` (text). Si un presskit
-// viejo tuviera texto plano, se trata como "notas" (compat).
+// Rider técnico ESTRUCTURADO del presskit. Un rider de DJ suele tener VARIAS
+// configuraciones de setup (club, alternativo/fallback, festival, b2b, etc.),
+// cada una con sus equipos. Se guarda como JSON en `presskits.rider` (text).
+// Compat: rider viejo (config única a nivel raíz, o texto plano) se migra a un
+// setup / a las notas generales al parsear.
 
-export interface RiderData {
+export interface RiderSetup {
+  name?: string; // "Setup club", "Alternativo", "Festival"…
   players?: { model: string; quantity: number };
   mixer?: string;
   monitors?: number;
@@ -11,8 +13,12 @@ export interface RiderData {
   notes?: string;
 }
 
-// Modelos reales estándar en clubes (Pioneer/AlphaTheta es el estándar de la
-// escena). "Otro" para cualquier caso especial (va en notas).
+export interface RiderData {
+  setups: RiderSetup[];
+  notes?: string; // notas generales (aplican a todos los setups)
+}
+
+// Modelos reales estándar en clubes (Pioneer/AlphaTheta es el estándar).
 export const PLAYER_MODELS = [
   'Pioneer CDJ-3000',
   'Pioneer CDJ-2000NXS2',
@@ -37,45 +43,76 @@ export const RIDER_EXTRAS = [
   'Tomas de corriente (mín. 3)',
 ];
 
-export function riderIsEmpty(d: RiderData | null | undefined): boolean {
-  if (!d) return true;
+export function setupIsEmpty(s: RiderSetup | null | undefined): boolean {
+  if (!s) return true;
   return (
-    !d.players?.model &&
-    !d.mixer &&
-    !d.monitors &&
-    !(d.extras && d.extras.length) &&
-    !(d.notes && d.notes.trim())
+    !s.players?.model &&
+    !s.mixer &&
+    !s.monitors &&
+    !(s.extras && s.extras.length) &&
+    !(s.notes && s.notes.trim())
   );
 }
 
+export function riderIsEmpty(d: RiderData | null | undefined): boolean {
+  if (!d) return true;
+  const hasSetup = (d.setups || []).some((s) => !setupIsEmpty(s));
+  return !hasSetup && !(d.notes && d.notes.trim());
+}
+
+export function emptySetup(): RiderSetup {
+  return { players: { model: '', quantity: 2 }, extras: [] };
+}
+
+// Normaliza cualquier valor guardado a { setups, notes }.
 export function parseRider(raw: string | null | undefined): RiderData {
-  if (!raw) return {};
+  if (!raw) return { setups: [] };
+  let o: unknown;
   try {
-    const o = JSON.parse(raw);
-    if (o && typeof o === 'object' && !Array.isArray(o)) return o as RiderData;
+    o = JSON.parse(raw);
   } catch {
-    // Rider viejo en texto plano → lo mostramos como notas.
-    return { notes: raw };
+    // Rider viejo en texto plano → notas generales.
+    return { setups: [], notes: raw };
   }
-  return {};
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { setups: [] };
+  const obj = o as Record<string, unknown>;
+  if (Array.isArray(obj.setups)) {
+    return { setups: obj.setups as RiderSetup[], notes: typeof obj.notes === 'string' ? obj.notes : undefined };
+  }
+  // Compat: config única a nivel raíz (players/mixer/…) → un solo setup.
+  const single = obj as RiderSetup;
+  if (!setupIsEmpty(single)) {
+    const { notes, ...rest } = single;
+    return { setups: [rest], notes };
+  }
+  return { setups: [], notes: typeof obj.notes === 'string' ? obj.notes : undefined };
+}
+
+function cleanSetup(s: RiderSetup): RiderSetup | null {
+  const clean: RiderSetup = {};
+  if (s.name?.trim()) clean.name = s.name.trim();
+  if (s.players?.model) clean.players = { model: s.players.model, quantity: Math.max(1, s.players.quantity || 1) };
+  if (s.mixer) clean.mixer = s.mixer;
+  if (s.monitors && s.monitors > 0) clean.monitors = s.monitors;
+  if (s.extras && s.extras.length) clean.extras = s.extras;
+  if (s.notes?.trim()) clean.notes = s.notes.trim();
+  // Un setup con solo nombre (sin equipos ni notas) no cuenta.
+  return setupIsEmpty(clean) ? null : clean;
 }
 
 export function serializeRider(d: RiderData): string | null {
-  const clean: RiderData = {};
-  if (d.players?.model) clean.players = { model: d.players.model, quantity: Math.max(1, d.players.quantity || 1) };
-  if (d.mixer) clean.mixer = d.mixer;
-  if (d.monitors && d.monitors > 0) clean.monitors = d.monitors;
-  if (d.extras && d.extras.length) clean.extras = d.extras;
-  if (d.notes && d.notes.trim()) clean.notes = d.notes.trim();
-  return riderIsEmpty(clean) ? null : JSON.stringify(clean);
+  const setups = (d.setups || []).map(cleanSetup).filter((s): s is RiderSetup => s !== null);
+  const out: RiderData = { setups };
+  if (d.notes?.trim()) out.notes = d.notes.trim();
+  return riderIsEmpty(out) ? null : JSON.stringify(out);
 }
 
-// Filas para mostrar el rider en la página pública / admin.
-export function riderRows(d: RiderData): { label: string; value: string }[] {
+// Filas de un setup para mostrarlo.
+export function setupRows(s: RiderSetup): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = [];
-  if (d.players?.model) rows.push({ label: 'Reproductores', value: `${d.players.quantity || 1}× ${d.players.model}` });
-  if (d.mixer) rows.push({ label: 'Mixer', value: d.mixer });
-  if (d.monitors) rows.push({ label: 'Monitores de booth', value: String(d.monitors) });
-  if (d.extras && d.extras.length) rows.push({ label: 'Extras', value: d.extras.join(', ') });
+  if (s.players?.model) rows.push({ label: 'Reproductores', value: `${s.players.quantity || 1}× ${s.players.model}` });
+  if (s.mixer) rows.push({ label: 'Mixer', value: s.mixer });
+  if (s.monitors) rows.push({ label: 'Monitores de booth', value: String(s.monitors) });
+  if (s.extras && s.extras.length) rows.push({ label: 'Extras', value: s.extras.join(', ') });
   return rows;
 }

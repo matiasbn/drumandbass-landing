@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { PresskitMix, PresskitSocial, PresskitLink } from '@/src/types/presskit';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
-import { parseRider, riderRows, riderIsEmpty } from '@/src/lib/rider';
+import { parseRider, setupRows, riderIsEmpty } from '@/src/lib/rider';
 
 // Handle de Instagram de un presskit (guardado en socials como usuario).
 const igOf = (pk: { socials?: { platform?: string; url?: string }[] }): string => {
@@ -458,15 +458,20 @@ export default function PresskitsClient() {
                         {(() => {
                           const rd = parseRider(pk.rider);
                           if (riderIsEmpty(rd)) return null;
-                          const rows = riderRows(rd);
                           return (
                             <div className="mb-4">
                               <p className="mono text-xs font-bold uppercase mb-1">Rider técnico (lo edita el DJ)</p>
-                              <div className="border-2 border-black p-2 text-sm space-y-0.5">
-                                {rows.map((r) => (
-                                  <p key={r.label}><span className="mono text-[11px] uppercase text-gray-500">{r.label}:</span> {r.value}</p>
+                              <div className="border-2 border-black p-2 text-sm space-y-2">
+                                {rd.setups.map((s, i) => (
+                                  <div key={i}>
+                                    <p className="mono text-[11px] font-bold uppercase">{s.name || `Setup ${i + 1}`}</p>
+                                    {setupRows(s).map((r) => (
+                                      <p key={r.label} className="pl-2"><span className="mono text-[11px] uppercase text-gray-500">{r.label}:</span> {r.value}</p>
+                                    ))}
+                                    {s.notes && <p className="pl-2 text-xs whitespace-pre-line">{s.notes}</p>}
+                                  </div>
                                 ))}
-                                {rd.notes && <p className="text-xs whitespace-pre-line mt-1">{rd.notes}</p>}
+                                {rd.notes && <p className="text-xs whitespace-pre-line border-t pt-1">{rd.notes}</p>}
                               </div>
                             </div>
                           );
