@@ -18,29 +18,59 @@ export interface RiderData {
   notes?: string; // notas generales (aplican a todos los setups)
 }
 
-// Modelos reales estándar en clubes (Pioneer/AlphaTheta es el estándar).
+// Modelos reales de club (CDJs/media players + tornamesas). Pioneer/AlphaTheta
+// es el estándar de la escena; se incluyen alternativos y varias tornas.
 export const PLAYER_MODELS = [
+  // Pioneer / AlphaTheta CDJ
   'Pioneer CDJ-3000',
   'Pioneer CDJ-2000NXS2',
+  'Pioneer CDJ-2000NXS',
+  'Pioneer CDJ-2000',
+  'Pioneer CDJ-900NXS',
+  'Pioneer CDJ-900',
   'Pioneer XDJ-1000MK2',
-  'Turntables Technics SL-1200',
+  'Pioneer XDJ-1000',
+  'Pioneer XDJ-700',
+  // Denon
+  'Denon DJ SC6000 Prime',
+  'Denon DJ SC6000M Prime',
+  'Denon DJ SC5000 Prime',
+  // Tornamesas
+  'Technics SL-1200MK7',
+  'Technics SL-1210MK7',
+  'Technics SL-1200MK2',
+  'Technics SL-1200MK5',
+  'Technics SL-1210MK5',
+  'Pioneer PLX-1000',
+  'Reloop RP-8000 MK2',
+  'Reloop RP-7000 MK2',
+  'Audio-Technica AT-LP140XP',
   'Otro',
 ];
 export const MIXER_MODELS = [
+  // Pioneer / AlphaTheta DJM
   'Pioneer DJM-A9',
-  'Pioneer DJM-900NXS2',
   'Pioneer DJM-V10',
+  'Pioneer DJM-V10-LF',
+  'Pioneer DJM-900NXS2',
+  'Pioneer DJM-900NXS',
+  'Pioneer DJM-800',
   'Pioneer DJM-750MK2',
-  'Allen & Heath Xone',
+  'Pioneer DJM-450',
+  'Pioneer DJM-250MK2',
+  // Allen & Heath
+  'Allen & Heath Xone:96',
+  'Allen & Heath Xone:92',
+  'Allen & Heath Xone:PX5',
+  'Allen & Heath Xone:43',
+  'Allen & Heath Xone:23',
+  // Rane / Denon
+  'Rane Seventy',
+  'Rane Seventy-Two MKII',
+  'Rane MP2015',
+  'Denon DJ X1850 Prime',
+  'Denon DJ X1800 Prime',
   'Otro',
-];
-export const RIDER_EXTRAS = [
-  'Cables RCA',
-  'USB',
-  'Soporte para laptop',
-  'DI box',
-  'Micrófono',
-  'Tomas de corriente (mín. 3)',
 ];
 
 export function setupIsEmpty(s: RiderSetup | null | undefined): boolean {

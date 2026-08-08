@@ -7,7 +7,7 @@ import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
-import { RiderData, RiderSetup, PLAYER_MODELS, MIXER_MODELS, RIDER_EXTRAS, parseRider, serializeRider, emptySetup } from '@/src/lib/rider';
+import { RiderData, RiderSetup, PLAYER_MODELS, MIXER_MODELS, parseRider, serializeRider, emptySetup } from '@/src/lib/rider';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -828,51 +828,6 @@ function PresskitEditor() {
                       <option value="">— Sin especificar —</option>
                       {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
-                  </label>
-
-                  <label className="block mono text-xs font-bold uppercase sm:w-40">
-                    Monitores de booth
-                    <input
-                      type="number"
-                      min={0}
-                      max={8}
-                      value={s.monitors ?? 0}
-                      onChange={(e) => upd({ monitors: Math.max(0, +e.target.value || 0) || undefined })}
-                      className={`${inputClass} mt-1`}
-                    />
-                  </label>
-
-                  <div>
-                    <span className="mono text-xs font-bold uppercase">Extras</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
-                      {RIDER_EXTRAS.map((ex) => (
-                        <label key={ex} className="flex items-center gap-2 mono text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={s.extras?.includes(ex) || false}
-                            onChange={(e) => {
-                              const set = new Set(s.extras || []);
-                              if (e.target.checked) set.add(ex);
-                              else set.delete(ex);
-                              const arr = [...set];
-                              upd({ extras: arr.length ? arr : undefined });
-                            }}
-                          />
-                          {ex}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <label className="block mono text-xs font-bold uppercase">
-                    Notas de este setup
-                    <textarea
-                      value={s.notes || ''}
-                      onChange={(e) => upd({ notes: e.target.value || undefined })}
-                      className={`${inputClass} mt-1 min-h-[60px] resize-y normal-case`}
-                      placeholder="Detalles de este setup (opcional)"
-                      rows={2}
-                    />
                   </label>
                 </div>
               );
