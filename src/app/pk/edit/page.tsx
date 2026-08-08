@@ -7,7 +7,7 @@ import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
-import { RiderData, PLAYER_MODELS, MIXER_MODELS, RIDER_EXTRAS, parseRider, serializeRider } from '@/src/lib/rider';
+import { RiderData, RiderSetup, PLAYER_MODELS, MIXER_MODELS, RIDER_EXTRAS, parseRider, serializeRider, emptySetup } from '@/src/lib/rider';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -65,7 +65,7 @@ function PresskitEditor() {
   const [instagram, setInstagram] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
-  const [riderData, setRiderData] = useState<RiderData>({}); // rider técnico estructurado (opcional)
+  const [riderData, setRiderData] = useState<RiderData>({ setups: [] }); // rider técnico estructurado (opcional)
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -754,109 +754,137 @@ function PresskitEditor() {
           </div>
 
           <div className="border-4 border-black p-4 space-y-4">
-            <div>
-              <label className={labelClass}>Rider técnico (opcional)</label>
-              <p className="mono text-[11px] text-gray-500 -mt-1">
-                Tus requerimientos de equipo. Si completas algo, aparece como sección en tu presskit.
-              </p>
-            </div>
-
-            {/* Reproductores: modelo + cantidad */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-              <label className="flex-1 mono text-xs font-bold uppercase">
-                Reproductores
-                <select
-                  value={riderData.players?.model || ''}
-                  onChange={(e) =>
-                    setRiderData((d) => ({
-                      ...d,
-                      players: e.target.value ? { model: e.target.value, quantity: d.players?.quantity || 2 } : undefined,
-                    }))
-                  }
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">— Sin especificar —</option>
-                  {PLAYER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </label>
-              <label className="mono text-xs font-bold uppercase sm:w-28">
-                Cantidad
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  disabled={!riderData.players?.model}
-                  value={riderData.players?.quantity ?? 2}
-                  onChange={(e) =>
-                    setRiderData((d) => ({ ...d, players: d.players ? { ...d.players, quantity: Math.max(1, +e.target.value || 1) } : d.players }))
-                  }
-                  className={`${inputClass} mt-1 disabled:opacity-40`}
-                />
-              </label>
-            </div>
-
-            {/* Mixer */}
-            <label className="block mono text-xs font-bold uppercase">
-              Mixer
-              <select
-                value={riderData.mixer || ''}
-                onChange={(e) => setRiderData((d) => ({ ...d, mixer: e.target.value || undefined }))}
-                className={`${inputClass} mt-1`}
-              >
-                <option value="">— Sin especificar —</option>
-                {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </label>
-
-            {/* Monitores */}
-            <label className="block mono text-xs font-bold uppercase sm:w-40">
-              Monitores de booth
-              <input
-                type="number"
-                min={0}
-                max={8}
-                value={riderData.monitors ?? 0}
-                onChange={(e) => setRiderData((d) => ({ ...d, monitors: Math.max(0, +e.target.value || 0) || undefined }))}
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-
-            {/* Extras (checkboxes) */}
-            <div>
-              <span className="mono text-xs font-bold uppercase">Extras</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
-                {RIDER_EXTRAS.map((ex) => {
-                  const checked = riderData.extras?.includes(ex) || false;
-                  return (
-                    <label key={ex} className="flex items-center gap-2 mono text-xs cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          setRiderData((d) => {
-                            const set = new Set(d.extras || []);
-                            if (e.target.checked) set.add(ex);
-                            else set.delete(ex);
-                            const arr = [...set];
-                            return { ...d, extras: arr.length ? arr : undefined };
-                          })
-                        }
-                      />
-                      {ex}
-                    </label>
-                  );
-                })}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <label className={labelClass}>Rider técnico (opcional)</label>
+                <p className="mono text-[11px] text-gray-500 -mt-1">
+                  Uno o varios setups (club, alternativo, festival…). Si completas algo, aparece en tu presskit.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setRiderData((d) => ({ ...d, setups: [...d.setups, emptySetup()] }))}
+                className="shrink-0 mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white hover:bg-gray-900"
+              >
+                + Setup
+              </button>
             </div>
 
-            {/* Notas libres */}
+            {riderData.setups.length === 0 && (
+              <p className="mono text-xs text-gray-500">Sin setups aún. Agrega uno para especificar tu equipo.</p>
+            )}
+
+            {riderData.setups.map((s, si) => {
+              const upd = (patch: Partial<RiderSetup>) =>
+                setRiderData((d) => ({ ...d, setups: d.setups.map((x, i) => (i === si ? { ...x, ...patch } : x)) }));
+              return (
+                <div key={si} className="border-2 border-black p-3 space-y-3 bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={s.name || ''}
+                      onChange={(e) => upd({ name: e.target.value })}
+                      placeholder={`Setup ${si + 1} (nombre opcional)`}
+                      className={`${inputClass} flex-1`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRiderData((d) => ({ ...d, setups: d.setups.filter((_, i) => i !== si) }))}
+                      aria-label="Quitar setup"
+                      className="shrink-0 mono text-xs font-bold uppercase px-2.5 py-1.5 brutalist-border border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                    <label className="flex-1 mono text-xs font-bold uppercase">
+                      Reproductores
+                      <select
+                        value={s.players?.model || ''}
+                        onChange={(e) => upd({ players: e.target.value ? { model: e.target.value, quantity: s.players?.quantity || 2 } : undefined })}
+                        className={`${inputClass} mt-1`}
+                      >
+                        <option value="">— Sin especificar —</option>
+                        {PLAYER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </label>
+                    <label className="mono text-xs font-bold uppercase sm:w-28">
+                      Cantidad
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        disabled={!s.players?.model}
+                        value={s.players?.quantity ?? 2}
+                        onChange={(e) => upd({ players: s.players ? { ...s.players, quantity: Math.max(1, +e.target.value || 1) } : s.players })}
+                        className={`${inputClass} mt-1 disabled:opacity-40`}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block mono text-xs font-bold uppercase">
+                    Mixer
+                    <select value={s.mixer || ''} onChange={(e) => upd({ mixer: e.target.value || undefined })} className={`${inputClass} mt-1`}>
+                      <option value="">— Sin especificar —</option>
+                      {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </label>
+
+                  <label className="block mono text-xs font-bold uppercase sm:w-40">
+                    Monitores de booth
+                    <input
+                      type="number"
+                      min={0}
+                      max={8}
+                      value={s.monitors ?? 0}
+                      onChange={(e) => upd({ monitors: Math.max(0, +e.target.value || 0) || undefined })}
+                      className={`${inputClass} mt-1`}
+                    />
+                  </label>
+
+                  <div>
+                    <span className="mono text-xs font-bold uppercase">Extras</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
+                      {RIDER_EXTRAS.map((ex) => (
+                        <label key={ex} className="flex items-center gap-2 mono text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={s.extras?.includes(ex) || false}
+                            onChange={(e) => {
+                              const set = new Set(s.extras || []);
+                              if (e.target.checked) set.add(ex);
+                              else set.delete(ex);
+                              const arr = [...set];
+                              upd({ extras: arr.length ? arr : undefined });
+                            }}
+                          />
+                          {ex}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="block mono text-xs font-bold uppercase">
+                    Notas de este setup
+                    <textarea
+                      value={s.notes || ''}
+                      onChange={(e) => upd({ notes: e.target.value || undefined })}
+                      className={`${inputClass} mt-1 min-h-[60px] resize-y normal-case`}
+                      placeholder="Detalles de este setup (opcional)"
+                      rows={2}
+                    />
+                  </label>
+                </div>
+              );
+            })}
+
             <label className="block mono text-xs font-bold uppercase">
-              Notas adicionales
+              Notas generales
               <textarea
                 value={riderData.notes || ''}
                 onChange={(e) => setRiderData((d) => ({ ...d, notes: e.target.value || undefined }))}
-                className={`${inputClass} mt-1 min-h-[70px] resize-y normal-case`}
-                placeholder="Cualquier detalle extra (opcional)"
+                className={`${inputClass} mt-1 min-h-[60px] resize-y normal-case`}
+                placeholder="Aplican a todos los setups (opcional)"
                 rows={2}
               />
             </label>
