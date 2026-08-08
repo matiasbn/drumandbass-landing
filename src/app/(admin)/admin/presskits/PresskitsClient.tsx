@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
 import { PresskitMix, PresskitSocial, PresskitLink } from '@/src/types/presskit';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
+import { parseRider, riderRows, riderIsEmpty } from '@/src/lib/rider';
 
 // Handle de Instagram de un presskit (guardado en socials como usuario).
 const igOf = (pk: { socials?: { platform?: string; url?: string }[] }): string => {
@@ -42,7 +43,6 @@ interface EditForm {
   city: string;
   country: string;
   bio: string;
-  rider: string;
   published: boolean;
   genres: string; // separado por comas
   instagram: string; // handle dedicado
@@ -59,7 +59,7 @@ export default function PresskitsClient() {
   const [loadingData, setLoadingData] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
-    artist_name: '', real_name: '', city: '', country: '', bio: '', rider: '', published: false,
+    artist_name: '', real_name: '', city: '', country: '', bio: '', published: false,
     genres: '', instagram: '', socials: [], mixes: [], links: [],
   });
   const [saving, setSaving] = useState(false);
@@ -158,7 +158,6 @@ export default function PresskitsClient() {
       city: pk.city || '',
       country: pk.country || '',
       bio: pk.bio || '',
-      rider: pk.rider || '',
       published: pk.published,
       genres: (pk.genres || []).join(', '),
       instagram: ig ? socialToHandle('Instagram', ig.url) : '',
@@ -207,7 +206,6 @@ export default function PresskitsClient() {
       city: editForm.city,
       country: editForm.country,
       bio: editForm.bio,
-      rider: editForm.rider.trim() || null,
       published: editForm.published,
       genres: editForm.genres.split(',').map((g) => g.trim()).filter(Boolean),
       socials,
@@ -457,16 +455,22 @@ export default function PresskitsClient() {
                             placeholder="Bio del artista"
                           />
                         </label>
-                        <label className="block mono text-xs font-bold uppercase mb-4">
-                          Rider técnico (opcional)
-                          <textarea
-                            value={editForm.rider}
-                            onChange={(e) => setField('rider', e.target.value)}
-                            rows={3}
-                            className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
-                            placeholder="Requerimientos técnicos (CDJs, mixer, monitores…)"
-                          />
-                        </label>
+                        {(() => {
+                          const rd = parseRider(pk.rider);
+                          if (riderIsEmpty(rd)) return null;
+                          const rows = riderRows(rd);
+                          return (
+                            <div className="mb-4">
+                              <p className="mono text-xs font-bold uppercase mb-1">Rider técnico (lo edita el DJ)</p>
+                              <div className="border-2 border-black p-2 text-sm space-y-0.5">
+                                {rows.map((r) => (
+                                  <p key={r.label}><span className="mono text-[11px] uppercase text-gray-500">{r.label}:</span> {r.value}</p>
+                                ))}
+                                {rd.notes && <p className="text-xs whitespace-pre-line mt-1">{rd.notes}</p>}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Redes (sin Instagram, que va arriba) */}
                         <div className="flex items-center justify-between mb-2">

@@ -7,6 +7,7 @@ import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
+import { RiderData, PLAYER_MODELS, MIXER_MODELS, RIDER_EXTRAS, parseRider, serializeRider } from '@/src/lib/rider';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -64,7 +65,7 @@ function PresskitEditor() {
   const [instagram, setInstagram] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
-  const [rider, setRider] = useState(''); // rider técnico (opcional)
+  const [riderData, setRiderData] = useState<RiderData>({}); // rider técnico estructurado (opcional)
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +102,7 @@ function PresskitEditor() {
   const [dirty, setDirty] = useState(false);
   const currentSnapshot = () =>
     JSON.stringify({
-      artistName, realName, city, country, instagram, genresInput, bio, rider,
+      artistName, realName, city, country, instagram, genresInput, bio, riderData,
       photoUrls, logoUrls, socials, mixes, links, published,
     });
 
@@ -136,7 +137,7 @@ function PresskitEditor() {
         setCountry(pk.country || '');
         setGenresInput(loadedGenres);
         setBio(pk.bio || '');
-        setRider(pk.rider || '');
+        setRiderData(parseRider(pk.rider));
         setPhotoUrls(loadedPhotoUrls);
         setLogoUrls(loadedLogoUrls);
         setInstagram(loadedInstagram);
@@ -149,7 +150,7 @@ function PresskitEditor() {
         savedRef.current = JSON.stringify({
           artistName: pk.artist_name || '', realName: pk.real_name || '', city: pk.city || '',
           country: pk.country || '', instagram: loadedInstagram, genresInput: loadedGenres,
-          bio: pk.bio || '', rider: pk.rider || '', photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
+          bio: pk.bio || '', riderData: parseRider(pk.rider), photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
           socials: loadedSocials, mixes: loadedMixes, links: loadedLinks, published: pk.published || false,
         });
       }
@@ -379,7 +380,7 @@ function PresskitEditor() {
 
     const body = {
       artist_name: artistName, real_name: realName, city, country, genres, bio,
-      rider: rider.trim() || null,
+      rider: serializeRider(riderData),
       photo_urls: photoUrls, logo_urls: logoUrls, socials: resolvedSocials,
       mixes: filteredMixes, links: filteredLinks, published,
     };
@@ -417,7 +418,7 @@ function PresskitEditor() {
   useEffect(() => {
     setDirty(currentSnapshot() !== savedRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artistName, realName, city, country, instagram, genresInput, bio, rider, photoUrls, logoUrls, socials, mixes, links, published]);
+  }, [artistName, realName, city, country, instagram, genresInput, bio, riderData, photoUrls, logoUrls, socials, mixes, links, published]);
 
   // Auto-guardado: solo cuando un cambio DISCRETO marcó autoPendingRef (los textos no).
   useEffect(() => {
@@ -752,18 +753,113 @@ function PresskitEditor() {
             />
           </div>
 
-          <div>
-            <label className={labelClass}>Rider técnico (opcional)</label>
-            <textarea
-              value={rider}
-              onChange={(e) => setRider(e.target.value)}
-              className={`${inputClass} min-h-[100px] resize-y`}
-              placeholder="Requerimientos técnicos: p.ej. 2x CDJ-3000, mixer DJM-900, 2 monitores, cables… (opcional)"
-              rows={4}
-            />
-            <p className="mono text-[11px] text-gray-500 mt-1">
-              Si lo completas, aparece como sección &quot;Rider técnico&quot; en tu presskit público.
-            </p>
+          <div className="border-4 border-black p-4 space-y-4">
+            <div>
+              <label className={labelClass}>Rider técnico (opcional)</label>
+              <p className="mono text-[11px] text-gray-500 -mt-1">
+                Tus requerimientos de equipo. Si completas algo, aparece como sección en tu presskit.
+              </p>
+            </div>
+
+            {/* Reproductores: modelo + cantidad */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+              <label className="flex-1 mono text-xs font-bold uppercase">
+                Reproductores
+                <select
+                  value={riderData.players?.model || ''}
+                  onChange={(e) =>
+                    setRiderData((d) => ({
+                      ...d,
+                      players: e.target.value ? { model: e.target.value, quantity: d.players?.quantity || 2 } : undefined,
+                    }))
+                  }
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">— Sin especificar —</option>
+                  {PLAYER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
+              <label className="mono text-xs font-bold uppercase sm:w-28">
+                Cantidad
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  disabled={!riderData.players?.model}
+                  value={riderData.players?.quantity ?? 2}
+                  onChange={(e) =>
+                    setRiderData((d) => ({ ...d, players: d.players ? { ...d.players, quantity: Math.max(1, +e.target.value || 1) } : d.players }))
+                  }
+                  className={`${inputClass} mt-1 disabled:opacity-40`}
+                />
+              </label>
+            </div>
+
+            {/* Mixer */}
+            <label className="block mono text-xs font-bold uppercase">
+              Mixer
+              <select
+                value={riderData.mixer || ''}
+                onChange={(e) => setRiderData((d) => ({ ...d, mixer: e.target.value || undefined }))}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">— Sin especificar —</option>
+                {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+
+            {/* Monitores */}
+            <label className="block mono text-xs font-bold uppercase sm:w-40">
+              Monitores de booth
+              <input
+                type="number"
+                min={0}
+                max={8}
+                value={riderData.monitors ?? 0}
+                onChange={(e) => setRiderData((d) => ({ ...d, monitors: Math.max(0, +e.target.value || 0) || undefined }))}
+                className={`${inputClass} mt-1`}
+              />
+            </label>
+
+            {/* Extras (checkboxes) */}
+            <div>
+              <span className="mono text-xs font-bold uppercase">Extras</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
+                {RIDER_EXTRAS.map((ex) => {
+                  const checked = riderData.extras?.includes(ex) || false;
+                  return (
+                    <label key={ex} className="flex items-center gap-2 mono text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setRiderData((d) => {
+                            const set = new Set(d.extras || []);
+                            if (e.target.checked) set.add(ex);
+                            else set.delete(ex);
+                            const arr = [...set];
+                            return { ...d, extras: arr.length ? arr : undefined };
+                          })
+                        }
+                      />
+                      {ex}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Notas libres */}
+            <label className="block mono text-xs font-bold uppercase">
+              Notas adicionales
+              <textarea
+                value={riderData.notes || ''}
+                onChange={(e) => setRiderData((d) => ({ ...d, notes: e.target.value || undefined }))}
+                className={`${inputClass} mt-1 min-h-[70px] resize-y normal-case`}
+                placeholder="Cualquier detalle extra (opcional)"
+                rows={2}
+              />
+            </label>
           </div>
 
           {/* Barra de guardado: los textos se guardan acá; los dropdowns/uploads solos. */}
