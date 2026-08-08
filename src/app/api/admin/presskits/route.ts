@@ -85,7 +85,7 @@ export async function PATCH(request: NextRequest) {
   // 'mixes' permite al admin desmarcar releases publicados en Releases Nacionales.
   // El admin puede editar todo salvo imágenes (photos/logos se manejan aparte).
   const allowed = [
-    'artist_name', 'real_name', 'city', 'country', 'bio', 'genres',
+    'artist_name', 'real_name', 'city', 'country', 'bio', 'rider', 'genres',
     'socials', 'links', 'published', 'mixes',
   ];
   const updateData: Record<string, unknown> = {};
