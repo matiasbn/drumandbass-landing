@@ -64,6 +64,7 @@ function PresskitEditor() {
   const [instagram, setInstagram] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
+  const [rider, setRider] = useState(''); // rider técnico (opcional)
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +101,7 @@ function PresskitEditor() {
   const [dirty, setDirty] = useState(false);
   const currentSnapshot = () =>
     JSON.stringify({
-      artistName, realName, city, country, instagram, genresInput, bio,
+      artistName, realName, city, country, instagram, genresInput, bio, rider,
       photoUrls, logoUrls, socials, mixes, links, published,
     });
 
@@ -135,6 +136,7 @@ function PresskitEditor() {
         setCountry(pk.country || '');
         setGenresInput(loadedGenres);
         setBio(pk.bio || '');
+        setRider(pk.rider || '');
         setPhotoUrls(loadedPhotoUrls);
         setLogoUrls(loadedLogoUrls);
         setInstagram(loadedInstagram);
@@ -147,7 +149,7 @@ function PresskitEditor() {
         savedRef.current = JSON.stringify({
           artistName: pk.artist_name || '', realName: pk.real_name || '', city: pk.city || '',
           country: pk.country || '', instagram: loadedInstagram, genresInput: loadedGenres,
-          bio: pk.bio || '', photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
+          bio: pk.bio || '', rider: pk.rider || '', photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
           socials: loadedSocials, mixes: loadedMixes, links: loadedLinks, published: pk.published || false,
         });
       }
@@ -377,6 +379,7 @@ function PresskitEditor() {
 
     const body = {
       artist_name: artistName, real_name: realName, city, country, genres, bio,
+      rider: rider.trim() || null,
       photo_urls: photoUrls, logo_urls: logoUrls, socials: resolvedSocials,
       mixes: filteredMixes, links: filteredLinks, published,
     };
@@ -414,7 +417,7 @@ function PresskitEditor() {
   useEffect(() => {
     setDirty(currentSnapshot() !== savedRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artistName, realName, city, country, instagram, genresInput, bio, photoUrls, logoUrls, socials, mixes, links, published]);
+  }, [artistName, realName, city, country, instagram, genresInput, bio, rider, photoUrls, logoUrls, socials, mixes, links, published]);
 
   // Auto-guardado: solo cuando un cambio DISCRETO marcó autoPendingRef (los textos no).
   useEffect(() => {
@@ -747,6 +750,20 @@ function PresskitEditor() {
               placeholder="Cuéntanos sobre ti..."
               rows={4}
             />
+          </div>
+
+          <div>
+            <label className={labelClass}>Rider técnico (opcional)</label>
+            <textarea
+              value={rider}
+              onChange={(e) => setRider(e.target.value)}
+              className={`${inputClass} min-h-[100px] resize-y`}
+              placeholder="Requerimientos técnicos: p.ej. 2x CDJ-3000, mixer DJM-900, 2 monitores, cables… (opcional)"
+              rows={4}
+            />
+            <p className="mono text-[11px] text-gray-500 mt-1">
+              Si lo completas, aparece como sección &quot;Rider técnico&quot; en tu presskit público.
+            </p>
           </div>
 
           {/* Barra de guardado: los textos se guardan acá; los dropdowns/uploads solos. */}

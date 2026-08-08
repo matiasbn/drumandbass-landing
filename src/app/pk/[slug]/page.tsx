@@ -151,6 +151,14 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         </section>
       )}
 
+      {/* Rider técnico (opcional) */}
+      {presskit.rider && (
+        <section className="border-b-4 border-black p-6 lg:p-12">
+          <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
+          <p className="mono text-base leading-relaxed max-w-3xl whitespace-pre-line break-words overflow-hidden">{presskit.rider}</p>
+        </section>
+      )}
+
       {/* Social */}
       {presskit.socials.length > 0 && (
         <section className="border-b-4 border-black p-6 lg:p-12">

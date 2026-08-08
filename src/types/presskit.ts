@@ -46,6 +46,8 @@ export interface Presskit {
   country: string | null;
   genres: string[];
   bio: string | null;
+  // Rider técnico OPCIONAL: requerimientos de equipo del DJ (CDJs, mixer, etc.).
+  rider: string | null;
   photo_url: string | null;
   photo_urls: string[];
   logo_urls: string[];

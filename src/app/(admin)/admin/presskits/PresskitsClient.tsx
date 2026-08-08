@@ -25,6 +25,7 @@ interface PresskitItem {
   country: string | null;
   genres: string[];
   bio: string | null;
+  rider: string | null;
   photo_url: string | null;
   published: boolean;
   slug: string | null;
@@ -41,6 +42,7 @@ interface EditForm {
   city: string;
   country: string;
   bio: string;
+  rider: string;
   published: boolean;
   genres: string; // separado por comas
   instagram: string; // handle dedicado
@@ -57,7 +59,7 @@ export default function PresskitsClient() {
   const [loadingData, setLoadingData] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
-    artist_name: '', real_name: '', city: '', country: '', bio: '', published: false,
+    artist_name: '', real_name: '', city: '', country: '', bio: '', rider: '', published: false,
     genres: '', instagram: '', socials: [], mixes: [], links: [],
   });
   const [saving, setSaving] = useState(false);
@@ -156,6 +158,7 @@ export default function PresskitsClient() {
       city: pk.city || '',
       country: pk.country || '',
       bio: pk.bio || '',
+      rider: pk.rider || '',
       published: pk.published,
       genres: (pk.genres || []).join(', '),
       instagram: ig ? socialToHandle('Instagram', ig.url) : '',
@@ -204,6 +207,7 @@ export default function PresskitsClient() {
       city: editForm.city,
       country: editForm.country,
       bio: editForm.bio,
+      rider: editForm.rider.trim() || null,
       published: editForm.published,
       genres: editForm.genres.split(',').map((g) => g.trim()).filter(Boolean),
       socials,
@@ -451,6 +455,16 @@ export default function PresskitsClient() {
                             rows={3}
                             className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
                             placeholder="Bio del artista"
+                          />
+                        </label>
+                        <label className="block mono text-xs font-bold uppercase mb-4">
+                          Rider técnico (opcional)
+                          <textarea
+                            value={editForm.rider}
+                            onChange={(e) => setField('rider', e.target.value)}
+                            rows={3}
+                            className="block w-full mt-1 border-2 border-black px-2 py-1 text-sm normal-case"
+                            placeholder="Requerimientos técnicos (CDJs, mixer, monitores…)"
                           />
                         </label>
 
