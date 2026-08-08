@@ -815,8 +815,11 @@ function PresskitEditor() {
                         min={1}
                         max={8}
                         disabled={!s.players?.model}
-                        value={s.players?.quantity ?? 2}
-                        onChange={(e) => upd({ players: s.players ? { ...s.players, quantity: Math.max(1, +e.target.value || 1) } : s.players })}
+                        // Permite vaciar el campo mientras se edita (queda 0 → se
+                        // muestra vacío); al guardar se normaliza a mínimo 1.
+                        value={s.players?.quantity || ''}
+                        onChange={(e) => upd({ players: s.players ? { ...s.players, quantity: e.target.value === '' ? 0 : Math.min(8, Math.max(0, +e.target.value || 0)) } : s.players })}
+                        onBlur={(e) => { if (e.target.value === '' || +e.target.value < 1) upd({ players: s.players ? { ...s.players, quantity: 1 } : s.players }); }}
                         className={`${inputClass} mt-1 disabled:opacity-40`}
                       />
                     </label>
