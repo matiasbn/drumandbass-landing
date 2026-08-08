@@ -5,6 +5,7 @@ import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
 import { socialToUrl } from '@/src/lib/socials';
 import { parseRider, setupRows, riderIsEmpty } from '@/src/lib/rider';
+import DownloadPresskitButton from '@/src/components/pk/DownloadPresskitButton';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
 import TrackOnMount from '@/src/components/TrackOnMount';
@@ -141,6 +142,9 @@ export default async function PublicPresskitPage({ params }: PageProps) {
               ))}
             </div>
           )}
+          <div className="mt-6">
+            <DownloadPresskitButton presskit={presskit} slug={slug} />
+          </div>
         </div>
       </section>
 
