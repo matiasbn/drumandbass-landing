@@ -4,6 +4,7 @@ import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
 import { socialToUrl } from '@/src/lib/socials';
+import { parseRider, riderRows, riderIsEmpty } from '@/src/lib/rider';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
 import TrackOnMount from '@/src/components/TrackOnMount';
@@ -151,13 +152,28 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         </section>
       )}
 
-      {/* Rider técnico (opcional) */}
-      {presskit.rider && (
-        <section className="border-b-4 border-black p-6 lg:p-12">
-          <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
-          <p className="mono text-base leading-relaxed max-w-3xl whitespace-pre-line break-words overflow-hidden">{presskit.rider}</p>
-        </section>
-      )}
+      {/* Rider técnico (opcional, estructurado) */}
+      {(() => {
+        const rider = parseRider(presskit.rider);
+        if (riderIsEmpty(rider)) return null;
+        const rows = riderRows(rider);
+        return (
+          <section className="border-b-4 border-black p-6 lg:p-12">
+            <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
+            <div className="max-w-2xl space-y-3">
+              {rows.map((r) => (
+                <div key={r.label} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3 border-b-2 border-black/10 pb-2">
+                  <span className="mono text-xs font-black uppercase text-gray-500 sm:w-44 shrink-0">{r.label}</span>
+                  <span className="text-lg font-bold">{r.value}</span>
+                </div>
+              ))}
+              {rider.notes && (
+                <p className="mono text-base leading-relaxed whitespace-pre-line break-words pt-2">{rider.notes}</p>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Social */}
       {presskit.socials.length > 0 && (
