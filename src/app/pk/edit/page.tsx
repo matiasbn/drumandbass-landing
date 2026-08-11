@@ -67,6 +67,8 @@ function PresskitEditor() {
   const [bio, setBio] = useState('');
   // Secciones personalizadas (título + contenido) que el DJ agrega tras la bio.
   const [customSections, setCustomSections] = useState<PresskitCustomSection[]>([]);
+  // Índice de la sección con confirmación de borrado abierta (inline, no window.confirm).
+  const [confirmDelSection, setConfirmDelSection] = useState<number | null>(null);
   const [riderData, setRiderData] = useState<RiderData>({ setups: [] }); // rider técnico estructurado (opcional)
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -432,7 +434,7 @@ function PresskitEditor() {
     autoPendingRef.current = false;
     void persist(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoUrls, logoUrls, socials, mixes, links, published]);
+  }, [photoUrls, logoUrls, socials, mixes, links, customSections, published]);
 
   // Social handlers
   const addSocial = () => setSocials([...socials, { platform: 'SoundCloud', url: '' }]);
@@ -477,7 +479,13 @@ function PresskitEditor() {
 
   // Secciones personalizadas (título + contenido), mostradas tras la bio.
   const addCustomSection = () => setCustomSections([...customSections, { title: '', body: '' }]);
-  const removeCustomSection = (i: number) => setCustomSections(customSections.filter((_, idx) => idx !== i));
+  // Borrado con confirmación: al aceptar se elimina y se guarda de inmediato
+  // (autoPendingRef → auto-guardado), sin tener que apretar "Guardar".
+  const removeCustomSection = (i: number) => {
+    autoPendingRef.current = true;
+    setCustomSections(customSections.filter((_, idx) => idx !== i));
+    setConfirmDelSection(null);
+  };
   const updateCustomSection = (i: number, field: keyof PresskitCustomSection, value: string) =>
     setCustomSections(customSections.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
   const moveCustomSection = (i: number, dir: -1 | 1) => {
@@ -823,13 +831,36 @@ function PresskitEditor() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => removeCustomSection(i)}
+                    onClick={() => setConfirmDelSection(i)}
                     aria-label="Quitar sección"
                     className="shrink-0 mono text-xs font-bold uppercase px-2.5 py-1.5 brutalist-border border-red-600 text-red-600 hover:bg-red-50"
                   >
                     ×
                   </button>
                 </div>
+                {confirmDelSection === i && (
+                  <div className="flex flex-wrap items-center gap-3 border-2 border-red-600 bg-red-50 p-2.5">
+                    <span className="mono text-[11px] font-bold uppercase text-red-700">
+                      ¿Eliminar esta sección? Se borra de inmediato.
+                    </span>
+                    <div className="flex gap-2 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => removeCustomSection(i)}
+                        className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-red-600 text-white hover:bg-red-700 cursor-pointer"
+                      >
+                        Aceptar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelSection(null)}
+                        className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border hover:bg-gray-100 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <textarea
                   value={sec.body}
                   onChange={(e) => updateCustomSection(i, 'body', e.target.value)}
