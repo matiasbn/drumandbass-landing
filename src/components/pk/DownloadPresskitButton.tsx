@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { RiDownloadLine } from '@remixicon/react';
+import { RiDownloadLine, RiLoader4Line } from '@remixicon/react';
 import type { Presskit } from '@/src/types/presskit';
 import { event } from '@/src/lib/gtag';
 
@@ -61,7 +61,11 @@ export default function DownloadPresskitButton({ presskit, slug }: { presskit: P
       disabled={loading}
       className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-5 py-3 mono text-sm font-black uppercase hover:bg-[#ff0055] transition-colors disabled:opacity-60 cursor-pointer"
     >
-      <RiDownloadLine className="w-5 h-5" />
+      {loading ? (
+        <RiLoader4Line className="w-5 h-5 animate-spin" />
+      ) : (
+        <RiDownloadLine className="w-5 h-5" />
+      )}
       {loading ? 'Generando PDF…' : 'Descargar presskit (PDF)'}
     </button>
   );

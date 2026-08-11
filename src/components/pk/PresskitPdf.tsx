@@ -27,6 +27,14 @@ function absUrl(url: string): string {
   return `https://${u}`;
 }
 
+// Secciones de texto (bio/custom): las CHICAS se mantienen enteras (wrap={false})
+// para que no se corten a mitad; las GRANDES fluyen (wrap={true}) y llenan la
+// página — mantenerlas enteras las empujaría a la página siguiente y dejaría un
+// hueco enorme. ~1500 chars ≈ 1/3 de página: bajo eso, mover la sección desperdicia
+// poco; sobre eso, conviene que fluya.
+const SECTION_SPLIT_CHARS = 1500;
+const shouldSplit = (text?: string | null) => (text || '').length > SECTION_SPLIT_CHARS;
+
 const ROSE = '#ff0055';
 const BLUE = '#0000ff';
 const ORANGE = '#ff5500';
@@ -58,11 +66,14 @@ const s = StyleSheet.create({
   h2: { fontWeight: 'bold', fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
   bio: { fontSize: 9.5, lineHeight: 1.6 },
 
-  // Rider.
-  setup: { borderLeft: `4pt solid ${VIOLET}`, border: `1.2pt solid ${BLACK}`, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 8 },
-  setupName: { fontWeight: 'bold', fontSize: 10, textTransform: 'uppercase', marginBottom: 5, backgroundColor: BLACK, color: '#fff', alignSelf: 'flex-start', paddingVertical: 2, paddingHorizontal: 6 },
+  // Rider: dos columnas — nombre a la izquierda, equipo a la derecha (aprovecha
+  // el espacio; el nombre ya no gasta una línea propia).
+  setup: { flexDirection: 'row', alignItems: 'center', borderLeft: `4pt solid ${VIOLET}`, border: `1.2pt solid ${BLACK}`, paddingVertical: 7, paddingHorizontal: 10, marginBottom: 8 },
+  setupNameCol: { width: 118, marginRight: 10 },
+  setupName: { fontWeight: 'bold', fontSize: 10, textTransform: 'uppercase', backgroundColor: BLACK, color: '#fff', alignSelf: 'flex-start', paddingVertical: 3, paddingHorizontal: 7 },
+  setupBody: { flex: 1 },
   riderRow: { flexDirection: 'row', marginBottom: 3, alignItems: 'baseline' },
-  riderLabel: { fontSize: 7.5, color: GRAY, textTransform: 'uppercase', width: 96 },
+  riderLabel: { fontSize: 7.5, color: GRAY, textTransform: 'uppercase', width: 90 },
   riderValue: { fontWeight: 'bold', fontSize: 10, flex: 1 },
   notes: { fontSize: 8.5, color: '#333', marginTop: 4 },
 
@@ -87,6 +98,33 @@ function SectionTitle({ title }: { title: string }) {
     <View style={s.h2wrap} wrap={false} minPresenceAhead={44}>
       <View style={s.h2square} />
       <Text style={s.h2}>{title}</Text>
+    </View>
+  );
+}
+
+// Sección de lista (rider/releases/redes/links). Dos modos según tamaño:
+// - Lista CORTA (≤ atomicMax): todo junto en un bloque wrap={false} — encabezado
+//   e ítems nunca se separan (evita dejar un ítem solo en otra página).
+// - Lista LARGA: pega el encabezado con el PRIMER ítem (wrap={false}) y deja fluir
+//   el resto; cada ítem es atómico, así ninguno se parte y el encabezado nunca
+//   queda huérfano. Fluir es necesario porque no cabría entera en una página.
+function BlockSection({ title, blocks, atomicMax = 8 }: { title: string; blocks: React.ReactNode[]; atomicMax?: number }) {
+  if (blocks.length === 0) return null;
+  if (blocks.length <= atomicMax) {
+    return (
+      <View style={s.section} wrap={false}>
+        <SectionTitle title={title} />
+        {blocks}
+      </View>
+    );
+  }
+  return (
+    <View style={s.section}>
+      <View wrap={false}>
+        <SectionTitle title={title} />
+        {blocks[0]}
+      </View>
+      {blocks.slice(1)}
     </View>
   );
 }
@@ -133,7 +171,7 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
 
         {/* Bio */}
         {presskit.bio ? (
-          <View style={s.section}>
+          <View style={s.section} wrap={shouldSplit(presskit.bio)}>
             <SectionTitle title="Bio" />
             <Text style={s.bio}>{presskit.bio}</Text>
           </View>
@@ -141,7 +179,7 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
 
         {/* Secciones personalizadas (título + contenido), tras la bio */}
         {customSections.map((sec, i) => (
-          <View key={i} style={s.section}>
+          <View key={i} style={s.section} wrap={shouldSplit(sec.body)}>
             <SectionTitle title={sec.title} />
             <Text style={s.bio}>{sec.body}</Text>
           </View>
@@ -149,67 +187,67 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
 
         {/* Rider */}
         {!riderIsEmpty(rider) ? (
-          <View style={s.section}>
-            <SectionTitle title="Rider técnico" />
-            {riderSetups.map((setup, i) => (
-              <View key={i} style={s.setup} wrap={false}>
-                <Text style={s.setupName}>{setup.name || `Setup ${i + 1}`}</Text>
-                {setupRows(setup).map((r) => (
-                  <View key={r.label} style={s.riderRow}>
-                    <Text style={s.riderLabel}>{r.label}</Text>
-                    <Text style={s.riderValue}>{r.value}</Text>
+          <BlockSection
+            title="Rider técnico"
+            blocks={[
+              ...riderSetups.map((setup, i) => (
+                <View key={i} style={s.setup} wrap={false}>
+                  <View style={s.setupNameCol}>
+                    <Text style={s.setupName}>{setup.name || `Setup ${i + 1}`}</Text>
                   </View>
-                ))}
-                {setup.notes ? <Text style={s.notes}>{setup.notes}</Text> : null}
-              </View>
-            ))}
-            {rider.notes ? <Text style={s.notes}>{rider.notes}</Text> : null}
-          </View>
+                  <View style={s.setupBody}>
+                    {setupRows(setup).map((r) => (
+                      <View key={r.label} style={s.riderRow}>
+                        <Text style={s.riderLabel}>{r.label}</Text>
+                        <Text style={s.riderValue}>{r.value}</Text>
+                      </View>
+                    ))}
+                    {setup.notes ? <Text style={s.notes}>{setup.notes}</Text> : null}
+                  </View>
+                </View>
+              )),
+              ...(rider.notes ? [<Text key="notes" style={s.notes}>{rider.notes}</Text>] : []),
+            ]}
+          />
         ) : null}
 
         {/* Releases */}
-        {mixes.length ? (
-          <View style={s.section}>
-            <SectionTitle title="Sets & Releases" />
-            {mixes.map((m, i) => (
-              <Link key={i} src={absUrl(m.url)} style={s.item} wrap={false}>
-                <Text style={{ ...s.chip, backgroundColor: m.type === 'release' ? ORANGE : BLACK }}>
-                  {m.type === 'release' ? 'REL' : 'SET'}
-                </Text>
-                <Text style={s.linkBold}>{m.title}</Text>
-              </Link>
-            ))}
-          </View>
-        ) : null}
+        <BlockSection
+          title="Sets & Releases"
+          blocks={mixes.map((m, i) => (
+            <Link key={i} src={absUrl(m.url)} style={s.item} wrap={false}>
+              <Text style={{ ...s.chip, backgroundColor: m.type === 'release' ? ORANGE : BLACK }}>
+                {m.type === 'release' ? 'REL' : 'SET'}
+              </Text>
+              <Text style={s.linkBold}>{m.title}</Text>
+            </Link>
+          ))}
+        />
 
         {/* Redes */}
-        {socials.length ? (
-          <View style={s.section}>
-            <SectionTitle title="Redes" />
-            {socials.map((so, i) => {
-              const url = absUrl(socialToUrl(so.platform, so.url));
-              return (
-                <Link key={i} src={url} style={s.item} wrap={false}>
-                  <Text style={{ ...s.chip, backgroundColor: BLACK }}>{so.platform}</Text>
-                  <Text style={s.link}>{url}</Text>
-                </Link>
-              );
-            })}
-          </View>
-        ) : null}
+        <BlockSection
+          title="Redes"
+          blocks={socials.map((so, i) => {
+            const url = absUrl(socialToUrl(so.platform, so.url));
+            return (
+              <Link key={i} src={url} style={s.item} wrap={false}>
+                <Text style={{ ...s.chip, backgroundColor: BLACK }}>{so.platform}</Text>
+                <Text style={s.link}>{url}</Text>
+              </Link>
+            );
+          })}
+        />
 
         {/* Links */}
-        {links.length ? (
-          <View style={s.section}>
-            <SectionTitle title="Links" />
-            {links.map((l, i) => (
-              <Link key={i} src={absUrl(l.url)} style={s.item} wrap={false}>
-                <Text style={{ ...s.chip, backgroundColor: ROSE }}>URL</Text>
-                <Text style={s.linkBold}>{l.title}</Text>
-              </Link>
-            ))}
-          </View>
-        ) : null}
+        <BlockSection
+          title="Links"
+          blocks={links.map((l, i) => (
+            <Link key={i} src={absUrl(l.url)} style={s.item} wrap={false}>
+              <Text style={{ ...s.chip, backgroundColor: ROSE }}>URL</Text>
+              <Text style={s.linkBold}>{l.title}</Text>
+            </Link>
+          ))}
+        />
 
         {/* Footer */}
         <View style={s.footer} fixed>
