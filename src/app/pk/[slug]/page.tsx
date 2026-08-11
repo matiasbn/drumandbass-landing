@@ -156,6 +156,16 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         </section>
       )}
 
+      {/* Secciones personalizadas (título + contenido), tras la bio */}
+      {(presskit.custom_sections || [])
+        .filter((s) => s.title?.trim() && s.body?.trim())
+        .map((sec, i) => (
+          <section key={i} className="border-b-4 border-black p-6 lg:p-12">
+            <h2 className="text-5xl font-black uppercase italic mb-6 break-words">{sec.title}</h2>
+            <p className="text-lg leading-relaxed max-w-3xl whitespace-pre-line break-words overflow-hidden">{sec.body}</p>
+          </section>
+        ))}
+
       {/* Rider técnico (opcional): uno o varios setups */}
       {(() => {
         const rider = parseRider(presskit.rider);
