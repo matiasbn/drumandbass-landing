@@ -12,6 +12,19 @@ function revalidateReleases() {
 
 const enrichMixes = enrichFeaturedReleaseDates;
 
+// Normaliza las secciones personalizadas: sólo las que tienen título Y contenido,
+// recortadas, con un tope sano de secciones para no reventar la fila.
+function sanitizeCustomSections(input: unknown): { title: string; body: string }[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((s) => ({
+      title: typeof s?.title === 'string' ? s.title.trim() : '',
+      body: typeof s?.body === 'string' ? s.body.trim() : '',
+    }))
+    .filter((s) => s.title && s.body)
+    .slice(0, 20);
+}
+
 export async function GET() {
   const supabase = await createSupabaseServer();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -53,6 +66,7 @@ export async function POST(request: Request) {
       country: body.country || null,
       genres: body.genres || [],
       bio: body.bio || null,
+      custom_sections: sanitizeCustomSections(body.custom_sections),
       rider: body.rider || null,
       photo_url: body.photo_urls?.length ? body.photo_urls[0] : (body.photo_url || null),
       photo_urls: body.photo_urls || [],
@@ -92,6 +106,7 @@ export async function PUT(request: Request) {
       country: body.country || null,
       genres: body.genres || [],
       bio: body.bio || null,
+      custom_sections: sanitizeCustomSections(body.custom_sections),
       rider: body.rider || null,
       photo_url: body.photo_urls?.length ? body.photo_urls[0] : (body.photo_url || null),
       photo_urls: body.photo_urls || [],

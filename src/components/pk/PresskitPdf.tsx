@@ -55,7 +55,7 @@ const s = StyleSheet.create({
   section: { marginBottom: 13 },
   h2wrap: { flexDirection: 'row', alignItems: 'center', borderBottom: `3pt solid ${BLACK}`, paddingBottom: 4, marginBottom: 7 },
   h2square: { width: 9, height: 9, backgroundColor: ROSE, marginRight: 7 },
-  h2: { fontWeight: 'bold', fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
+  h2: { fontWeight: 'bold', fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 },
   bio: { fontSize: 9.5, lineHeight: 1.6 },
 
   // Rider.
@@ -92,6 +92,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photoData?: string | null }) {
+  const customSections = (presskit.custom_sections || []).filter((x) => x.title?.trim() && x.body?.trim());
   const rider = parseRider(presskit.rider);
   const riderSetups = rider.setups.filter((x) => setupRows(x).length > 0 || x.notes);
   const mixes = (presskit.mixes || []).filter((m) => m.title?.trim() && m.url?.trim());
@@ -137,6 +138,14 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
             <Text style={s.bio}>{presskit.bio}</Text>
           </View>
         ) : null}
+
+        {/* Secciones personalizadas (título + contenido), tras la bio */}
+        {customSections.map((sec, i) => (
+          <View key={i} style={s.section}>
+            <SectionTitle title={sec.title} />
+            <Text style={s.bio}>{sec.body}</Text>
+          </View>
+        ))}
 
         {/* Rider */}
         {!riderIsEmpty(rider) ? (

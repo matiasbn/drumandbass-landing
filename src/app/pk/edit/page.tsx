@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PkAuthProvider, usePkAuth } from '@/src/components/pk/PkAuthContext';
 import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
-import { Presskit, PresskitSocial, PresskitMix, PresskitLink } from '@/src/types/presskit';
+import { Presskit, PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
@@ -65,6 +65,8 @@ function PresskitEditor() {
   const [instagram, setInstagram] = useState('');
   const [genresInput, setGenresInput] = useState('');
   const [bio, setBio] = useState('');
+  // Secciones personalizadas (título + contenido) que el DJ agrega tras la bio.
+  const [customSections, setCustomSections] = useState<PresskitCustomSection[]>([]);
   const [riderData, setRiderData] = useState<RiderData>({ setups: [] }); // rider técnico estructurado (opcional)
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -102,7 +104,7 @@ function PresskitEditor() {
   const [dirty, setDirty] = useState(false);
   const currentSnapshot = () =>
     JSON.stringify({
-      artistName, realName, city, country, instagram, genresInput, bio, riderData,
+      artistName, realName, city, country, instagram, genresInput, bio, customSections, riderData,
       photoUrls, logoUrls, socials, mixes, links, published,
     });
 
@@ -137,6 +139,7 @@ function PresskitEditor() {
         setCountry(pk.country || '');
         setGenresInput(loadedGenres);
         setBio(pk.bio || '');
+        setCustomSections(pk.custom_sections || []);
         setRiderData(parseRider(pk.rider));
         setPhotoUrls(loadedPhotoUrls);
         setLogoUrls(loadedLogoUrls);
@@ -150,7 +153,7 @@ function PresskitEditor() {
         savedRef.current = JSON.stringify({
           artistName: pk.artist_name || '', realName: pk.real_name || '', city: pk.city || '',
           country: pk.country || '', instagram: loadedInstagram, genresInput: loadedGenres,
-          bio: pk.bio || '', riderData: parseRider(pk.rider), photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
+          bio: pk.bio || '', customSections: pk.custom_sections || [], riderData: parseRider(pk.rider), photoUrls: loadedPhotoUrls, logoUrls: loadedLogoUrls,
           socials: loadedSocials, mixes: loadedMixes, links: loadedLinks, published: pk.published || false,
         });
       }
@@ -380,6 +383,9 @@ function PresskitEditor() {
 
     const body = {
       artist_name: artistName, real_name: realName, city, country, genres, bio,
+      custom_sections: customSections
+        .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
+        .filter((s) => s.title && s.body),
       rider: serializeRider(riderData),
       photo_urls: photoUrls, logo_urls: logoUrls, socials: resolvedSocials,
       mixes: filteredMixes, links: filteredLinks, published,
@@ -418,7 +424,7 @@ function PresskitEditor() {
   useEffect(() => {
     setDirty(currentSnapshot() !== savedRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artistName, realName, city, country, instagram, genresInput, bio, riderData, photoUrls, logoUrls, socials, mixes, links, published]);
+  }, [artistName, realName, city, country, instagram, genresInput, bio, customSections, riderData, photoUrls, logoUrls, socials, mixes, links, published]);
 
   // Auto-guardado: solo cuando un cambio DISCRETO marcó autoPendingRef (los textos no).
   useEffect(() => {
@@ -467,6 +473,19 @@ function PresskitEditor() {
     const updated = [...links];
     updated[i] = { ...updated[i], [field]: value };
     setLinks(updated);
+  };
+
+  // Secciones personalizadas (título + contenido), mostradas tras la bio.
+  const addCustomSection = () => setCustomSections([...customSections, { title: '', body: '' }]);
+  const removeCustomSection = (i: number) => setCustomSections(customSections.filter((_, idx) => idx !== i));
+  const updateCustomSection = (i: number, field: keyof PresskitCustomSection, value: string) =>
+    setCustomSections(customSections.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+  const moveCustomSection = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= customSections.length) return;
+    const updated = [...customSections];
+    [updated[i], updated[j]] = [updated[j], updated[i]];
+    setCustomSections(updated);
   };
 
   // SoundCloud helpers
@@ -751,6 +770,88 @@ function PresskitEditor() {
               placeholder="Cuéntanos sobre ti..."
               rows={4}
             />
+          </div>
+
+          {/* Secciones personalizadas: título libre + contenido, tras la bio. */}
+          <div className="border-4 border-black p-4 space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <label className={labelClass}>Secciones personalizadas (opcional)</label>
+                <p className="mono text-[11px] text-gray-500 -mt-1">
+                  Agrega las secciones que quieras (Discografía, Prensa, Contacto…). Aparecen después de tu bio.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addCustomSection}
+                className="shrink-0 mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white hover:bg-gray-900"
+              >
+                + Sección
+              </button>
+            </div>
+
+            {customSections.length === 0 && (
+              <p className="mono text-xs text-gray-500">Sin secciones aún. Agrega una para sumar contenido a tu presskit.</p>
+            )}
+
+            {customSections.map((sec, i) => (
+              <div key={i} className="border-2 border-black p-3 space-y-2 bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={sec.title}
+                    onChange={(e) => updateCustomSection(i, 'title', e.target.value)}
+                    placeholder="Título de la sección (ej. Discografía)"
+                    className={`${inputClass} flex-1 font-bold uppercase`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => moveCustomSection(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Subir sección"
+                    className="shrink-0 mono text-xs font-bold px-2.5 py-1.5 brutalist-border hover:bg-gray-100 disabled:opacity-30 disabled:cursor-default"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveCustomSection(i, 1)}
+                    disabled={i === customSections.length - 1}
+                    aria-label="Bajar sección"
+                    className="shrink-0 mono text-xs font-bold px-2.5 py-1.5 brutalist-border hover:bg-gray-100 disabled:opacity-30 disabled:cursor-default"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomSection(i)}
+                    aria-label="Quitar sección"
+                    className="shrink-0 mono text-xs font-bold uppercase px-2.5 py-1.5 brutalist-border border-red-600 text-red-600 hover:bg-red-50"
+                  >
+                    ×
+                  </button>
+                </div>
+                <textarea
+                  value={sec.body}
+                  onChange={(e) => updateCustomSection(i, 'body', e.target.value)}
+                  placeholder="Contenido de la sección…"
+                  className={`${inputClass} min-h-[100px] resize-y`}
+                  rows={4}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!dirty || saving}
+                    className="brutalist-border bg-black text-white px-5 py-1.5 mono text-xs font-bold uppercase hover:bg-gray-900 disabled:opacity-40 disabled:cursor-default cursor-pointer"
+                  >
+                    {saving ? 'Guardando…' : 'Guardar'}
+                  </button>
+                  <span className={`mono text-[11px] font-bold uppercase ${dirty ? 'text-[#ff0055]' : 'text-green-600'}`}>
+                    {saving ? '' : dirty ? '● Sin guardar' : '✓ Guardado'}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="border-4 border-black p-4 space-y-4">

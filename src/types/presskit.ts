@@ -37,6 +37,13 @@ export interface PresskitLink {
   url: string;
 }
 
+// Sección personalizada OPCIONAL: el DJ define el título y el contenido (texto
+// libre). Se muestran, en orden, después de la bio en el presskit público.
+export interface PresskitCustomSection {
+  title: string;
+  body: string;
+}
+
 export interface Presskit {
   id: string;
   user_id: string;
@@ -46,6 +53,8 @@ export interface Presskit {
   country: string | null;
   genres: string[];
   bio: string | null;
+  // Secciones personalizadas OPCIONALES (título + contenido), mostradas tras la bio.
+  custom_sections: PresskitCustomSection[];
   // Rider técnico OPCIONAL: requerimientos de equipo del DJ (CDJs, mixer, etc.).
   rider: string | null;
   photo_url: string | null;
