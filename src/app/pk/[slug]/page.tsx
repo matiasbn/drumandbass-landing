@@ -175,7 +175,10 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+            {/* auto-fit: tantas columnas como quepan con ≥400px cada una (para que
+                el valor del rider no se parta). Ancho → 3 en fila; angosto → 2 o 1.
+                El min(400px,100%) evita overflow horizontal en móvil. */}
+            <div className="grid gap-6 max-w-7xl grid-cols-[repeat(auto-fit,minmax(min(400px,100%),1fr))]">
               {setups.map((s, i) => (
                 <div key={i} className={single ? 'md:col-span-2 max-w-2xl' : 'brutalist-border p-4'}>
                   {!single && (
@@ -184,8 +187,8 @@ export default async function PublicPresskitPage({ params }: PageProps) {
                   <div className="space-y-2">
                     {setupRows(s).map((r) => (
                       <div key={r.label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-3 border-b-2 border-black/10 pb-1.5">
-                        <span className="mono text-xs font-black uppercase text-gray-500 sm:w-40 shrink-0">{r.label}</span>
-                        <span className="text-lg font-bold">{r.value}</span>
+                        <span className="mono text-xs font-black uppercase text-gray-500 sm:w-28 shrink-0">{r.label}</span>
+                        <span className="text-lg font-bold min-w-0 flex-1">{r.value}</span>
                       </div>
                     ))}
                     {s.notes && <p className="mono text-sm leading-relaxed whitespace-pre-line break-words pt-1">{s.notes}</p>}
