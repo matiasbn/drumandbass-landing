@@ -6,7 +6,9 @@ const SC_MOBILE_HEADERS = {
     'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
 };
 
-// El título sale del atributo aria-label del HTML, así que viene con entidades
+type ScTrack = { id: string; title: string; url: string };
+
+// El título sale del aria-label o del JSON-LD, así que puede venir con entidades
 // HTML (p.ej. "&amp;" por "&"). Las decodificamos para guardar el título limpio.
 function decodeHtmlEntities(text: string): string {
   return text
@@ -30,6 +32,75 @@ function extractUsername(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Fuente 1: JSON-LD (schema.org). SoundCloud embebe el perfil como MusicGroup con
+// un array de MusicRecording {name, url}. Es la fuente MÁS confiable: para algunas
+// cuentas los tracks NO se renderizan como anchors aria-label (p.ej. djmestizo),
+// pero SIEMPRE están acá. Recorremos el JSON en profundidad por robustez.
+function extractJsonLdTracks(html: string, username: string): ScTrack[] {
+  const out: ScTrack[] = [];
+  const seen = new Set<string>();
+  const prefix = `https://soundcloud.com/${username}/`;
+  const scriptRe = /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  while ((m = scriptRe.exec(html)) !== null) {
+    let data: unknown;
+    try {
+      data = JSON.parse(m[1].trim());
+    } catch {
+      continue;
+    }
+    const stack: unknown[] = [data];
+    while (stack.length) {
+      const node = stack.pop();
+      if (Array.isArray(node)) {
+        // Push en reversa para que el recorrido LIFO respete el orden del array
+        // (el JSON-LD lista los tracks del más reciente al más antiguo).
+        for (let i = node.length - 1; i >= 0; i--) stack.push(node[i]);
+        continue;
+      }
+      if (node && typeof node === 'object') {
+        const o = node as Record<string, unknown>;
+        if (o['@type'] === 'MusicRecording' && typeof o.url === 'string' && o.url.startsWith(prefix)) {
+          const url = o.url;
+          const slug = url.slice(prefix.length).replace(/\/+$/, '');
+          if (slug && !seen.has(slug)) {
+            seen.add(slug);
+            out.push({ id: slug, title: decodeHtmlEntities(String(o.name ?? slug)), url });
+          }
+        }
+        for (const v of Object.values(o)) {
+          if (v && typeof v === 'object') stack.push(v);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Fuente 2: anchors aria-label + href del HTML móvil. Captura además playlists/EPs
+// (/username/sets/…) que el JSON-LD (solo MusicRecording) no incluye.
+function extractAriaTracks(html: string, username: string): ScTrack[] {
+  const pattern = new RegExp(
+    `aria-label="([^"]+)"[^>]*href="\\/${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/([^"]+)"`,
+    'g'
+  );
+  const out: ScTrack[] = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const slug = match[2];
+    if (!seen.has(slug)) {
+      seen.add(slug);
+      out.push({
+        id: slug,
+        title: decodeHtmlEntities(match[1]),
+        url: `https://soundcloud.com/${username}/${slug}`,
+      });
+    }
+  }
+  return out;
 }
 
 export async function GET(req: NextRequest) {
@@ -58,27 +129,18 @@ export async function GET(req: NextRequest) {
 
     const html = await res.text();
 
-    // Extract tracks from aria-label + href pairs in the mobile HTML
-    const pattern = new RegExp(
-      `aria-label="([^"]+)"[^>]*href="\\/${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/([^"]+)"`,
-      'g'
-    );
-
-    const tracks: { id: string; title: string; url: string }[] = [];
-    const seen = new Set<string>();
-    let match;
-
-    while ((match = pattern.exec(html)) !== null) {
-      const slug = match[2];
-      if (!seen.has(slug)) {
-        seen.add(slug);
-        tracks.push({
-          id: slug,
-          title: decodeHtmlEntities(match[1]),
-          url: `https://soundcloud.com/${username}/${slug}`,
-        });
-      }
+    // Mergeamos JSON-LD (primario, más completo) + anchors aria-label (aporta
+    // playlists/EPs), deduplicado por slug. El JSON-LD va primero para preservar
+    // su orden (recientes primero).
+    const bySlug = new Map<string, ScTrack>();
+    for (const t of [...extractJsonLdTracks(html, username), ...extractAriaTracks(html, username)]) {
+      if (!bySlug.has(t.id)) bySlug.set(t.id, t);
     }
+
+    // Orden alfabético por título (es-CL, sin distinguir mayúsculas/acentos).
+    const tracks = [...bySlug.values()].sort((a, b) =>
+      a.title.localeCompare(b.title, 'es', { sensitivity: 'base', numeric: true })
+    );
 
     return NextResponse.json({ tracks });
   } catch (err) {
