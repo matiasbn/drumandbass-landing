@@ -7,7 +7,7 @@ import { Presskit, PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSect
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
-import { RiderData, RiderSetup, PLAYER_MODELS, MIXER_MODELS, parseRider, serializeRider, emptySetup } from '@/src/lib/rider';
+import { RiderData, RiderSetup, PLAYER_MODELS, MIXER_MODELS, CONTROLLER_MODELS, parseRider, serializeRider, emptySetup } from '@/src/lib/rider';
 import {
   RiSaveLine,
   RiEyeLine,
@@ -70,6 +70,12 @@ function PresskitEditor() {
   // Índice de la sección con confirmación de borrado abierta (inline, no window.confirm).
   const [confirmDelSection, setConfirmDelSection] = useState<number | null>(null);
   const [riderData, setRiderData] = useState<RiderData>({ setups: [] }); // rider técnico estructurado (opcional)
+  // Al agregar un setup (se suma al final, fuera de vista), scrolleamos a él, lo
+  // enfocamos y le damos un destello para que se note que apareció.
+  const setupRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const setupNameRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const pendingSetupScroll = useRef<number | null>(null);
+  const [flashSetup, setFlashSetup] = useState<number | null>(null);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -496,6 +502,27 @@ function PresskitEditor() {
     setCustomSections(updated);
   };
 
+  // Agregar setup: marca el índice nuevo para scrollear/enfocar tras el render.
+  const addSetup = () => {
+    pendingSetupScroll.current = riderData.setups.length;
+    setRiderData((d) => ({ ...d, setups: [...d.setups, emptySetup()] }));
+  };
+  useEffect(() => {
+    const i = pendingSetupScroll.current;
+    if (i == null) return;
+    pendingSetupScroll.current = null;
+    const el = setupRefs.current[i];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Enfocar SOLO en escritorio: en móvil abriría el teclado (tapa pantalla) y
+    // el nombre es opcional. El scroll + destello ya avisan que se agregó.
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (isDesktop) setupNameRefs.current[i]?.focus({ preventScroll: true });
+    setFlashSetup(i);
+    const t = setTimeout(() => setFlashSetup((cur) => (cur === i ? null : cur)), 1400);
+    return () => clearTimeout(t);
+  }, [riderData.setups.length]);
+
   // SoundCloud helpers
   const soundcloudUrl = socials.find(
     (s) => s.platform === 'SoundCloud' && s.url.trim()
@@ -895,7 +922,7 @@ function PresskitEditor() {
               </div>
               <button
                 type="button"
-                onClick={() => setRiderData((d) => ({ ...d, setups: [...d.setups, emptySetup()] }))}
+                onClick={addSetup}
                 className="shrink-0 mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white hover:bg-gray-900"
               >
                 + Setup
@@ -909,15 +936,28 @@ function PresskitEditor() {
             {riderData.setups.map((s, si) => {
               const upd = (patch: Partial<RiderSetup>) =>
                 setRiderData((d) => ({ ...d, setups: d.setups.map((x, i) => (i === si ? { ...x, ...patch } : x)) }));
+              const isCtrl = !!s.controller;
+              // Número secuencial del controlador (1-based) entre los setups controlador.
+              const ctrlNum = riderData.setups.slice(0, si + 1).filter((x) => x.controller).length;
               return (
-                <div key={si} className="border-2 border-black p-3 space-y-3 bg-gray-50">
+                <div
+                  key={si}
+                  ref={(el) => { setupRefs.current[si] = el; }}
+                  className={`border-2 border-black p-3 space-y-3 bg-gray-50 transition-shadow duration-300 ${flashSetup === si ? 'ring-4 ring-[#7C3AED] ring-offset-2' : ''}`}
+                >
                   <div className="flex items-center gap-2">
-                    <input
-                      value={s.name || ''}
-                      onChange={(e) => upd({ name: e.target.value })}
-                      placeholder={`Setup ${si + 1} (nombre opcional)`}
-                      className={`${inputClass} flex-1`}
-                    />
+                    {isCtrl ? (
+                      // Los controladores no llevan nombre: se numeran solos.
+                      <span className="flex-1 mono text-sm font-black uppercase text-[#7C3AED]">Controlador {ctrlNum}</span>
+                    ) : (
+                      <input
+                        ref={(el) => { setupNameRefs.current[si] = el; }}
+                        value={s.name || ''}
+                        onChange={(e) => upd({ name: e.target.value })}
+                        placeholder={`Setup ${si + 1} (nombre opcional)`}
+                        className={`${inputClass} flex-1`}
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => setRiderData((d) => ({ ...d, setups: d.setups.filter((_, i) => i !== si) }))}
@@ -928,42 +968,84 @@ function PresskitEditor() {
                     </button>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                    <label className="flex-1 mono text-xs font-bold uppercase">
-                      Reproductores
-                      <select
-                        value={s.players?.model || ''}
-                        onChange={(e) => upd({ players: e.target.value ? { model: e.target.value, quantity: s.players?.quantity || 2 } : undefined })}
-                        className={`${inputClass} mt-1`}
-                      >
-                        <option value="">— Sin especificar —</option>
-                        {PLAYER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </label>
-                    <label className="mono text-xs font-bold uppercase sm:w-28">
-                      Cantidad
-                      <input
-                        type="number"
-                        min={1}
-                        max={8}
-                        disabled={!s.players?.model}
-                        // Permite vaciar el campo mientras se edita (queda 0 → se
-                        // muestra vacío); al guardar se normaliza a mínimo 1.
-                        value={s.players?.quantity || ''}
-                        onChange={(e) => upd({ players: s.players ? { ...s.players, quantity: e.target.value === '' ? 0 : Math.min(8, Math.max(0, +e.target.value || 0)) } : s.players })}
-                        onBlur={(e) => { if (e.target.value === '' || +e.target.value < 1) upd({ players: s.players ? { ...s.players, quantity: 1 } : s.players }); }}
-                        className={`${inputClass} mt-1 disabled:opacity-40`}
-                      />
-                    </label>
-                  </div>
+                  {/* Selector EXCLUYENTE: reproductores+mixer O un controlador
+                      all-in-one. Cambiar de modo limpia los campos del otro. */}
+                  {(() => {
+                    return (
+                      <>
+                        <div className="inline-flex brutalist-border">
+                          <button
+                            type="button"
+                            onClick={() => upd({ players: { model: '', quantity: 2 }, mixer: undefined, controller: undefined })}
+                            className={`mono text-[11px] font-black uppercase px-3 py-2 cursor-pointer ${!isCtrl ? 'bg-[#7C3AED] text-white' : 'bg-white text-black hover:bg-gray-100'}`}
+                          >
+                            Reproductores + Mixer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => upd({ controller: { model: '' }, players: undefined, mixer: undefined, name: undefined })}
+                            className={`mono text-[11px] font-black uppercase px-3 py-2 border-l-4 border-black cursor-pointer ${isCtrl ? 'bg-[#7C3AED] text-white' : 'bg-white text-black hover:bg-gray-100'}`}
+                          >
+                            Controlador
+                          </button>
+                        </div>
 
-                  <label className="block mono text-xs font-bold uppercase">
-                    Mixer
-                    <select value={s.mixer || ''} onChange={(e) => upd({ mixer: e.target.value || undefined })} className={`${inputClass} mt-1`}>
-                      <option value="">— Sin especificar —</option>
-                      {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </label>
+                        {isCtrl ? (
+                          // Controlador: solo el modelo (sin nombre ni cantidad).
+                          <label className="block mono text-xs font-bold uppercase">
+                            Modelo del controlador
+                            <select
+                              value={s.controller?.model || ''}
+                              onChange={(e) => upd({ controller: { model: e.target.value } })}
+                              className={`${inputClass} mt-1`}
+                            >
+                              <option value="">— Sin especificar —</option>
+                              {CONTROLLER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </label>
+                        ) : (
+                          <>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                              <label className="flex-1 mono text-xs font-bold uppercase">
+                                Reproductores
+                                <select
+                                  value={s.players?.model || ''}
+                                  onChange={(e) => upd({ players: e.target.value ? { model: e.target.value, quantity: s.players?.quantity || 2 } : { model: '', quantity: s.players?.quantity || 2 } })}
+                                  className={`${inputClass} mt-1`}
+                                >
+                                  <option value="">— Sin especificar —</option>
+                                  {PLAYER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </label>
+                              <label className="mono text-xs font-bold uppercase sm:w-28">
+                                Cantidad
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={8}
+                                  disabled={!s.players?.model}
+                                  // Permite vaciar el campo mientras se edita (queda 0 → se
+                                  // muestra vacío); al guardar se normaliza a mínimo 1.
+                                  value={s.players?.quantity || ''}
+                                  onChange={(e) => upd({ players: s.players ? { ...s.players, quantity: e.target.value === '' ? 0 : Math.min(8, Math.max(0, +e.target.value || 0)) } : s.players })}
+                                  onBlur={(e) => { if (e.target.value === '' || +e.target.value < 1) upd({ players: s.players ? { ...s.players, quantity: 1 } : s.players }); }}
+                                  className={`${inputClass} mt-1 disabled:opacity-40`}
+                                />
+                              </label>
+                            </div>
+
+                            <label className="block mono text-xs font-bold uppercase">
+                              Mixer
+                              <select value={s.mixer || ''} onChange={(e) => upd({ mixer: e.target.value || undefined })} className={`${inputClass} mt-1`}>
+                                <option value="">— Sin especificar —</option>
+                                {MIXER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                              </select>
+                            </label>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}

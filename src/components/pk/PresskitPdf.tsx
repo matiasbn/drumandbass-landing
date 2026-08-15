@@ -2,7 +2,7 @@ import React from 'react';
 import { Document, Page, View, Text, Image, Link, StyleSheet, Font } from '@react-pdf/renderer';
 import type { Presskit } from '@/src/types/presskit';
 import { socialToUrl } from '@/src/lib/socials';
-import { parseRider, setupRows, riderIsEmpty } from '@/src/lib/rider';
+import { parseRider, riderDisplay } from '@/src/lib/rider';
 
 // PDF "enviable" del presskit: documento propio (no captura), links clickeables,
 // estética brutalista de la marca. Space Mono es una de las tipografías del sitio
@@ -132,7 +132,7 @@ function BlockSection({ title, blocks, atomicMax = 8 }: { title: string; blocks:
 export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photoData?: string | null }) {
   const customSections = (presskit.custom_sections || []).filter((x) => x.title?.trim() && x.body?.trim());
   const rider = parseRider(presskit.rider);
-  const riderSetups = rider.setups.filter((x) => setupRows(x).length > 0 || x.notes);
+  const riderItems = riderDisplay(rider); // controladores ya numerados ("Controlador N")
   const mixes = (presskit.mixes || []).filter((m) => m.title?.trim() && m.url?.trim());
   const socials = (presskit.socials || []).filter((so) => so.url?.trim());
   const links = (presskit.links || []).filter((l) => l.title?.trim() && l.url?.trim());
@@ -186,23 +186,23 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
         ))}
 
         {/* Rider */}
-        {!riderIsEmpty(rider) ? (
+        {riderItems.length > 0 || rider.notes ? (
           <BlockSection
             title="Rider técnico"
             blocks={[
-              ...riderSetups.map((setup, i) => (
+              ...riderItems.map((it, i) => (
                 <View key={i} style={s.setup} wrap={false}>
                   <View style={s.setupNameCol}>
-                    <Text style={s.setupName}>{setup.name || `Setup ${i + 1}`}</Text>
+                    <Text style={s.setupName}>{it.name}</Text>
                   </View>
                   <View style={s.setupBody}>
-                    {setupRows(setup).map((r) => (
+                    {it.rows.map((r) => (
                       <View key={r.label} style={s.riderRow}>
                         <Text style={s.riderLabel}>{r.label}</Text>
                         <Text style={s.riderValue}>{r.value}</Text>
                       </View>
                     ))}
-                    {setup.notes ? <Text style={s.notes}>{setup.notes}</Text> : null}
+                    {it.notes ? <Text style={s.notes}>{it.notes}</Text> : null}
                   </View>
                 </View>
               )),
