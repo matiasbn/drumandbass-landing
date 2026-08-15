@@ -4,7 +4,7 @@ import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { Presskit, PkProfile } from '@/src/types/presskit';
 import BrutalistButton from '@/src/components/BigButton';
 import { socialToUrl } from '@/src/lib/socials';
-import { parseRider, setupRows, riderIsEmpty } from '@/src/lib/rider';
+import { parseRider, setupRows, riderIsEmpty, riderDisplay } from '@/src/lib/rider';
 import DownloadPresskitButton from '@/src/components/pk/DownloadPresskitButton';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
@@ -170,8 +170,12 @@ export default async function PublicPresskitPage({ params }: PageProps) {
       {(() => {
         const rider = parseRider(presskit.rider);
         if (riderIsEmpty(rider)) return null;
-        const setups = rider.setups.filter((s) => setupRows(s).length > 0 || s.notes);
-        const single = setups.length === 1 && !setups[0].name;
+        const items = riderDisplay(rider);
+        if (items.length === 0) return null;
+        // "single" = un único setup de reproductores sin nombre → layout simple.
+        // Un controlador siempre muestra su encabezado "Controlador N".
+        const rawSole = rider.setups.filter((s) => setupRows(s).length > 0 || s.notes);
+        const single = items.length === 1 && !items[0].isController && !rawSole[0]?.name;
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
@@ -179,19 +183,19 @@ export default async function PublicPresskitPage({ params }: PageProps) {
                 el valor del rider no se parta). Ancho → 3 en fila; angosto → 2 o 1.
                 El min(400px,100%) evita overflow horizontal en móvil. */}
             <div className="grid gap-6 max-w-7xl grid-cols-[repeat(auto-fit,minmax(min(400px,100%),1fr))]">
-              {setups.map((s, i) => (
+              {items.map((it, i) => (
                 <div key={i} className={single ? 'md:col-span-2 max-w-2xl' : 'brutalist-border p-4'}>
                   {!single && (
-                    <h3 className="font-black uppercase text-xl mb-3">{s.name || `Setup ${i + 1}`}</h3>
+                    <h3 className="font-black uppercase text-xl mb-3">{it.name}</h3>
                   )}
                   <div className="space-y-2">
-                    {setupRows(s).map((r) => (
+                    {it.rows.map((r) => (
                       <div key={r.label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-3 border-b-2 border-black/10 pb-1.5">
                         <span className="mono text-xs font-black uppercase text-gray-500 sm:w-28 shrink-0">{r.label}</span>
                         <span className="text-lg font-bold min-w-0 flex-1">{r.value}</span>
                       </div>
                     ))}
-                    {s.notes && <p className="mono text-sm leading-relaxed whitespace-pre-line break-words pt-1">{s.notes}</p>}
+                    {it.notes && <p className="mono text-sm leading-relaxed whitespace-pre-line break-words pt-1">{it.notes}</p>}
                   </div>
                 </div>
               ))}

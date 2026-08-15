@@ -6,8 +6,13 @@
 
 export interface RiderSetup {
   name?: string; // "Setup club", "Alternativo", "Festival"…
+  // Un setup es EXCLUYENTE: o "reproductores + mixer" (players/mixer) o un
+  // controlador all-in-one (controller). Nunca ambos — cleanSetup lo garantiza.
   players?: { model: string; quantity: number };
   mixer?: string;
+  // Controlador all-in-one: SIN nombre ni cantidad. En el presskit se numeran
+  // secuencialmente ("Controlador 1", "Controlador 2"…) — ver riderDisplay.
+  controller?: { model: string };
   monitors?: number;
   extras?: string[];
   notes?: string;
@@ -73,11 +78,48 @@ export const MIXER_MODELS = [
   'Otro',
 ];
 
+// Controladores all-in-one (reemplazan reproductores + mixer). Estándar de la
+// escena: Pioneer/AlphaTheta DDJ/XDJ, Denon Prime, Traktor, RANE, Numark.
+export const CONTROLLER_MODELS = [
+  // Pioneer / AlphaTheta
+  'Pioneer DDJ-FLX10',
+  'Pioneer DDJ-FLX6',
+  'Pioneer DDJ-FLX4',
+  'Pioneer DDJ-1000',
+  'Pioneer DDJ-1000SRT',
+  'Pioneer DDJ-REV7',
+  'Pioneer DDJ-REV5',
+  'Pioneer DDJ-REV1',
+  'Pioneer DDJ-800',
+  'Pioneer DDJ-400',
+  'Pioneer XDJ-XZ',
+  'Pioneer XDJ-RX3',
+  'Pioneer XDJ-RR',
+  'AlphaTheta OPUS-QUAD',
+  // Denon DJ
+  'Denon DJ Prime 4+',
+  'Denon DJ Prime 4',
+  'Denon DJ Prime 2',
+  'Denon DJ SC Live 4',
+  'Denon DJ SC Live 2',
+  'Denon DJ Prime GO',
+  // Native Instruments
+  'Traktor Kontrol S4 MK3',
+  'Traktor Kontrol S8',
+  'Traktor Kontrol S2 MK3',
+  // RANE / Numark
+  'RANE ONE',
+  'RANE FOUR',
+  'Numark Mixstream Pro+',
+  'Otro',
+];
+
 export function setupIsEmpty(s: RiderSetup | null | undefined): boolean {
   if (!s) return true;
   return (
     !s.players?.model &&
     !s.mixer &&
+    !s.controller?.model &&
     !s.monitors &&
     !(s.extras && s.extras.length) &&
     !(s.notes && s.notes.trim())
@@ -120,9 +162,16 @@ export function parseRider(raw: string | null | undefined): RiderData {
 
 function cleanSetup(s: RiderSetup): RiderSetup | null {
   const clean: RiderSetup = {};
-  if (s.name?.trim()) clean.name = s.name.trim();
-  if (s.players?.model) clean.players = { model: s.players.model, quantity: Math.max(1, s.players.quantity || 1) };
-  if (s.mixer) clean.mixer = s.mixer;
+  // Exclusividad: un controlador all-in-one reemplaza reproductores + mixer.
+  // El controlador NO lleva nombre (se numera al mostrarse); solo los setups de
+  // reproductores conservan su nombre opcional.
+  if (s.controller?.model) {
+    clean.controller = { model: s.controller.model };
+  } else {
+    if (s.name?.trim()) clean.name = s.name.trim();
+    if (s.players?.model) clean.players = { model: s.players.model, quantity: Math.max(1, s.players.quantity || 1) };
+    if (s.mixer) clean.mixer = s.mixer;
+  }
   if (s.monitors && s.monitors > 0) clean.monitors = s.monitors;
   if (s.extras && s.extras.length) clean.extras = s.extras;
   if (s.notes?.trim()) clean.notes = s.notes.trim();
@@ -140,9 +189,46 @@ export function serializeRider(d: RiderData): string | null {
 // Filas de un setup para mostrarlo.
 export function setupRows(s: RiderSetup): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = [];
-  if (s.players?.model) rows.push({ label: 'Reproductores', value: `${s.players.quantity || 1}× ${s.players.model}` });
-  if (s.mixer) rows.push({ label: 'Mixer', value: s.mixer });
+  if (s.controller?.model) {
+    // El encabezado "Controlador N" lo pone riderDisplay; aquí solo el modelo.
+    rows.push({ label: 'Modelo', value: s.controller.model });
+  } else {
+    if (s.players?.model) rows.push({ label: 'Reproductores', value: `${s.players.quantity || 1}× ${s.players.model}` });
+    if (s.mixer) rows.push({ label: 'Mixer', value: s.mixer });
+  }
   if (s.monitors) rows.push({ label: 'Monitores de booth', value: String(s.monitors) });
   if (s.extras && s.extras.length) rows.push({ label: 'Extras', value: s.extras.join(', ') });
   return rows;
+}
+
+export function isControllerSetup(s: RiderSetup): boolean {
+  return !!s.controller?.model;
+}
+
+// Setups listos para mostrar, con encabezado resuelto: los controladores se
+// numeran secuencialmente ("Controlador 1/2/3…"); los setups de reproductores
+// usan su nombre (o "Setup N"). Descarta los vacíos (sin equipos ni notas).
+export interface RiderDisplayItem {
+  name: string; // encabezado del card
+  rows: { label: string; value: string }[];
+  notes?: string;
+  isController: boolean;
+}
+
+export function riderDisplay(d: RiderData): RiderDisplayItem[] {
+  const items: RiderDisplayItem[] = [];
+  let ctrl = 0;
+  let plain = 0;
+  for (const s of d.setups || []) {
+    const rows = setupRows(s);
+    if (rows.length === 0 && !s.notes) continue;
+    if (isControllerSetup(s)) {
+      ctrl += 1;
+      items.push({ name: `Controlador ${ctrl}`, rows, notes: s.notes, isController: true });
+    } else {
+      plain += 1;
+      items.push({ name: s.name || `Setup ${plain}`, rows, notes: s.notes, isController: false });
+    }
+  }
+  return items;
 }
