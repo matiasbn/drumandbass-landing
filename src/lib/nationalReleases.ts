@@ -11,6 +11,9 @@ export interface NationalRelease {
   downloadable: boolean;
   downloadUrl: string | null; // gate externo (Hypeddit…) o null si nativa/no descargable
   isEp: boolean;
+  // Tipo declarado por el DJ (mix.type): 'release' | 'set'. Opcional — en /releases
+  // todos son 'release'; en el presskit hay ambos y habilita el filtro por tipo.
+  kind?: 'set' | 'release';
 }
 
 // Cliente anónimo sin cookies: lo usa el home (ISR). No debe usar el cliente

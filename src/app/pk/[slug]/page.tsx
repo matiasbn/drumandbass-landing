@@ -6,6 +6,9 @@ import BrutalistButton from '@/src/components/BigButton';
 import { socialToUrl } from '@/src/lib/socials';
 import { parseRider, setupRows, riderIsEmpty, riderDisplay } from '@/src/lib/rider';
 import DownloadPresskitButton from '@/src/components/pk/DownloadPresskitButton';
+import ReleasesPlayer from '@/src/components/ReleasesPlayer';
+import { isSoundcloudUrl } from '@/src/lib/soundcloud';
+import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
 import TrackOnMount from '@/src/components/TrackOnMount';
@@ -14,7 +17,6 @@ import {
   RiSoundcloudLine,
   RiSpotifyLine,
   RiYoutubeLine,
-  RiMusic2Line,
   RiMapPinLine,
   RiGlobalLine,
   RiFacebookLine,
@@ -234,42 +236,55 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         </section>
       )}
 
-      {/* Mixes */}
-      {presskit.mixes.length > 0 && (
-        <section className="border-b-4 border-black p-6 lg:p-12">
-          <h2 className="text-5xl font-black uppercase italic mb-6">
-            <RiMusic2Line className="inline w-10 h-10 mr-2" />
-            SETS & RELEASES
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {presskit.mixes.map((mix, i) => (
-              <a
-                key={i}
-                href={ensureAbsoluteUrl(mix.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-xl font-black uppercase">{mix.title}</h3>
-                  {mix.type && (
-                    <span className={`mono text-[10px] font-black uppercase px-2 py-0.5 ${
-                      mix.type === 'release'
-                        ? 'bg-[#ff0055] text-white'
-                        : 'bg-black text-white'
-                    }`}>
-                      {mix.type}
-                    </span>
-                  )}
-                </div>
-                <span className="mono text-xs font-bold uppercase opacity-60">
-                  {mix.platform}
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Sets & Releases — reproductor con playlist (como /releases) para los
+          tracks de SoundCloud, con expansión de EPs. Los datos (presskit.mixes)
+          no se tocan, así que el PDF se sigue generando igual. */}
+      {presskit.mixes.length > 0 && (() => {
+        const valid = presskit.mixes.filter((m) => m.title?.trim() && m.url?.trim());
+        const scReleases: NationalRelease[] = valid
+          .filter((m) => isSoundcloudUrl(ensureAbsoluteUrl(m.url)))
+          .map((m) => ({
+            title: m.title,
+            url: ensureAbsoluteUrl(m.url),
+            artistName: presskit.artist_name,
+            slug,
+            releasedAt: m.released_at ?? null,
+            downloadable: false, // se lee en vivo por track
+            downloadUrl: null,
+            isEp: m.is_ep === true || /\/sets\//i.test(m.url),
+            kind: m.type === 'set' ? 'set' : 'release',
+          }));
+        const others = valid.filter((m) => !isSoundcloudUrl(ensureAbsoluteUrl(m.url)));
+        return (
+          <section className="border-b-4 border-black p-6 lg:p-12">
+            <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
+            {scReleases.length > 0 && <ReleasesPlayer releases={scReleases} hideArtistFilter />}
+            {others.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                {others.map((mix, i) => (
+                  <a
+                    key={i}
+                    href={ensureAbsoluteUrl(mix.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white brutalist-border brutalist-shadow p-6 hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] transition-all block"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-xl font-black uppercase">{mix.title}</h3>
+                      {mix.type && (
+                        <span className={`mono text-[10px] font-black uppercase px-2 py-0.5 ${mix.type === 'release' ? 'bg-[#ff0055] text-white' : 'bg-black text-white'}`}>
+                          {mix.type}
+                        </span>
+                      )}
+                    </div>
+                    <span className="mono text-xs font-bold uppercase opacity-60">{mix.platform}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* Links */}
       {presskit.links?.length > 0 && (
