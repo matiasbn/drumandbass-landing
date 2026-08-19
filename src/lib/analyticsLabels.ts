@@ -26,6 +26,7 @@ export const EVENT_LABELS: Record<string, string> = {
   presskit_publish: 'Presskit publicado/despublicado',
   presskit_view: 'Vistas de presskit',
   presskit_download: 'Descargas de presskit (PDF)',
+  presskit_claim: 'Presskits reclamados por el DJ (creados por admin)',
   release_publish: 'Releases publicados (DJ)',
   release_click: 'Clic a un release',
   release_play: 'Reproducciones de release',
@@ -80,6 +81,7 @@ export const EVENT_TIPS: Record<string, string> = {
   presskit_publish: 'Un DJ publicó o despublicó su presskit.',
   presskit_view: 'Alguien vio un presskit público.',
   presskit_download: 'Alguien descargó un presskit en PDF.',
+  presskit_claim: 'Un DJ reclamó y publicó un presskit que le había armado un admin.',
   release_publish: 'Un DJ marcó un release para publicarlo en Releases Nacionales.',
   release_click: 'Un visitante hizo clic en un release (hacia SoundCloud).',
   release_play: 'Un visitante reprodujo un release en el reproductor de Releases Nacionales.',
@@ -142,6 +144,7 @@ export const HIDDEN_ACTIONS = [
   'presskit_created',
   'presskit_saved',
   'presskit_publish',
+  'presskit_claim',
   'logo_download',
   // SUBIDÓN: señales de alto volumen o de tuning fino — se acumulan en GA
   // por si hay que mirarlas (mover a CORE_ACTIONS para mostrarlas).
