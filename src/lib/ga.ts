@@ -91,6 +91,7 @@ export const SITE_EVENT_NAMES = [
   'presskit_publish',
   'presskit_view',
   'presskit_download',
+  'presskit_claim',
   'release_publish',
   'release_click',
   'release_play',

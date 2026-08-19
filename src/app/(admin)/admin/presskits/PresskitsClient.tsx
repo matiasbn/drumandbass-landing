@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/src/components/admin/AdminAuthContext';
+import PendingPresskitsList from './PendingPresskitsList';
 import { PresskitMix, PresskitSocial, PresskitLink } from '@/src/types/presskit';
 import { socialToHandle, socialToUrl } from '@/src/lib/socials';
 import { parseRider, setupRows, riderIsEmpty } from '@/src/lib/rider';
@@ -277,6 +278,9 @@ export default function PresskitsClient() {
           </h1>
         </div>
       </div>
+
+      {/* Pendientes de aprobación (creados por admin para un DJ) */}
+      <PendingPresskitsList />
 
       {/* Table */}
       <div className="brutalist-border bg-white p-6 brutalist-shadow">
