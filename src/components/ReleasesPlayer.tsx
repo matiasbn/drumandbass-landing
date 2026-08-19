@@ -81,20 +81,54 @@ function buildQueue(len: number, shuffle: boolean, curIdx: number): { queue: num
 // SoundCloud), no con el widget. Da la mejor UX: controles nativos del celular
 // (Media Session), auto-avance, shuffle, sin gate. Es frágil por depender de la
 // web de SoundCloud; si cambia, se reimplementa.
-export default function ReleasesPlayer({ releases }: { releases: NationalRelease[] }) {
+export default function ReleasesPlayer({
+  releases,
+  hideArtistFilter = false,
+}: {
+  releases: NationalRelease[];
+  // En un presskit (un solo artista) el filtro por artista sobra: se oculta.
+  hideArtistFilter?: boolean;
+}) {
   const [filterArtist, setFilterArtist] = useState<string>('');
+  // Filtro por tipo (release/set). Solo tiene sentido si conviven ambos tipos
+  // (presskit); en /releases todos son 'release' y el filtro no se muestra.
+  const [filterKind, setFilterKind] = useState<'' | 'set' | 'release'>('');
+  const hasBothKinds = useMemo(
+    () => releases.some((r) => r.kind === 'set') && releases.some((r) => r.kind === 'release'),
+    [releases]
+  );
   const artists = useMemo(
     () => Array.from(new Set(releases.map((r) => r.artistName))).sort((a, b) => a.localeCompare(b, 'es')),
     [releases]
   );
   const view = useMemo(
-    () => (filterArtist ? releases.filter((r) => r.artistName === filterArtist) : releases),
-    [releases, filterArtist]
+    () =>
+      releases.filter(
+        (r) => (!filterArtist || r.artistName === filterArtist) && (!filterKind || r.kind === filterKind)
+      ),
+    [releases, filterArtist, filterKind]
   );
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [epTracks, setEpTracks] = useState<Record<string, SetTrack[] | 'loading' | 'error'>>({});
   const [dl, setDl] = useState<Record<string, DlInfo>>({});
+
+  // Conteos del filtro por tipo a nivel de TRACK: un EP suma sus tracks (una vez
+  // precargada su tracklist), un tema suelto suma 1. Arranca en 1 por EP y crece
+  // al cargarse las tracklists (se precargan en mount).
+  const kindCounts = useMemo(() => {
+    const n = (r: NationalRelease) => {
+      const t = epTracks[r.url];
+      return r.isEp && Array.isArray(t) ? t.length : 1;
+    };
+    let release = 0;
+    let set = 0;
+    for (const r of releases) {
+      if (r.kind === 'set') set += n(r);
+      else release += n(r);
+    }
+    return { release, set, all: release + set };
+  }, [releases, epTracks]);
 
   const [shuffle, setShuffle] = useState(false);
   const [onlyDl, setOnlyDl] = useState(false); // filtro (aparte del de artista): solo descargables
@@ -475,30 +509,59 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
         onLoadedMetadata={onLoadedMetadata}
       />
 
-      {/* ── Filtro por artista ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="mono text-[11px] font-black uppercase opacity-60 mr-1">Artista:</span>
-        <button
-          onClick={() => setFilterArtist('')}
-          className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border ${filterArtist === '' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'}`}
-        >
-          Todos ({releases.length})
-        </button>
-        {artists.map((a) => {
-          const active = filterArtist === a;
-          return (
-            <button
-              key={a}
-              onClick={() => setFilterArtist(active ? '' : a)}
-              aria-pressed={active}
-              className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border inline-flex items-center gap-1 ${active ? 'bg-[#FF5500] text-white' : 'bg-white hover:bg-gray-100'}`}
-            >
-              {a}
-              {active && <span aria-hidden className="opacity-80">×</span>}
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Filtro por artista (oculto en presskit de un solo artista) ────── */}
+      {!hideArtistFilter && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="mono text-[11px] font-black uppercase opacity-60 mr-1">Artista:</span>
+          <button
+            onClick={() => setFilterArtist('')}
+            className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border ${filterArtist === '' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'}`}
+          >
+            {/* Conteo por track (EPs expandidos) para coordinar con "Próximos". */}
+            Todos ({kindCounts.all})
+          </button>
+          {artists.map((a) => {
+            const active = filterArtist === a;
+            return (
+              <button
+                key={a}
+                onClick={() => setFilterArtist(active ? '' : a)}
+                aria-pressed={active}
+                className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border inline-flex items-center gap-1 ${active ? 'bg-[#FF5500] text-white' : 'bg-white hover:bg-gray-100'}`}
+              >
+                {a}
+                {active && <span aria-hidden className="opacity-80">×</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Filtro por tipo (release/set) — solo si conviven ambos ────────── */}
+      {hasBothKinds && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="mono text-[11px] font-black uppercase opacity-60 mr-1">Tipo:</span>
+          {([
+            { k: '', label: `Todos (${kindCounts.all})` },
+            { k: 'release', label: `Releases (${kindCounts.release})` },
+            { k: 'set', label: `Sets (${kindCounts.set})` },
+          ] as const).map(({ k, label }) => {
+            const active = filterKind === k;
+            return (
+              <button
+                key={k || 'all'}
+                onClick={() => setFilterKind(k)}
+                aria-pressed={active}
+                className={`mono text-[11px] font-black uppercase px-2.5 py-1 brutalist-border ${
+                  active ? 'bg-[#0000ff] text-white' : 'bg-white hover:bg-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Filtro por descarga (aparte del de artista) ───────────────────── */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -548,8 +611,15 @@ export default function ReleasesPlayer({ releases }: { releases: NationalRelease
                     </button>
                     <div className="flex-1 min-w-0 p-3">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        {r.isEp ? (
-                          <span className="mono text-[9px] font-black uppercase bg-[#7C3AED] text-white px-1.5 py-0.5">EP</span>
+                        {/* El tipo declarado por el DJ (kind) manda: un /sets/ marcado
+                            como 'set' es un SET, no un EP. Sin kind (p.ej. /releases)
+                            cae al comportamiento por isEp. */}
+                        {r.kind === 'set' ? (
+                          <span className={`mono text-[9px] font-black uppercase px-1.5 py-0.5 ${isCurrentSingle ? 'bg-white text-black' : 'bg-black text-white'}`}>SET</span>
+                        ) : r.isEp ? (
+                          <span className="mono text-[9px] font-black uppercase bg-[#7C3AED] text-white px-1.5 py-0.5">
+                            EP{Array.isArray(tracks) ? ` · ${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}` : ''}
+                          </span>
                         ) : (
                           <span className={`mono text-[9px] font-black uppercase px-1.5 py-0.5 ${isCurrentSingle ? 'bg-black text-white' : 'bg-[#FF5500] text-white'}`}>RELEASE</span>
                         )}
