@@ -1,39 +1,13 @@
 import { notFound } from 'next/navigation';
 import { createSupabaseServer } from '@/src/lib/supabase-server';
 import { verifyAdmin } from '@/src/lib/authz';
-import type { Presskit } from '@/src/types/presskit';
+import { pendingToPresskit } from '@/src/types/pendingPresskit';
 import type { PendingPresskitData } from '@/src/types/pendingPresskit';
 import PresskitView from '@/src/components/pk/PresskitView';
 
 export const dynamic = 'force-dynamic';
 
 type PageProps = { params: Promise<{ id: string }> };
-
-// Convierte la data que armó el admin (pending_presskits.data) al shape Presskit
-// para renderizarla con el MISMO componente del presskit público.
-function toPresskit(data: PendingPresskitData): Presskit {
-  return {
-    id: 'preview',
-    user_id: 'preview',
-    artist_name: data.artist_name || '',
-    real_name: data.real_name ?? null,
-    city: data.city ?? null,
-    country: data.country ?? null,
-    genres: data.genres || [],
-    bio: data.bio ?? null,
-    custom_sections: data.custom_sections || [],
-    rider: data.rider ?? null,
-    photo_url: null,
-    photo_urls: data.photo_urls || [],
-    logo_urls: data.logo_urls || [],
-    socials: data.socials || [],
-    mixes: data.mixes || [],
-    links: data.links || [],
-    published: false,
-    created_at: '',
-    updated_at: '',
-  };
-}
 
 export default async function PresskitPreviewPage({ params }: PageProps) {
   const { id } = await params;
@@ -51,7 +25,7 @@ export default async function PresskitPreviewPage({ params }: PageProps) {
 
   if (!pending) notFound();
 
-  const presskit = toPresskit(pending.data as PendingPresskitData);
+  const presskit = pendingToPresskit(pending.data as PendingPresskitData);
   const label =
     pending.status === 'claimed'
       ? 'Ya reclamado por el DJ'

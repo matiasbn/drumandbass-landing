@@ -3,23 +3,18 @@
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/src/lib/supabase';
-import { RiGoogleFill, RiCheckLine, RiErrorWarningLine, RiLoader4Line } from '@remixicon/react';
+import { RiGoogleFill, RiCheckLine, RiLoader4Line } from '@remixicon/react';
 import { event } from '@/src/lib/gtag';
+import PresskitView from '@/src/components/pk/PresskitView';
+import { pendingToPresskit } from '@/src/types/pendingPresskit';
+import type { PendingPresskitData } from '@/src/types/pendingPresskit';
 
 interface PendingPreview {
   email: string;
   slug: string;
   artist_name: string | null;
   status: string;
-  data: {
-    artist_name?: string;
-    city?: string | null;
-    country?: string | null;
-    genres?: string[];
-    bio?: string | null;
-    mixes?: { title: string }[];
-    photo_urls?: string[];
-  };
+  data: Partial<PendingPresskitData>;
 }
 
 function ClaimInner() {
@@ -118,88 +113,49 @@ function ClaimInner() {
     return <Centered title="Ya fue reclamado" body="Este presskit ya se publicó anteriormente." />;
   }
 
-  const d = pending.data || {};
-  const artist = d.artist_name || pending.artist_name || 'Tu presskit';
+  const data = (pending.data || {}) as Partial<PendingPresskitData>;
+  const artist = data.artist_name || pending.artist_name || 'Tu presskit';
   const emailMatches = userEmail && userEmail === pending.email.toLowerCase();
-  const cover = d.photo_urls?.[0] || null;
+  const presskit = pendingToPresskit(data);
 
   return (
-    <main className="min-h-[70vh] max-w-2xl mx-auto p-6 lg:p-10">
-      <p className="mono text-xs font-black uppercase text-[#ff0055] mb-2">Presskit pendiente de aprobación</p>
-      <h1 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none mb-6">{artist}</h1>
-
-      {/* Preview de lo que armó el admin */}
-      <div className="brutalist-border brutalist-shadow p-5 mb-6 flex gap-4 items-start bg-white">
-        {cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt={artist} className="w-24 h-24 object-cover brutalist-border shrink-0" />
-        )}
-        <div className="min-w-0">
-          {(d.city || d.country) && (
-            <p className="mono text-xs font-bold uppercase text-gray-500">{[d.city, d.country].filter(Boolean).join(', ')}</p>
-          )}
-          {d.genres?.length ? (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {d.genres.slice(0, 6).map((g) => (
-                <span key={g} className="mono text-[10px] font-black uppercase bg-black text-white px-2 py-0.5">{g}</span>
-              ))}
-            </div>
-          ) : null}
-          {d.bio && <p className="text-sm mt-3 line-clamp-3 text-gray-700">{d.bio}</p>}
-          {d.mixes?.length ? (
-            <p className="mono text-[11px] font-bold uppercase text-gray-500 mt-3">{d.mixes.length} sets & releases</p>
-          ) : null}
+    <main className="flex-1">
+      {/* Barra fija: estado + acción de publicar. Debajo, el presskit COMPLETO
+          tal como quedará publicado. */}
+      <div className="sticky top-0 z-50 bg-[#ff0055] text-white border-b-4 border-black px-4 py-3">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+          <div className="min-w-0">
+            <p className="mono text-xs font-black uppercase truncate">{artist} · presskit pendiente</p>
+            <p className="mono text-[11px] opacity-90">Así se verá publicado. Es para {pending.email}.</p>
+          </div>
+          <div className="shrink-0">
+            {!userEmail ? (
+              <button onClick={signIn} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-4 py-2.5 mono text-xs font-black uppercase hover:bg-white hover:text-black cursor-pointer">
+                <RiGoogleFill className="w-4 h-4" /> Iniciar sesión para publicar
+              </button>
+            ) : emailMatches ? (
+              <button onClick={claim} disabled={claiming} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-4 py-2.5 mono text-xs font-black uppercase hover:bg-white hover:text-black disabled:opacity-60 cursor-pointer">
+                {claiming ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiCheckLine className="w-4 h-4" />}
+                {claiming ? 'Publicando…' : 'Aceptar y publicar'}
+              </button>
+            ) : (
+              <button onClick={async () => { await supabase.auth.signOut(); await signIn(); }} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-4 py-2.5 mono text-xs font-black uppercase hover:bg-white hover:text-black cursor-pointer">
+                <RiGoogleFill className="w-4 h-4" /> Cambiar de cuenta
+              </button>
+            )}
+          </div>
         </div>
+        {error && (
+          <p className="max-w-5xl mx-auto mono text-[11px] font-bold uppercase mt-2 bg-black/30 px-2 py-1">{error}</p>
+        )}
+        {userEmail && !emailMatches && (
+          <p className="max-w-5xl mx-auto mono text-[11px] mt-1 opacity-90">
+            Iniciaste sesión como {userEmail}, pero la invitación es para {pending.email}. Cambia de cuenta para publicar.
+          </p>
+        )}
       </div>
 
-      <p className="text-sm text-gray-700 mb-4">
-        Este presskit es para <strong>{pending.email}</strong>. Al confirmarlo con tu cuenta de Google queda publicado; después puedes editarlo cuando quieras.
-      </p>
-
-      {error && (
-        <div className="flex items-start gap-2 brutalist-border border-red-600 bg-red-50 p-3 mb-4">
-          <RiErrorWarningLine className="w-5 h-5 text-red-600 shrink-0" />
-          <p className="mono text-xs font-bold uppercase text-red-700">{error}</p>
-        </div>
-      )}
-
-      {!userEmail ? (
-        <button
-          onClick={signIn}
-          className="w-full inline-flex items-center justify-center gap-2 brutalist-border bg-black text-white px-6 py-4 mono text-sm font-black uppercase hover:bg-[#ff0055] cursor-pointer"
-        >
-          <RiGoogleFill className="w-5 h-5" />
-          Iniciar sesión con Google para confirmar
-        </button>
-      ) : emailMatches ? (
-        <button
-          onClick={claim}
-          disabled={claiming}
-          className="w-full inline-flex items-center justify-center gap-2 brutalist-border bg-[#ff0055] text-white px-6 py-4 mono text-sm font-black uppercase hover:bg-black disabled:opacity-60 cursor-pointer"
-        >
-          {claiming ? <RiLoader4Line className="w-5 h-5 animate-spin" /> : <RiCheckLine className="w-5 h-5" />}
-          {claiming ? 'Publicando…' : 'Aceptar y publicar mi presskit'}
-        </button>
-      ) : (
-        <div>
-          <div className="flex items-start gap-2 brutalist-border border-yellow-500 bg-yellow-50 p-3 mb-3">
-            <RiErrorWarningLine className="w-5 h-5 text-yellow-600 shrink-0" />
-            <p className="mono text-xs font-bold uppercase text-yellow-800">
-              Iniciaste sesión como {userEmail}, pero la invitación es para {pending.email}. Cambia de cuenta para confirmar.
-            </p>
-          </div>
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut();
-              await signIn();
-            }}
-            className="w-full inline-flex items-center justify-center gap-2 brutalist-border bg-black text-white px-6 py-4 mono text-sm font-black uppercase hover:bg-[#ff0055] cursor-pointer"
-          >
-            <RiGoogleFill className="w-5 h-5" />
-            Cambiar de cuenta
-          </button>
-        </div>
-      )}
+      <PresskitView presskit={presskit} slug={pending.slug} preview />
     </main>
   );
 }
