@@ -5,6 +5,7 @@
 // nature (depends on SoundCloud's HTML), so callers must tolerate a null return.
 
 import { PresskitMix } from '@/src/types/presskit';
+import { isBandcampUrl } from '@/src/lib/bandcamp';
 
 const SC_DESKTOP_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -199,11 +200,16 @@ export async function enrichFeaturedReleaseDates(
 ): Promise<PresskitMix[]> {
   return Promise.all(
     mixes.map(async (m) => {
-      const isFeaturedScRelease =
-        !!m.featured && m.type === 'release' && isSoundcloudUrl(m.url);
-      if (!isFeaturedScRelease) {
+      // Un release puede publicarse en Releases Nacionales si es de SoundCloud o
+      // de Bandcamp (el reproductor de /releases soporta ambos).
+      const isFeaturedRelease =
+        !!m.featured && m.type === 'release' && (isSoundcloudUrl(m.url) || isBandcampUrl(m.url));
+      if (!isFeaturedRelease) {
         return { ...m, featured: false };
       }
+      // La fecha se scrapea solo de SoundCloud; para Bandcamp conservamos el
+      // featured tal cual (released_at/is_ep vienen del import de Bandcamp).
+      if (!isSoundcloudUrl(m.url)) return m;
       const isShortLink = /on\.soundcloud\.com/i.test(m.url);
       const needs =
         !m.released_at ||
