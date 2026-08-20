@@ -264,6 +264,82 @@ async function getClientId(force = false): Promise<string | null> {
   return cachedClientId;
 }
 
+// Lista TODA la discografía de un usuario vía la API de SoundCloud (api-v2) con el
+// client_id scrapeado. El HTML móvil solo embebe ~10 tracks (los recientes); la
+// API pagina y trae todos. Devuelve tracks sueltos + playlists (EPs/sets). null si
+// no se pudo (client_id/rotación) → el caller cae al scrape del HTML.
+export interface SoundcloudUserTrack {
+  id: string;
+  title: string;
+  url: string;
+}
+
+const SC_API = 'https://api-v2.soundcloud.com';
+
+async function resolveScUserId(profileUrl: string, cid: string): Promise<number | 'refresh' | null> {
+  const r = await fetch(`${SC_API}/resolve?url=${encodeURIComponent(profileUrl)}&client_id=${cid}`, {
+    headers: { 'User-Agent': SC_DESKTOP_UA },
+  });
+  if (r.status === 401 || r.status === 403) return 'refresh';
+  if (!r.ok) return null;
+  const u = (await r.json()) as { id?: number; kind?: string };
+  return u?.kind === 'user' && typeof u.id === 'number' ? u.id : null;
+}
+
+async function fetchScCollection(
+  path: string,
+  cid: string
+): Promise<{ title?: string; permalink_url?: string }[]> {
+  const out: { title?: string; permalink_url?: string }[] = [];
+  let next: string | null = `${SC_API}${path}?client_id=${cid}&limit=200&linked_partitioning=1`;
+  let guard = 0;
+  while (next && guard++ < 12) {
+    const r: Response = await fetch(next, { headers: { 'User-Agent': SC_DESKTOP_UA } });
+    if (!r.ok) break;
+    const data = (await r.json()) as {
+      collection?: { title?: string; permalink_url?: string }[];
+      next_href?: string | null;
+    };
+    if (data.collection) out.push(...data.collection);
+    next = data.next_href
+      ? data.next_href.includes('client_id=')
+        ? data.next_href
+        : `${data.next_href}&client_id=${cid}`
+      : null;
+  }
+  return out;
+}
+
+export async function fetchSoundcloudUserTracks(profileUrl: string): Promise<SoundcloudUserTrack[] | null> {
+  let cid = await getClientId();
+  if (!cid) return null;
+  let userId = await resolveScUserId(profileUrl, cid);
+  if (userId === 'refresh') {
+    cid = await getClientId(true);
+    if (!cid) return null;
+    userId = await resolveScUserId(profileUrl, cid);
+  }
+  if (typeof userId !== 'number') return null;
+
+  try {
+    const [tracks, playlists] = await Promise.all([
+      fetchScCollection(`/users/${userId}/tracks`, cid),
+      fetchScCollection(`/users/${userId}/playlists`, cid),
+    ]);
+    const out: SoundcloudUserTrack[] = [];
+    const seen = new Set<string>();
+    for (const t of [...tracks, ...playlists]) {
+      const url = t.permalink_url;
+      if (!url || !t.title || seen.has(url)) continue;
+      seen.add(url);
+      out.push({ id: url.split('/').filter(Boolean).slice(-1)[0] || url, title: t.title, url });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 export interface SoundcloudStream {
   streamUrl: string;
   protocol: 'progressive' | 'hls';

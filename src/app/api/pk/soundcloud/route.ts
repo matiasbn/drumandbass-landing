@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchSoundcloudUserTracks } from '@/src/lib/soundcloud';
 
 const SC_MOBILE_HEADERS = {
   Accept: 'text/html',
@@ -115,25 +116,32 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Fetch the mobile version of the profile — it returns HTML with track data
-    const res = await fetch(`https://m.soundcloud.com/${username}`, {
-      headers: SC_MOBILE_HEADERS,
-    });
+    // Fuente PRIMARIA: la API de SoundCloud (api-v2) con el client_id scrapeado,
+    // que PAGINA y trae TODA la discografía. El HTML móvil solo embebe ~10 tracks
+    // (los recientes), así que perfiles grandes se quedaban cortos.
+    const apiTracks = await fetchSoundcloudUserTracks(url);
 
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: 'No se pudo acceder al perfil de SoundCloud' },
-        { status: 502 }
-      );
+    // Fuente SECUNDARIA (fallback + robustez): scrape del HTML móvil (JSON-LD +
+    // anchors aria-label). Cubre si la API falla (client_id rotado) y aporta algo
+    // que la API no liste.
+    let htmlTracks: ScTrack[] = [];
+    try {
+      const res = await fetch(`https://m.soundcloud.com/${username}`, { headers: SC_MOBILE_HEADERS });
+      if (res.ok) {
+        const html = await res.text();
+        htmlTracks = [...extractJsonLdTracks(html, username), ...extractAriaTracks(html, username)];
+      }
+    } catch {
+      // ignoramos: la API suele bastar
     }
 
-    const html = await res.text();
+    if ((!apiTracks || apiTracks.length === 0) && htmlTracks.length === 0) {
+      return NextResponse.json({ error: 'No se pudo acceder al perfil de SoundCloud' }, { status: 502 });
+    }
 
-    // Mergeamos JSON-LD (primario, más completo) + anchors aria-label (aporta
-    // playlists/EPs), deduplicado por slug. El JSON-LD va primero para preservar
-    // su orden (recientes primero).
+    // Merge: API primero (completa), luego HTML, deduplicado por slug.
     const bySlug = new Map<string, ScTrack>();
-    for (const t of [...extractJsonLdTracks(html, username), ...extractAriaTracks(html, username)]) {
+    for (const t of [...(apiTracks || []), ...htmlTracks]) {
       if (!bySlug.has(t.id)) bySlug.set(t.id, t);
     }
 
