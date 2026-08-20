@@ -19,6 +19,13 @@ export const PLATFORM_BASE_URLS: Record<string, string> = {
 export function socialToHandle(platform: string, value: string): string {
   const t = (value || '').trim();
   if (!t) return '';
+  // Bandcamp usa SUBDOMINIO (https://<handle>.bandcamp.com), no un path. El handle
+  // es el subdominio; aceptamos URL completa o handle pelado.
+  if (platform === 'Bandcamp') {
+    const m = t.match(/https?:\/\/([^./]+)\.bandcamp\.com/i);
+    if (m) return m[1];
+    return t.replace(/^@/, '').replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.bandcamp\.com.*$/i, '');
+  }
   const base = PLATFORM_BASE_URLS[platform];
   let h: string;
   if (base && base !== 'https://' && t.startsWith(base)) {
@@ -45,6 +52,11 @@ export function socialToUrl(platform: string, value: string): string {
   const t = (value || '').trim();
   if (!t) return '';
   if (/^https?:\/\//i.test(t)) return t;
+  // Bandcamp: subdominio. "djfatpablo" → https://djfatpablo.bandcamp.com
+  if (platform === 'Bandcamp') {
+    const handle = t.replace(/^@/, '').replace(/\.bandcamp\.com.*$/i, '').replace(/\/+$/, '');
+    return `https://${handle}.bandcamp.com`;
+  }
   const base = PLATFORM_BASE_URLS[platform];
   return base ? `${base}${t.replace(/^@/, '')}` : t;
 }

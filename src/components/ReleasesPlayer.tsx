@@ -9,6 +9,7 @@ import {
   RiSkipForwardFill,
   RiShuffleLine,
   RiSoundcloudLine,
+  RiAlbumFill,
   RiDownloadLine,
   RiArrowDownSLine,
 } from '@remixicon/react';
@@ -26,6 +27,20 @@ function downloadHref(downloadUrl: string | null, fallbackScUrl: string): string
 }
 const sameUrl = (a: string, b: string) => a.split('?')[0] === b.split('?')[0];
 const bigArt = (art: string | null) => (art ? art.replace('-large', '-t500x500') : null);
+// Plataforma por URL → elige los endpoints correctos (SoundCloud vs Bandcamp).
+const isBc = (url: string) => /bandcamp\.com/i.test(url);
+const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
+const setApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/set' : '/api/pk/soundcloud/set');
+const downloadApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/download' : '/api/pk/soundcloud/download');
+// Marca/branding por plataforma (ícono, color, nombre, URL de "abrir").
+const platformColor = (url: string) => (isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isBc(url) ? 'Bandcamp' : 'SoundCloud');
+// Los tracks de un álbum de Bandcamp usan una URL sintética (álbum#i); para el
+// enlace "abrir" limpiamos el fragmento y apuntamos al álbum real.
+const openUrl = (url: string) => (isBc(url) ? url.split('#')[0] : url);
+function PlatformIcon({ url, className, style }: { url: string; className?: string; style?: React.CSSProperties }) {
+  return isBc(url) ? <RiAlbumFill className={className} style={style} /> : <RiSoundcloudLine className={className} style={style} />;
+}
 
 interface SetTrack {
   title: string;
@@ -33,6 +48,8 @@ interface SetTrack {
   downloadable: boolean;
   downloadUrl: string | null;
   durationMs: number | null;
+  streamUrl?: string | null; // Bandcamp: stream ya resuelto (no tienen URL propia)
+  artwork?: string | null; // Bandcamp: carátula del álbum
 }
 type DlInfo = { downloadable: boolean; downloadUrl: string | null; canonicalUrl?: string | null };
 interface Stream {
@@ -209,10 +226,26 @@ export default function ReleasesPlayer({
   const loadEp = useCallback(async (url: string) => {
     setEpTracks((p) => (p[url] ? p : { ...p, [url]: 'loading' }));
     try {
-      const res = await fetch(`/api/pk/soundcloud/set?url=${encodeURIComponent(url)}`);
+      const res = await fetch(`${setApi(url)}?url=${encodeURIComponent(url)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setEpTracks((p) => ({ ...p, [url]: (data.tracks as SetTrack[]) || [] }));
+      const tracks = (data.tracks as SetTrack[]) || [];
+      // Bandcamp: los tracks del álbum traen el stream resuelto → pre-cacheamos
+      // para que el player reproduzca directo (no tienen URL propia que resolver).
+      for (const t of tracks) {
+        if (t.streamUrl && !streamCache.current[t.url]) {
+          streamCache.current[t.url] = {
+            streamUrl: t.streamUrl,
+            protocol: 'progressive',
+            title: t.title,
+            artist: '',
+            artwork: t.artwork ?? null,
+            durationMs: t.durationMs,
+            permalinkUrl: url,
+          };
+        }
+      }
+      setEpTracks((p) => ({ ...p, [url]: tracks }));
     } catch {
       setEpTracks((p) => ({ ...p, [url]: 'error' }));
     }
@@ -230,7 +263,7 @@ export default function ReleasesPlayer({
       const entries = await Promise.all(
         releases.map(async (r) => {
           try {
-            const res = await fetch(`/api/pk/soundcloud/download?url=${encodeURIComponent(r.url)}`);
+            const res = await fetch(`${downloadApi(r.url)}?url=${encodeURIComponent(r.url)}`);
             if (!res.ok) return null;
             return [r.url, (await res.json()) as DlInfo] as const;
           } catch {
@@ -261,7 +294,7 @@ export default function ReleasesPlayer({
   const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
     if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
     try {
-      const res = await fetch(`/api/pk/soundcloud/stream?url=${encodeURIComponent(trackUrl)}`);
+      const res = await fetch(`${streamApi(trackUrl)}?url=${encodeURIComponent(trackUrl)}`);
       if (!res.ok) return null;
       const s = (await res.json()) as Stream;
       streamCache.current[trackUrl] = s;
@@ -300,8 +333,9 @@ export default function ReleasesPlayer({
       loadedUrlRef.current = item.url;
       a.src = s.streamUrl;
       void a.play().catch(() => {});
-      setNowPlaying({ title: s.title || item.title, artist: s.artist || item.artist, artwork: s.artwork, permalink });
-      updateMediaSession(s);
+      const artist = s.artist || item.artist; // Bandcamp no trae artista → usa el del release
+      setNowPlaying({ title: s.title || item.title, artist, artwork: s.artwork, permalink });
+      updateMediaSession({ ...s, artist });
     },
     [updateMediaSession]
   );
@@ -642,14 +676,15 @@ export default function ReleasesPlayer({
                         )}
                       </div>
                       <a
-                        href={r.url}
+                        href={openUrl(r.url)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={() => event('release_open_soundcloud', { release_title: r.title, artist: r.artistName })}
+                        aria-label={`Abrir ${r.title} en ${platformName(r.url)}`}
+                        onClick={() => event('release_open_soundcloud', { release_title: r.title, artist: r.artistName, platform: platformName(r.url) })}
                         className="inline-flex items-start gap-1 text-sm font-black uppercase leading-tight break-words hover:underline"
                       >
                         {r.title}
-                        <RiSoundcloudLine className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${isCurrentSingle ? 'text-white' : 'text-[#FF5500]'}`} />
+                        <PlatformIcon url={r.url} className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: isCurrentSingle ? '#fff' : platformColor(r.url) }} />
                       </a>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
                         <span className={`mono text-[11px] font-bold uppercase truncate ${isCurrentSingle ? 'opacity-90' : 'opacity-70'}`}>
@@ -699,8 +734,8 @@ export default function ReleasesPlayer({
                                     <RiDownloadLine className="w-3.5 h-3.5" />
                                   </a>
                                 )}
-                                <a href={t.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${t.title} en SoundCloud`} className={`shrink-0 p-1 hover:opacity-70 ${isThis ? 'text-white' : 'text-[#FF5500]'}`}>
-                                  <RiSoundcloudLine className="w-3.5 h-3.5" />
+                                <a href={openUrl(t.url)} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${t.title} en ${platformName(t.url)}`} className="shrink-0 p-1 hover:opacity-70" style={{ color: isThis ? '#fff' : platformColor(t.url) }}>
+                                  <PlatformIcon url={t.url} className="w-3.5 h-3.5" />
                                 </a>
                               </li>
                             );
@@ -766,8 +801,8 @@ export default function ReleasesPlayer({
               </a>
             )}
             {nowPlaying?.permalink && (
-              <a href={nowPlaying.permalink} target="_blank" rel="noopener noreferrer" aria-label="Abrir en SoundCloud" className="p-1.5 hover:text-[#FF5500] shrink-0">
-                <RiSoundcloudLine className="w-5 h-5" />
+              <a href={openUrl(nowPlaying.permalink)} target="_blank" rel="noopener noreferrer" aria-label={`Abrir en ${platformName(nowPlaying.permalink)}`} className="p-1.5 hover:opacity-70 shrink-0" style={{ color: platformColor(nowPlaying.permalink) }}>
+                <PlatformIcon url={nowPlaying.permalink} className="w-5 h-5" />
               </a>
             )}
           </div>
@@ -791,7 +826,7 @@ export default function ReleasesPlayer({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={artwork} alt="" className="w-full h-full object-cover" />
             ) : (
-              <RiSoundcloudLine className="w-16 h-16 text-[#FF5500] opacity-40" />
+              <PlatformIcon url={nowPlaying?.permalink || ''} className="w-16 h-16 opacity-40" style={{ color: platformColor(nowPlaying?.permalink || '') }} />
             )}
             {nowPlaying && !playbackError && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
@@ -805,16 +840,17 @@ export default function ReleasesPlayer({
                 <p className="mono text-xs uppercase opacity-80 leading-relaxed">
                   No se pudo reproducir «{playbackError.title}» aquí.
                   <br />
-                  Escúchalo en SoundCloud.
+                  Escúchalo en {platformName(playbackError.permalink)}.
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <a
-                    href={playbackError.permalink}
+                    href={openUrl(playbackError.permalink)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mono text-xs font-black uppercase bg-[#FF5500] text-black px-3 py-1.5 inline-flex items-center gap-1 hover:bg-white"
+                    className="mono text-xs font-black uppercase text-black px-3 py-1.5 inline-flex items-center gap-1 hover:bg-white"
+                    style={{ backgroundColor: platformColor(playbackError.permalink) }}
                   >
-                    <RiSoundcloudLine className="w-4 h-4" /> Abrir en SoundCloud
+                    <PlatformIcon url={playbackError.permalink} className="w-4 h-4" /> Abrir en {platformName(playbackError.permalink)}
                   </a>
                   <button
                     onClick={() => playNext()}
