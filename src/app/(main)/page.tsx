@@ -28,7 +28,12 @@ export const metadata: Metadata = {
   },
 };
 
-export const revalidate = 3600;
+// 60s: un capítulo nuevo de El Sótano (que no tiene hook de revalidación como los
+// eventos) aparece en ~1 min. Con ISR el home se regenera como MÁXIMO 1 vez por
+// minuto sin importar el tráfico, así que el costo (1 llamada a YouTube por
+// regeneración, ~1440/día vs. cuota de 10k) es holgado. Los eventos igual se
+// revalidan al instante vía revalidatePath al editar en el admin.
+export const revalidate = 60;
 
 const Home = async () => {
   const [cmsEvents, sotanoVideos] = await Promise.all([
