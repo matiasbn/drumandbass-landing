@@ -470,7 +470,9 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     if (sel) await playUrl(sel.url);
   };
 
-  const fetchBcTracks = async () => {
+  // flat=true → lista los tracks individuales (expande álbumes) para encontrar un
+  // track que vive dentro de un álbum. Es más lento (resuelve cada álbum).
+  const fetchBcTracks = async (flat = false) => {
     const manual = bcRef.current?.value.trim();
     const social = socials.find((s) => s.platform === 'Bandcamp' && s.url.trim())?.url;
     const url = manual || (social ? socialToUrl('Bandcamp', social) : '');
@@ -487,7 +489,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     setPlaylistBlocked(false);
     setScDropdownOpen(true);
     try {
-      const res = await fetch(`/api/pk/bandcamp?url=${encodeURIComponent(url)}`);
+      const res = await fetch(`/api/pk/bandcamp?url=${encodeURIComponent(url)}${flat ? '&tracks=1' : ''}`);
       const data = await res.json();
       if (!res.ok) {
         setScError(data.error || 'Error al cargar la discografía');
@@ -685,10 +687,13 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
             {scLoading ? '…' : 'Traer de SoundCloud'}
           </button>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <input ref={bcRef} placeholder="URL Bandcamp del artista (ej. https://artista.bandcamp.com)" className={`${fieldBase} flex-1 min-w-0`} />
-          <button onClick={fetchBcTracks} disabled={scLoading} className="mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1da0c3] text-white disabled:opacity-50 whitespace-nowrap">
+          <button onClick={() => fetchBcTracks(false)} disabled={scLoading} className="mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1da0c3] text-white disabled:opacity-50 whitespace-nowrap">
             {scLoading ? '…' : 'Traer de Bandcamp'}
+          </button>
+          <button onClick={() => fetchBcTracks(true)} disabled={scLoading} title="Expande los álbumes en tracks individuales (más lento)" className="mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-white text-[#1da0c3] disabled:opacity-50 whitespace-nowrap">
+            {scLoading ? '…' : 'Ver tracks individuales'}
           </button>
         </div>
 

@@ -140,6 +140,56 @@ export async function resolveBandcampTralbum(url: string): Promise<BandcampTralb
   };
 }
 
+// Resuelve un ítem DIRECTO de Bandcamp (URL de /track/… o /album/…) a un
+// BandcampRelease único. Sirve cuando el DJ pega el link de un track/álbum
+// puntual en vez de la URL del artista. Devuelve null si no es una URL de ítem.
+export async function resolveBandcampItem(url: string): Promise<BandcampRelease | null> {
+  if (!/\/(track|album)\//i.test(url)) return null;
+  const tr = await resolveBandcampTralbum(url);
+  if (!tr) return null;
+  const isAlbum = /\/album\//i.test(url);
+  // Para un track suelto usamos su URL canónica; para un álbum, la URL tal cual.
+  const canonical = !isAlbum ? tr.tracks[0]?.trackUrl || url : url;
+  return { id: canonical, title: tr.title || canonical, url: canonical, isAlbum };
+}
+
+// Lista TODOS los tracks individuales del artista: expande cada álbum de la
+// discografía en sus tracks (con su URL propia /track/…) y suma los tracks
+// sueltos. Útil cuando el DJ manda el link de un track que vive dentro de un
+// álbum (la página /music solo lista álbumes). Resuelve los álbumes en paralelo
+// con concurrencia limitada. Frágil (misma zona gris de scraping).
+export async function fetchBandcampTracks(inputUrl: string): Promise<BandcampRelease[]> {
+  const releases = await fetchBandcampDiscography(inputUrl);
+  const out: BandcampRelease[] = [];
+  const seen = new Set<string>();
+  // Tracks sueltos de /music (si los hubiera) van tal cual.
+  for (const r of releases) {
+    if (!r.isAlbum && !seen.has(r.url)) {
+      seen.add(r.url);
+      out.push(r);
+    }
+  }
+  const albums = releases.filter((r) => r.isAlbum);
+  const queue = [...albums];
+  const worker = async () => {
+    while (queue.length) {
+      const alb = queue.shift();
+      if (!alb) break;
+      const tr = await resolveBandcampTralbum(alb.url);
+      if (!tr) continue;
+      for (const t of tr.tracks) {
+        if (t.trackUrl && !seen.has(t.trackUrl)) {
+          seen.add(t.trackUrl);
+          out.push({ id: t.trackUrl, title: t.title || t.trackUrl, url: t.trackUrl, isAlbum: false });
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 5 }, worker));
+  out.sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base', numeric: true }));
+  return out;
+}
+
 export async function fetchBandcampDiscography(inputUrl: string): Promise<BandcampRelease[]> {
   const origin = artistOrigin(inputUrl);
   if (!origin) return [];
