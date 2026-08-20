@@ -1,4 +1,5 @@
 import type {
+  Presskit,
   PresskitSocial,
   PresskitMix,
   PresskitLink,
@@ -37,6 +38,33 @@ export interface PendingPresskit {
   invited_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Mapea la data editable del pendiente al shape Presskit, para renderizar el
+// perfil COMPLETO (con PresskitView) en la vista previa admin, la página de
+// claim y la vista pública pre-publicación. id/user_id/timestamps son placeholder.
+export function pendingToPresskit(d: Partial<PendingPresskitData>): Presskit {
+  return {
+    id: 'preview',
+    user_id: 'preview',
+    artist_name: d.artist_name || '',
+    real_name: d.real_name ?? null,
+    city: d.city ?? null,
+    country: d.country ?? null,
+    genres: d.genres || [],
+    bio: d.bio ?? null,
+    custom_sections: d.custom_sections || [],
+    rider: d.rider ?? null,
+    photo_url: null,
+    photo_urls: d.photo_urls || [],
+    logo_urls: d.logo_urls || [],
+    socials: d.socials || [],
+    mixes: d.mixes || [],
+    links: d.links || [],
+    published: false,
+    created_at: '',
+    updated_at: '',
+  };
 }
 
 export function emptyPendingData(): PendingPresskitData {
