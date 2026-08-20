@@ -26,6 +26,7 @@ import {
   RiCloseLine,
   RiSoundcloudLine,
   RiAlbumFill,
+  RiYoutubeLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
 } from '@remixicon/react';
@@ -52,8 +53,29 @@ interface SoundcloudTrackOption {
   isAlbum?: boolean; // Bandcamp: álbum/EP vs track suelto
 }
 
-function PresskitEditor() {
+// Driver de datos para reutilizar ESTE editor desde el admin (editar el PK
+// publicado de otro artista, o una invitación pendiente) sin duplicar la vista.
+// Sin driver = modo DJ (edita el suyo vía /api/pk, comportamiento intacto).
+export interface EditorDriver {
+  kind: 'admin-pk' | 'admin-pending';
+  // Carga inicial: devuelve el presskit (mismo shape que /api/pk) + slug/email.
+  load: () => Promise<{ presskit: Presskit | null; slug: string; email: string } | null>;
+  // Guarda el body (mismo shape que /api/pk) + slug/email; devuelve el resultado.
+  save: (body: Record<string, unknown>, extra: { slug: string; email: string }) => Promise<{ ok: boolean; error?: string; presskit?: Presskit; slug?: string; id?: string }>;
+  // Solo pendiente: enviar/reenviar invitación por correo.
+  invite?: () => Promise<{ ok: boolean; error?: string }>;
+  invitedAt?: string | null;
+  claimUrl?: string | null;
+}
+
+function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   const { user, pkProfile, loading, needsPkProfile, signOut, updateSlug } = usePkAuth();
+  const isAdmin = !!driver;
+  const isPending = driver?.kind === 'admin-pending';
+  // slug/email editables en modo admin (el DJ usa pkProfile.slug).
+  const [adminSlug, setAdminSlug] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
   const [presskit, setPresskit] = useState<Presskit | null>(null);
   const [loadingPk, setLoadingPk] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,7 +123,7 @@ function PresskitEditor() {
   const [scSelectedTrack, setScSelectedTrack] = useState<string>('');
   const [scSelectedType, setScSelectedType] = useState<'set' | 'release'>('set');
   // Fuente del import abierto (SoundCloud o Bandcamp) — define plataforma al agregar.
-  const [importSource, setImportSource] = useState<'soundcloud' | 'bandcamp'>('soundcloud');
+  const [importSource, setImportSource] = useState<'soundcloud' | 'bandcamp' | 'youtube'>('soundcloud');
   const [scDropdownOpen, setScDropdownOpen] = useState(false);
   // Item de tipo set pendiente de confirmar (EP vs playlist).
   const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
@@ -123,12 +145,22 @@ function PresskitEditor() {
 
   const fetchPresskit = useCallback(async () => {
     try {
-      const res = await fetch('/api/pk');
-      if (!res.ok) {
-        setLoadingPk(false);
-        return;
+      let pk: Presskit | null = null;
+      if (driver) {
+        const loaded = await driver.load();
+        if (loaded) {
+          pk = loaded.presskit;
+          setAdminSlug(loaded.slug);
+          setAdminEmail(loaded.email);
+        }
+      } else {
+        const res = await fetch('/api/pk');
+        if (!res.ok) {
+          setLoadingPk(false);
+          return;
+        }
+        pk = (await res.json()).presskit;
       }
-      const { presskit: pk } = await res.json();
       if (pk) {
         setPresskit(pk);
         const loadedPhotoUrls: string[] =
@@ -175,9 +207,15 @@ function PresskitEditor() {
     } finally {
       setLoadingPk(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver]);
 
   useEffect(() => {
+    // En modo admin cargamos apenas hay sesión (no requiere pk_profile del admin).
+    if (driver && user) {
+      fetchPresskit();
+      return;
+    }
     if (user && pkProfile) {
       fetchPresskit();
     } else {
@@ -364,18 +402,26 @@ function PresskitEditor() {
     // presskit sin esto, así no quedan perfiles de DJ a medio llenar. En el
     // guardado manual se explica qué falta; en el auto-guardado se omite en
     // silencio (queda "sin guardar" hasta completar).
-    const meetsMinimum =
-      artistName.trim() && realName.trim() && city.trim() && country.trim() &&
-      instagram.trim() && photoUrls.length > 0;
-    if (!meetsMinimum) {
-      if (validate) {
-        setSaveMessage(
-          photoUrls.length === 0 && artistName.trim() && realName.trim() && city.trim() && country.trim() && instagram.trim()
-            ? 'Error: Debes subir al menos una foto para tu presskit'
-            : 'Error: Completa AKA de DJ, nombre real, ciudad, país, Instagram y una foto'
-        );
+    // Admin: puede guardar parcial (solo exige nombre artístico). DJ: mínimo completo.
+    if (isAdmin) {
+      if (!artistName.trim()) {
+        if (validate) setSaveMessage('Error: Falta el nombre artístico');
+        return;
       }
-      return;
+    } else {
+      const meetsMinimum =
+        artistName.trim() && realName.trim() && city.trim() && country.trim() &&
+        instagram.trim() && photoUrls.length > 0;
+      if (!meetsMinimum) {
+        if (validate) {
+          setSaveMessage(
+            photoUrls.length === 0 && artistName.trim() && realName.trim() && city.trim() && country.trim() && instagram.trim()
+              ? 'Error: Debes subir al menos una foto para tu presskit'
+              : 'Error: Completa AKA de DJ, nombre real, ciudad, país, Instagram y una foto'
+          );
+        }
+        return;
+      }
     }
 
     // Validación adicional (filas vacías, tope de logos) solo en guardado manual.
@@ -407,6 +453,20 @@ function PresskitEditor() {
     setSaving(true);
     setSaveMessage('');
     try {
+      if (driver) {
+        const r = await driver.save(body, { slug: adminSlug, email: adminEmail });
+        if (!r.ok) {
+          setSaveMessage(`Error: ${r.error || 'No se pudo guardar'}`);
+        } else {
+          if (r.presskit) setPresskit(r.presskit);
+          if (r.slug) setAdminSlug(r.slug);
+          savedRef.current = currentSnapshot();
+          setDirty(false);
+          setSaveMessage(validate ? 'Guardado correctamente' : 'Cambios guardados');
+          setTimeout(() => setSaveMessage(''), 2500);
+        }
+        return;
+      }
       const method = presskit ? 'PUT' : 'POST';
       const res = await fetch('/api/pk', {
         method,
@@ -542,6 +602,12 @@ function PresskitEditor() {
     .map((s) => socialToUrl('Bandcamp', s.url));
   const hasBandcamp = bandcampUrls.length > 0;
 
+  // YouTube: el canal del DJ (en Redes). "Traer de YouTube" lista todos sus videos.
+  const youtubeUrls = socials
+    .filter((s) => s.platform === 'YouTube' && s.url.trim())
+    .map((s) => socialToUrl('YouTube', s.url));
+  const hasYoutube = youtubeUrls.length > 0;
+
   const fetchScTracks = async () => {
     if (soundcloudUrls.length === 0) return;
     setImportSource('soundcloud');
@@ -625,6 +691,47 @@ function PresskitEditor() {
     }
   };
 
+  // Lista todos los videos del/los canal(es) de YouTube del DJ (igual que SC/BC).
+  const fetchYtItems = async () => {
+    if (youtubeUrls.length === 0) return;
+    setImportSource('youtube');
+    setScLoading(true);
+    setScError('');
+    setScTracks([]);
+    setScSelectedTrack('');
+    setEpPrompt(null);
+    setScDropdownOpen(true);
+    try {
+      const perAccount = await Promise.all(
+        youtubeUrls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/youtube?url=${encodeURIComponent(u)}`);
+            if (!res.ok) return [] as SoundcloudTrackOption[];
+            const data = await res.json();
+            return (data.tracks || []) as SoundcloudTrackOption[];
+          } catch {
+            return [] as SoundcloudTrackOption[];
+          }
+        })
+      );
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const available: SoundcloudTrackOption[] = [];
+      for (const t of perAccount.flat()) {
+        if (existingUrls.has(t.url) || seen.has(t.url)) continue;
+        seen.add(t.url);
+        available.push(t);
+      }
+      setScTracks(available);
+      if (available.length > 0) setScSelectedTrack(String(available[0].id));
+      else setScError('No se encontraron videos por agregar.');
+    } catch {
+      setScError('Error al conectar con YouTube');
+    } finally {
+      setScLoading(false);
+    }
+  };
+
   // Un item de SoundCloud es un "set" (URL /sets/…) cuando es un EP, álbum o
   // playlist. No podemos distinguir un EP de una playlist automáticamente, así
   // que se lo preguntamos al artista y bloqueamos las playlists.
@@ -633,14 +740,15 @@ function PresskitEditor() {
   const addMixEntry = (track: SoundcloudTrackOption, isEp: boolean) => {
     autoPendingRef.current = true; // importar → auto-guardar
     const bandcamp = importSource === 'bandcamp';
+    const youtube = importSource === 'youtube';
     setMixes([
       ...mixes,
       {
         title: track.title,
-        platform: bandcamp ? 'Bandcamp' : 'SoundCloud',
+        platform: youtube ? 'YouTube' : bandcamp ? 'Bandcamp' : 'SoundCloud',
         url: track.url,
-        // Un EP/álbum es un release (aparece en Releases Nacionales); marcamos is_ep.
-        type: bandcamp ? 'release' : isEp ? 'release' : scSelectedType,
+        // YouTube: siempre set. Bandcamp/EP: release. SoundCloud: lo elegido.
+        type: youtube ? 'set' : bandcamp ? 'release' : isEp ? 'release' : scSelectedType,
         ...(isEp ? { is_ep: true } : {}),
       },
     ]);
@@ -653,6 +761,10 @@ function PresskitEditor() {
   const addScTrack = () => {
     const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
     if (!track) return;
+    if (importSource === 'youtube') {
+      addMixEntry(track, false); // YouTube: se agrega directo (embebido)
+      return;
+    }
     if (importSource === 'bandcamp') {
       addMixEntry(track, !!track.isAlbum); // álbum = EP; track = release suelto
       return;
@@ -674,10 +786,19 @@ function PresskitEditor() {
     );
   }
 
-  if (!user || needsPkProfile) {
+  // DJ: exige sesión + pk_profile. Admin: la ruta ya verificó admin; solo espera
+  // la sesión de Supabase (el admin no tiene pk_profile y no debe ver el modal DJ).
+  if (!isAdmin && (!user || needsPkProfile)) {
     return (
       <main className="flex-1">
         <PkAuthModal isOpen={true} />
+      </main>
+    );
+  }
+  if (isAdmin && !user) {
+    return (
+      <main className="flex-1 flex items-center justify-center p-12">
+        <RiLoader4Line className="w-8 h-8 animate-spin" />
       </main>
     );
   }
@@ -702,7 +823,7 @@ function PresskitEditor() {
           <h1 className="text-4xl lg:text-6xl font-black uppercase italic tracking-tighter leading-none">
             EDITAR PRESSKIT
           </h1>
-          {pkProfile && !editingSlug && (
+          {!isAdmin && pkProfile && !editingSlug && (
             <div className="flex items-center gap-2 mt-1">
               <p className="mono text-sm opacity-60">/pk/{pkProfile.slug}</p>
               <button
@@ -714,7 +835,7 @@ function PresskitEditor() {
               </button>
             </div>
           )}
-          {pkProfile && editingSlug && (
+          {!isAdmin && pkProfile && editingSlug && (
             <div className="mt-2 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="mono text-sm opacity-60">/pk/</span>
@@ -759,11 +880,36 @@ function PresskitEditor() {
               )}
             </div>
           )}
+          {/* Modo admin: slug + (si es invitación) email destino, editables. */}
+          {isAdmin && (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="mono text-xs opacity-60">/pk/</span>
+                <input
+                  value={adminSlug}
+                  onChange={(e) => { setAdminSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); }}
+                  placeholder="slug"
+                  className="px-2 py-1 bg-white brutalist-border text-black font-mono text-sm w-48"
+                />
+              </div>
+              {isPending && (
+                <div className="flex items-center gap-2">
+                  <span className="mono text-xs opacity-60">Email:</span>
+                  <input
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="dj@correo.com"
+                    className="px-2 py-1 bg-white brutalist-border text-black font-mono text-sm w-56"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex gap-3 items-center">
-          {pkProfile && published && (
+        <div className="flex gap-3 items-center flex-wrap">
+          {((!isAdmin && pkProfile && published) || (isAdmin && adminSlug)) && (
             <a
-              href={`/pk/${pkProfile.slug}`}
+              href={`/pk/${isAdmin ? adminSlug : pkProfile?.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors"
@@ -772,16 +918,39 @@ function PresskitEditor() {
               VER PÚBLICO
             </a>
           )}
-          <button
-            onClick={async () => {
-              await signOut();
-              window.location.href = '/';
-            }}
-            className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors"
-          >
-            <RiLogoutBoxLine className="w-4 h-4" />
-            SALIR
-          </button>
+          {isPending && driver?.invite && (
+            <button
+              onClick={async () => {
+                setInviting(true);
+                const r = await driver.invite!();
+                setInviting(false);
+                setSaveMessage(r.ok ? 'Invitación enviada ✓' : `Error: ${r.error || 'no se pudo enviar'}`);
+                setTimeout(() => setSaveMessage(''), 3000);
+              }}
+              disabled={inviting}
+              className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border bg-[#ff0055] text-white hover:bg-black transition-colors disabled:opacity-50"
+            >
+              {inviting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiExternalLinkLine className="w-4 h-4" />}
+              {driver.invitedAt ? 'Reenviar invitación' : 'Enviar invitación'}
+            </button>
+          )}
+          {isAdmin ? (
+            <a href="/admin/presskits" className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors">
+              <RiLogoutBoxLine className="w-4 h-4" />
+              VOLVER
+            </a>
+          ) : (
+            <button
+              onClick={async () => {
+                await signOut();
+                window.location.href = '/';
+              }}
+              className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors"
+            >
+              <RiLogoutBoxLine className="w-4 h-4" />
+              SALIR
+            </button>
+          )}
         </div>
       </section>
 
@@ -1405,6 +1574,17 @@ function PresskitEditor() {
                     AGREGAR DESDE BANDCAMP
                   </button>
                 )}
+                {hasYoutube && (
+                  <button
+                    type="button"
+                    onClick={fetchYtItems}
+                    disabled={scLoading}
+                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#FF0000] hover:text-white transition-colors"
+                  >
+                    {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiYoutubeLine className="w-4 h-4" />}
+                    AGREGAR DESDE YOUTUBE
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={addMix}
@@ -1430,7 +1610,7 @@ function PresskitEditor() {
                 {scLoading && (
                   <div className="flex items-center gap-2 mono text-xs">
                     <RiLoader4Line className="w-4 h-4 animate-spin" />
-                    Cargando de {importSource === 'bandcamp' ? 'Bandcamp' : 'SoundCloud'}...
+                    Cargando de {importSource === 'bandcamp' ? 'Bandcamp' : importSource === 'youtube' ? 'YouTube' : 'SoundCloud'}...
                   </div>
                 )}
                 {scError && (
@@ -1450,8 +1630,11 @@ function PresskitEditor() {
                           </option>
                         ))}
                       </select>
-                      {/* En Bandcamp el tipo es siempre release (álbum = EP); no se elige. */}
-                      {importSource !== 'bandcamp' && (
+                      {/* Bandcamp = siempre release (álbum=EP); YouTube = siempre set. */}
+                      {importSource === 'youtube' && (
+                        <span className="mono text-xs font-black uppercase px-3 py-2 brutalist-border bg-black text-white sm:w-32 text-center self-center">Set</span>
+                      )}
+                      {importSource !== 'bandcamp' && importSource !== 'youtube' && (
                         <select
                           value={scSelectedType}
                           onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')}
@@ -1530,48 +1713,67 @@ function PresskitEditor() {
                   (mix.platform === 'SoundCloud' || mix.platform === 'Bandcamp') &&
                   mix.url.trim().length > 0;
                 const isBc = mix.platform === 'Bandcamp';
+                const isYt = mix.platform === 'YouTube' || /youtube\.com|youtu\.be/i.test(mix.url);
+                // Espina lateral con el color de la plataforma: agrupa cada track
+                // como una tarjeta inequívoca y encoda de qué plataforma es.
+                const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : '#0000ff';
                 return (
-                  <div key={i} className="space-y-2">
-                    <div className="flex flex-col sm:flex-row gap-2">
+                  <div
+                    key={i}
+                    className="brutalist-border bg-white p-3 space-y-2"
+                    style={{ borderLeftWidth: '6px', borderLeftColor: accent }}
+                  >
+                    {/* Header del track: título (ancho completo) + quitar ESTE track. */}
+                    <div className="flex items-start gap-2">
                       <input
                         type="text"
                         value={mix.title}
                         onChange={(e) => updateMix(i, 'title', e.target.value)}
-                        className={`${inputClass} sm:w-48 ${!mix.title.trim() ? '!border-red-500' : ''}`}
-                        placeholder="Título"
+                        className={`${inputClass} flex-1 min-w-0 ${!mix.title.trim() ? '!border-red-500' : ''}`}
+                        placeholder="Título del set / release"
                       />
+                      <button
+                        type="button"
+                        onClick={() => removeMix(i)}
+                        aria-label="Quitar este track"
+                        title="Quitar este track"
+                        className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                      >
+                        <RiDeleteBinLine className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {/* Controles del track */}
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <select
                         value={mix.platform}
                         onChange={(e) => updateMix(i, 'platform', e.target.value)}
-                        className={`${inputClass} sm:w-36 shrink-0`}
+                        className={`${inputClass} sm:w-40 shrink-0`}
                       >
                         {MIX_PLATFORM_OPTIONS.map((p) => (
                           <option key={p} value={p}>{p}</option>
                         ))}
                       </select>
-                      <select
-                        value={mix.type || 'set'}
-                        onChange={(e) => updateMix(i, 'type', e.target.value)}
-                        className={`${inputClass} sm:w-28 shrink-0`}
-                      >
-                        {MIX_TYPE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      {isYt ? (
+                        // YouTube es siempre set (nunca release).
+                        <span className="mono text-xs font-black uppercase px-3 py-2 brutalist-border bg-black text-white sm:w-28 shrink-0 text-center flex items-center justify-center">Set</span>
+                      ) : (
+                        <select
+                          value={mix.type || 'set'}
+                          onChange={(e) => updateMix(i, 'type', e.target.value)}
+                          className={`${inputClass} sm:w-28 shrink-0`}
+                        >
+                          {MIX_TYPE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      )}
                       <input
                         type="url"
                         value={mix.url}
                         onChange={(e) => updateMix(i, 'url', e.target.value)}
-                        className={`${inputClass} ${!mix.url.trim() ? '!border-red-500' : ''}`}
+                        className={`${inputClass} min-w-0 flex-1 ${!mix.url.trim() ? '!border-red-500' : ''}`}
                         placeholder="https://..."
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeMix(i)}
-                        className="p-3 brutalist-border hover:bg-red-500 hover:text-white transition-colors shrink-0 self-start"
-                      >
-                        <RiDeleteBinLine className="w-4 h-4" />
-                      </button>
                     </div>
                     {canFeature && (
                       <label className="flex items-center gap-2 mono text-xs font-bold uppercase cursor-pointer select-none pl-1">
@@ -1644,7 +1846,9 @@ function PresskitEditor() {
             </div>
           </div>
 
-          {/* Publish toggle */}
+          {/* Publish toggle. En una invitación (pending) no aplica: se publica al
+              aceptar el DJ. */}
+          {!isPending && (
           <div className="flex items-center gap-4 p-4 brutalist-border bg-gray-50">
             <button
               type="button"
@@ -1677,6 +1881,7 @@ function PresskitEditor() {
                 : 'Tu presskit no es visible aún'}
             </span>
           </div>
+          )}
 
           {/* Save */}
           <div className="flex items-center gap-4">
@@ -1712,6 +1917,16 @@ export default function EditPresskitPage() {
   return (
     <PkAuthProvider>
       <PresskitEditor />
+    </PkAuthProvider>
+  );
+}
+
+// Reutilización desde el admin: el MISMO editor, con un driver de datos admin.
+// PkAuthProvider da la sesión de Supabase (el admin igual inició sesión Google).
+export function AdminPresskitEditor({ driver }: { driver: EditorDriver }) {
+  return (
+    <PkAuthProvider>
+      <PresskitEditor driver={driver} />
     </PkAuthProvider>
   );
 }
