@@ -82,17 +82,21 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
   }
 
-  // 'mixes' permite al admin desmarcar releases publicados en Releases Nacionales.
-  // El admin puede editar todo salvo imágenes (photos/logos se manejan aparte).
+  // El admin puede editar TODO desde el editor completo, incluidas imágenes y
+  // secciones personalizadas. 'mixes' permite marcar/desmarcar Releases Nacionales.
   const allowed = [
     'artist_name', 'real_name', 'city', 'country', 'bio', 'rider', 'genres',
-    'socials', 'links', 'published', 'mixes',
+    'socials', 'links', 'published', 'mixes', 'custom_sections', 'photo_urls', 'logo_urls',
   ];
   const updateData: Record<string, unknown> = {};
   for (const key of Object.keys(fields)) {
     if (allowed.includes(key)) {
       updateData[key] = fields[key];
     }
+  }
+  // Mantener photo_url (legacy, single) en sync con la primera de photo_urls.
+  if (Array.isArray(updateData.photo_urls)) {
+    updateData.photo_url = (updateData.photo_urls as string[])[0] || null;
   }
 
   if (Object.keys(updateData).length === 0) {

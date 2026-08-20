@@ -129,7 +129,10 @@ function BlockSection({ title, blocks, atomicMax = 8 }: { title: string; blocks:
   );
 }
 
-export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photoData?: string | null }) {
+export function PresskitPdf({ presskit, photoData, slug }: { presskit: Presskit; photoData?: string | null; slug?: string }) {
+  // El link del footer apunta al presskit online del artista (/artistas/<slug>).
+  const artistUrl = slug ? `https://drumandbasschile.cl/artistas/${slug}` : 'https://drumandbasschile.cl';
+  const artistLabel = slug ? `drumandbasschile.cl/artistas/${slug}` : 'drumandbasschile.cl';
   const customSections = (presskit.custom_sections || []).filter((x) => x.title?.trim() && x.body?.trim());
   const rider = parseRider(presskit.rider);
   const riderItems = riderDisplay(rider); // controladores ya numerados ("Controlador N")
@@ -252,8 +255,8 @@ export function PresskitPdf({ presskit, photoData }: { presskit: Presskit; photo
         {/* Footer */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>Drum and Bass Chile · Presskit</Text>
-          <Link src="https://drumandbasschile.cl" style={{ ...s.footerText, color: BLUE }}>
-            drumandbasschile.cl
+          <Link src={artistUrl} style={{ ...s.footerText, color: BLUE }}>
+            {artistLabel}
           </Link>
         </View>
       </Page>
