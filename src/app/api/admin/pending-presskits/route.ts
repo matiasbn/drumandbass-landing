@@ -148,6 +148,9 @@ async function sendInvite(supabase: ReturnType<typeof createSupabaseServer>, id:
   if (!apiKey) return NextResponse.json({ error: 'Resend no configurado' }, { status: 500 });
   const resend = new Resend(apiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Drum and Bass Chile <info@drumandbasschile.cl>';
+  // En local el admin se manda correos a sí mismo para probar el flujo de claim
+  // (link localhost, abrible en su máquina); en prod sale el dominio real. OJO:
+  // por esto NO invites a un DJ real desde local — le llegaría un link localhost.
   const appOrigin = process.env.NODE_ENV === 'development' ? 'http://localhost:3600' : BASE_URL;
   const claimUrl = `${appOrigin}/pk/claim?token=${row.claim_token}`;
   const artist = row.data?.artist_name || 'tu proyecto';

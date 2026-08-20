@@ -17,7 +17,7 @@ import {
 } from '@/src/lib/rider';
 import { emptyPendingData, PendingPresskitData } from '@/src/types/pendingPresskit';
 import type { PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
-import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill } from '@remixicon/react';
+import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill, RiEyeLine, RiFileCopyLine, RiCheckLine, RiTimeLine } from '@remixicon/react';
 
 // Base SIN ancho: en filas flex el ancho lo da flex-1/w-N. `inputClass` (con
 // w-full) es solo para campos de una columna; en filas flex usar `fieldBase` +
@@ -124,6 +124,39 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
   const [scDropdownOpen, setScDropdownOpen] = useState(false);
   const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
   const [playlistBlocked, setPlaylistBlocked] = useState(false);
+  const [claimCopied, setClaimCopied] = useState(false);
+  // Duración por URL (ms; null = no disponible) para distinguir set vs canción.
+  // Se carga perezosamente desde el endpoint de stream y se cachea; requestedDur
+  // evita re-pedir la misma URL.
+  const [durations, setDurations] = useState<Record<string, number | null>>({});
+  const requestedDur = useRef<Set<string>>(new Set());
+
+  // Carga perezosa de duraciones para los tracks reproducibles (SoundCloud/Bandcamp)
+  // que aún no la tienen, con concurrencia limitada para no golpear los endpoints.
+  useEffect(() => {
+    const toFetch = mixes
+      .map((m) => m.url.trim())
+      .filter((u) => u && /soundcloud\.com|bandcamp\.com/i.test(u) && !requestedDur.current.has(u));
+    if (!toFetch.length) return;
+    toFetch.forEach((u) => requestedDur.current.add(u));
+    let cancelled = false;
+    const queue = [...toFetch];
+    const worker = async () => {
+      while (queue.length && !cancelled) {
+        const url = queue.shift()!;
+        try {
+          const ep = /bandcamp\.com/i.test(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream';
+          const res = await fetch(`${ep}?url=${encodeURIComponent(url)}`);
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled) setDurations((d) => ({ ...d, [url]: res.ok && typeof data.durationMs === 'number' ? data.durationMs : null }));
+        } catch {
+          if (!cancelled) setDurations((d) => ({ ...d, [url]: null }));
+        }
+      }
+    };
+    void Promise.all(Array.from({ length: 4 }, worker));
+    return () => { cancelled = true; };
+  }, [mixes]);
 
   const applyData = useCallback((d: Partial<PendingPresskitData>) => {
     setArtistName(d.artist_name || '');
@@ -194,11 +227,24 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     links: links.filter((l) => l.title.trim() && l.url.trim()),
   });
 
-  const save = async (): Promise<string | null> => {
+  // Guarda lo actual y abre la vista previa completa (lo que verá el DJ) en una
+  // pestaña nueva. Guardar primero garantiza que refleje lo último editado; el
+  // target fijo reutiliza la misma pestaña en vez de acumular una por click.
+  const openPreview = async () => {
+    const savedId = id || (await save());
+    if (!savedId) return;
+    window.open(`/pk/preview/${savedId}`, 'pk-preview');
+  };
+
+  // `override` fusiona campos ya calculados (p.ej. mixes recién togglados) para
+  // evitar leer estado stale en un autosave. `silent` = autosave: no muestra el
+  // error de validación (solo se salta si faltan datos base).
+  const save = async (override?: Partial<PendingPresskitData>, opts?: { silent?: boolean }): Promise<string | null> => {
     if (!artistName.trim() || (!isPresskit && (!email.trim() || !slug.trim()))) {
-      setMsg(isPresskit ? 'Falta el nombre artístico' : 'Faltan email, slug o nombre artístico');
+      if (!opts?.silent) setMsg(isPresskit ? 'Falta el nombre artístico' : 'Faltan email, slug o nombre artístico');
       return null;
     }
+    const built = { ...buildData(), ...(override || {}) };
     setSaving(true);
     setMsg('');
     try {
@@ -207,7 +253,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
         const res = await fetch('/api/admin/presskits', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, ...buildData(), published }),
+          body: JSON.stringify({ id, ...built, published }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -218,7 +264,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
         setTimeout(() => setMsg(''), 2500);
         return id;
       }
-      const body = { id, email: email.trim(), slug: slug.trim(), data: buildData() };
+      const body = { id, email: email.trim(), slug: slug.trim(), data: built };
       const res = await fetch('/api/admin/pending-presskits', {
         method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,8 +397,8 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
   // SoundCloud → release/set según elección (EP → release + is_ep).
   const addMixEntry = (track: SoundcloudTrackOption, isEp: boolean) => {
     const bandcamp = importSource === 'bandcamp';
+    // Se agrega ARRIBA (prepend) para que el recién agregado quede visible primero.
     setMixes((m) => [
-      ...m,
       {
         title: track.title,
         platform: bandcamp ? 'Bandcamp' : 'SoundCloud',
@@ -360,6 +406,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
         type: bandcamp ? 'release' : isEp ? 'release' : scSelectedType,
         ...(isEp ? { is_ep: true } : {}),
       },
+      ...m,
     ]);
     // Sacamos el agregado del dropdown para poder seguir agregando el resto.
     setScTracks((arr) => {
@@ -386,27 +433,28 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     addMixEntry(track, false);
   };
 
-  // Escuchar el track seleccionado sin salir de la página (SoundCloud o Bandcamp).
-  const togglePreview = async () => {
-    const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+  // Escuchar cualquier URL (SoundCloud o Bandcamp) sin salir de la página, con el
+  // <audio> compartido. Sirve para el dropdown de importación Y para los tracks ya
+  // agregados a la lista.
+  const playUrl = async (url: string) => {
     const a = previewAudioRef.current;
-    if (!sel || !a) return;
-    if (previewUrl === sel.url) {
+    if (!a || !url) return;
+    if (previewUrl === url) {
       if (a.paused) a.play().catch(() => {});
       else a.pause();
       return;
     }
     setPreviewLoading(true);
     try {
-      const endpoint = /bandcamp\.com/i.test(sel.url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream';
-      const res = await fetch(`${endpoint}?url=${encodeURIComponent(sel.url)}`);
+      const endpoint = /bandcamp\.com/i.test(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream';
+      const res = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
       const data = await res.json();
       if (!res.ok || !data.streamUrl) {
         setMsg('No se pudo reproducir este track');
         return;
       }
       a.src = data.streamUrl;
-      setPreviewUrl(sel.url);
+      setPreviewUrl(url);
       setPreviewTime(0);
       setPreviewDuration(0);
       a.play().catch(() => {});
@@ -415,6 +463,11 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  const togglePreview = async () => {
+    const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+    if (sel) await playUrl(sel.url);
   };
 
   const fetchBcTracks = async () => {
@@ -462,6 +515,41 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
   }
 
   const claimUrl = claimToken ? `/pk/claim?token=${claimToken}` : null;
+  // URL absoluto (mismo origen actual) para copiar/probar el enlace de claim.
+  const claimUrlAbs =
+    claimUrl && typeof window !== 'undefined' ? `${window.location.origin}${claimUrl}` : claimUrl;
+  const copyClaim = async () => {
+    if (!claimUrlAbs) return;
+    try {
+      await navigator.clipboard.writeText(claimUrlAbs);
+      setClaimCopied(true);
+      setTimeout(() => setClaimCopied(false), 2000);
+    } catch {
+      /* clipboard bloqueado: el usuario puede seleccionar el texto a mano */
+    }
+  };
+
+  // Barra de progreso/seek del reproductor compartido. Se renderiza inline en el
+  // track que suena (y en el dropdown de importación al escuchar antes de agregar).
+  const seekBar = (
+    <div className="flex items-center gap-2 w-full">
+      <span className="mono text-[10px] tabular-nums text-gray-500 w-9 text-right">{fmtTime(previewTime)}</span>
+      <input
+        type="range"
+        min={0}
+        max={previewDuration || 0}
+        step={0.1}
+        value={Math.min(previewTime, previewDuration || 0)}
+        onChange={(e) => {
+          const a = previewAudioRef.current;
+          if (a) { a.currentTime = +e.target.value; setPreviewTime(+e.target.value); }
+        }}
+        aria-label="Avanzar en el track"
+        className="flex-1 h-1.5 accent-[#ff0055] cursor-pointer"
+      />
+      <span className="mono text-[10px] tabular-nums text-gray-500 w-9">{previewLoading ? '…' : fmtTime(previewDuration)}</span>
+    </div>
+  );
 
   return (
     <main className="max-w-3xl mx-auto p-6 lg:p-10 space-y-6">
@@ -574,7 +662,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
       <section className="brutalist-border p-4 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <label className={labelClass}>Sets & Releases</label>
-          <button onClick={() => setMixes((m) => [...m, { title: '', platform: 'SoundCloud', url: '', type: 'set' }])} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white">+ Track</button>
+          <button onClick={() => setMixes((m) => [{ title: '', platform: 'SoundCloud', url: '', type: 'set' }, ...m])} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white">+ Track</button>
         </div>
         <div className="flex gap-2 items-center">
           <input ref={scRef} placeholder="URL perfil SoundCloud (opcional si está en Redes)" className={`${fieldBase} flex-1 min-w-0`} />
@@ -632,39 +720,10 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
                   <button onClick={() => { previewAudioRef.current?.pause(); setScDropdownOpen(false); setScTracks([]); setScError(''); setEpPrompt(null); setPlaylistBlocked(false); }} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border hover:bg-black hover:text-white">Cerrar</button>
                   <span className="mono text-[11px] uppercase text-gray-500 self-center">{scTracks.length} por agregar</span>
                 </div>
-                <audio
-                  ref={previewAudioRef}
-                  preload="none"
-                  onPlay={() => setPreviewPlaying(true)}
-                  onPause={() => setPreviewPlaying(false)}
-                  onEnded={() => setPreviewPlaying(false)}
-                  onTimeUpdate={() => setPreviewTime(previewAudioRef.current?.currentTime || 0)}
-                  onLoadedMetadata={() => setPreviewDuration(previewAudioRef.current?.duration || 0)}
-                />
-                {previewUrl && (
-                  <div className="space-y-1">
-                    <p className="mono text-[11px] uppercase text-gray-500 truncate">
-                      {previewLoading ? 'Cargando audio…' : `${previewPlaying ? '▶' : '❚❚'} ${scTracks.find((t) => t.url === previewUrl)?.title || ''}`}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="mono text-[10px] tabular-nums text-gray-500 w-9 text-right">{fmtTime(previewTime)}</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={previewDuration || 0}
-                        step={0.1}
-                        value={Math.min(previewTime, previewDuration || 0)}
-                        onChange={(e) => {
-                          const a = previewAudioRef.current;
-                          if (a) { a.currentTime = +e.target.value; setPreviewTime(+e.target.value); }
-                        }}
-                        aria-label="Avanzar en el track"
-                        className="flex-1 h-1.5 accent-[#ff0055] cursor-pointer"
-                      />
-                      <span className="mono text-[10px] tabular-nums text-gray-500 w-9">{fmtTime(previewDuration)}</span>
-                    </div>
-                  </div>
-                )}
+                {(() => {
+                  const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+                  return sel && previewUrl === sel.url ? seekBar : null;
+                })()}
 
                 {/* Set → preguntar si es EP (publicable) o playlist (no) */}
                 {epPrompt && (
@@ -685,7 +744,25 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
             {!scLoading && scTracks.length === 0 && !scError && <p className="mono text-xs opacity-40">No quedan tracks por agregar.</p>}
           </div>
         )}
-        {mixes.map((m, i) => (
+
+        {/* Reproductor compartido: un solo <audio> para el dropdown de importación
+            y para cada track de la lista. Siempre montado. */}
+        <audio
+          ref={previewAudioRef}
+          preload="none"
+          onPlay={() => setPreviewPlaying(true)}
+          onPause={() => setPreviewPlaying(false)}
+          onEnded={() => setPreviewPlaying(false)}
+          onTimeUpdate={() => setPreviewTime(previewAudioRef.current?.currentTime || 0)}
+          onLoadedMetadata={() => setPreviewDuration(previewAudioRef.current?.duration || 0)}
+        />
+
+        {mixes.map((m, i) => {
+          const playable = /soundcloud\.com|bandcamp\.com/i.test(m.url);
+          const isCur = previewUrl === m.url;
+          const durMs = durations[m.url.trim()];
+          const durLong = typeof durMs === 'number' && durMs >= 15 * 60 * 1000; // ≥15min ~ set
+          return (
           <div key={i} className="border-2 border-black p-2 space-y-2 bg-gray-50">
             <div className="flex gap-2">
               <input value={m.title} onChange={(e) => setMixes((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${fieldBase} flex-1 min-w-0`} />
@@ -696,12 +773,38 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
               <button onClick={() => setMixes((arr) => arr.filter((_, idx) => idx !== i))} className="px-2 brutalist-border border-red-600 text-red-600"><RiDeleteBinLine className="w-4 h-4" /></button>
             </div>
             <input value={m.url} onChange={(e) => setMixes((arr) => arr.map((x, idx) => (idx === i ? { ...x, url: e.target.value, released_at: null } : x)))} placeholder="URL de SoundCloud" className={inputClass} />
-            <label className="mono text-[11px] font-bold uppercase flex items-center gap-2">
-              <input type="checkbox" checked={!!m.featured} onChange={(e) => setMixes((arr) => arr.map((x, idx) => (idx === i ? { ...x, featured: e.target.checked } : x)))} />
-              Publicar en Releases Nacionales
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              {playable && (
+                <button onClick={() => playUrl(m.url)} disabled={previewLoading && !isCur} className="mono text-[11px] font-bold uppercase px-2.5 py-1 brutalist-border inline-flex items-center gap-1 hover:bg-black hover:text-white disabled:opacity-50">
+                  {previewLoading && !isCur ? <RiLoader4Line className="w-3 h-3 animate-spin" /> : isCur && previewPlaying ? <RiPauseFill className="w-3 h-3" /> : <RiPlayFill className="w-3 h-3" />}
+                  {isCur && previewPlaying ? 'Pausar' : 'Escuchar'}
+                </button>
+              )}
+              {playable && (
+                <span className={`mono text-[11px] font-bold tabular-nums inline-flex items-center gap-1 ${durLong ? 'text-[#7C3AED]' : 'text-gray-500'}`} title={durLong ? 'Larga: probablemente un set' : 'Duración'}>
+                  <RiTimeLine className="w-3.5 h-3.5" />
+                  {durMs === undefined ? '…' : durMs === null ? '—:—' : fmtTime(durMs / 1000)}
+                  {durLong && <span className="normal-case text-[10px]">(largo)</span>}
+                </span>
+              )}
+              <label className="mono text-[11px] font-bold uppercase flex items-center gap-2">
+                {/* Marcar "Releases Nacionales" implica que es un release (no un set):
+                    la API descarta featured si el tipo no es 'release', así que lo
+                    fijamos al activar el check. */}
+                <input type="checkbox" checked={!!m.featured} onChange={(e) => {
+                  const checked = e.target.checked;
+                  const next = mixes.map((x, idx) => (idx === i ? { ...x, featured: checked, type: checked ? ('release' as const) : x.type } : x));
+                  setMixes(next);
+                  // Autosave inmediato con los mixes ya actualizados (sin esperar a "Guardar").
+                  void save({ mixes: next.filter((x) => x.title.trim() && x.url.trim()) }, { silent: true });
+                }} />
+                Publicar en Releases Nacionales
+              </label>
+            </div>
+            {isCur && seekBar}
           </div>
-        ))}
+          );
+        })}
       </section>
 
       {/* Links */}
@@ -780,8 +883,11 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
 
       {/* Barra de acciones */}
       <div className="sticky bottom-0 bg-white border-t-4 border-black py-3 flex flex-wrap items-center gap-3">
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-gray-900 disabled:opacity-50">
+        <button onClick={() => save()} disabled={saving} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-gray-900 disabled:opacity-50">
           {saving ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSaveLine className="w-4 h-4" />} Guardar
+        </button>
+        <button onClick={openPreview} disabled={saving} className="inline-flex items-center gap-2 brutalist-border bg-white text-black px-5 py-2.5 mono text-sm font-black uppercase hover:bg-black hover:text-white disabled:opacity-50">
+          <RiEyeLine className="w-4 h-4" /> Vista previa
         </button>
         {!isPresskit && (
           <button onClick={sendInvite} disabled={inviting || status !== 'pending'} className="inline-flex items-center gap-2 brutalist-border bg-[#ff0055] text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-black disabled:opacity-50">
@@ -793,14 +899,26 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
             Ver PK <RiExternalLinkLine className="w-3 h-3" />
           </a>
         )}
-        {!isPresskit && claimUrl && (
-          <a href={claimUrl} target="_blank" rel="noopener noreferrer" className="mono text-xs font-bold uppercase text-blue-700 inline-flex items-center gap-1">
-            Ver link de claim <RiExternalLinkLine className="w-3 h-3" />
+        {!isPresskit && id && (
+          <a href={`/pk/preview/${id}`} target="_blank" rel="noopener noreferrer" className="mono text-xs font-bold uppercase text-blue-700 inline-flex items-center gap-1">
+            Ver lo guardado <RiExternalLinkLine className="w-3 h-3" />
           </a>
+        )}
+        {!isPresskit && claimUrlAbs && (
+          <span className="inline-flex items-center gap-1 max-w-full">
+            <button onClick={copyClaim} title="Copiar link de claim" className="inline-flex items-center gap-1 mono text-xs font-bold uppercase brutalist-border px-2 py-1 hover:bg-black hover:text-white">
+              {claimCopied ? <RiCheckLine className="w-3 h-3" /> : <RiFileCopyLine className="w-3 h-3" />}
+              {claimCopied ? 'Copiado' : 'Copiar link de claim'}
+            </button>
+            <a href={claimUrl!} target="_blank" rel="noopener noreferrer" className="mono text-[11px] text-blue-700 truncate max-w-[240px]" title={claimUrlAbs}>
+              {claimUrlAbs}
+            </a>
+          </span>
         )}
         {msg && <span className="mono text-xs font-bold uppercase text-[#ff0055]">{msg}</span>}
         {!isPresskit && invitedAt && <span className="mono text-[11px] uppercase text-gray-500">Invitado</span>}
       </div>
+
     </main>
   );
 }

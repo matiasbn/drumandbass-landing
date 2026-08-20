@@ -5,7 +5,7 @@ interface BrutalistButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
-  variant?: 'primary' | 'red' | 'blue' | 'whatsapp' | 'whiteRed' | 'spotify' | 'instagram' | 'soundcloud' | 'youtube' | 'club';
+  variant?: 'primary' | 'red' | 'blue' | 'whatsapp' | 'whiteRed' | 'spotify' | 'instagram' | 'soundcloud' | 'youtube' | 'club' | 'bandcamp';
   href?: string;
   external?: boolean;
   disabled?: boolean;
@@ -34,6 +34,7 @@ const BrutalistButton: React.FC<BrutalistButtonProps> = ({
     soundcloud: "bg-[#FF5500] text-white hover:bg-[#ff7f40] brutalist-shadow-soundcloud",
     youtube: "bg-[#FF0000] text-white hover:bg-[#ff4d4d] brutalist-shadow-youtube",
     club: "bg-[#7C3AED] text-white hover:bg-[#9b6bf2] brutalist-shadow-club",
+    bandcamp: "bg-[#1da0c3] text-white hover:bg-[#4bb8d4] brutalist-shadow",
   };
   let extra = ''
   if (href && !disabled) extra = ' cursor-pointer '
