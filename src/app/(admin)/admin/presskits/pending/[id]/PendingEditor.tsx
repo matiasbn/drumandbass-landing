@@ -17,7 +17,7 @@ import {
 } from '@/src/lib/rider';
 import { emptyPendingData, PendingPresskitData } from '@/src/types/pendingPresskit';
 import type { PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
-import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine } from '@remixicon/react';
+import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill } from '@remixicon/react';
 
 // Base SIN ancho: en filas flex el ancho lo da flex-1/w-N. `inputClass` (con
 // w-full) es solo para campos de una columna; en filas flex usar `fieldBase` +
@@ -54,8 +54,15 @@ interface SoundcloudTrackOption {
   id: string;
   title: string;
   url: string;
+  isAlbum?: boolean; // Bandcamp: álbum/EP vs track suelto
 }
 const isSetUrl = (url: string) => /soundcloud\.com\/[^/]+\/sets\//i.test(url);
+const fmtTime = (s: number) => {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const ss = Math.floor(s % 60);
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
 
 export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' | 'presskit' }) {
   const { isAdmin, loading: authLoading } = useAdminAuth();
@@ -95,8 +102,18 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
   const [riderData, setRiderData] = useState<RiderData>({ setups: [] });
   const [uploading, setUploading] = useState(false);
   const scRef = useRef<HTMLInputElement | null>(null);
+  const bcRef = useRef<HTMLInputElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  // Fuente del import abierto en el dropdown (define plataforma al agregar).
+  const [importSource, setImportSource] = useState<'soundcloud' | 'bandcamp'>('soundcloud');
+  // Preview del track seleccionado (escuchar sin salir de la página).
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewTime, setPreviewTime] = useState(0);
+  const [previewDuration, setPreviewDuration] = useState(0);
   // Importar desde SoundCloud: mismo flujo que el editor del DJ — dropdown de
   // tracks, se agrega de a uno y por cada uno se elige release/set (y EP vs playlist).
   const [scTracks, setScTracks] = useState<SoundcloudTrackOption[]>([]);
@@ -290,6 +307,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
       setMsg('Agrega el SoundCloud del DJ (en Redes) o pega la URL del perfil');
       return;
     }
+    setImportSource('soundcloud');
     setScLoading(true);
     setScError('');
     setScTracks([]);
@@ -329,15 +347,17 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
     }
   };
 
-  // Agrega UN track a la lista de mixes (release/set según elección; EP → release + is_ep).
+  // Agrega UN track a la lista de mixes. Bandcamp → siempre release (álbum = EP).
+  // SoundCloud → release/set según elección (EP → release + is_ep).
   const addMixEntry = (track: SoundcloudTrackOption, isEp: boolean) => {
+    const bandcamp = importSource === 'bandcamp';
     setMixes((m) => [
       ...m,
       {
         title: track.title,
-        platform: 'SoundCloud',
+        platform: bandcamp ? 'Bandcamp' : 'SoundCloud',
         url: track.url,
-        type: isEp ? 'release' : scSelectedType,
+        type: bandcamp ? 'release' : isEp ? 'release' : scSelectedType,
         ...(isEp ? { is_ep: true } : {}),
       },
     ]);
@@ -354,11 +374,84 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
   const addScTrack = () => {
     const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
     if (!track) return;
+    if (importSource === 'bandcamp') {
+      // En Bandcamp un álbum es un EP; un track es un release suelto. Sin ambigüedad.
+      addMixEntry(track, !!track.isAlbum);
+      return;
+    }
     if (isSetUrl(track.url)) {
       setEpPrompt(track); // preguntar EP vs playlist
       return;
     }
     addMixEntry(track, false);
+  };
+
+  // Escuchar el track seleccionado sin salir de la página (SoundCloud o Bandcamp).
+  const togglePreview = async () => {
+    const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+    const a = previewAudioRef.current;
+    if (!sel || !a) return;
+    if (previewUrl === sel.url) {
+      if (a.paused) a.play().catch(() => {});
+      else a.pause();
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const endpoint = /bandcamp\.com/i.test(sel.url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream';
+      const res = await fetch(`${endpoint}?url=${encodeURIComponent(sel.url)}`);
+      const data = await res.json();
+      if (!res.ok || !data.streamUrl) {
+        setMsg('No se pudo reproducir este track');
+        return;
+      }
+      a.src = data.streamUrl;
+      setPreviewUrl(sel.url);
+      setPreviewTime(0);
+      setPreviewDuration(0);
+      a.play().catch(() => {});
+    } catch {
+      setMsg('Error al reproducir');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const fetchBcTracks = async () => {
+    const manual = bcRef.current?.value.trim();
+    const social = socials.find((s) => s.platform === 'Bandcamp' && s.url.trim())?.url;
+    const url = manual || (social ? socialToUrl('Bandcamp', social) : '');
+    if (!url) {
+      setMsg('Pega la URL del Bandcamp del artista (ej. https://artista.bandcamp.com)');
+      return;
+    }
+    setImportSource('bandcamp');
+    setScLoading(true);
+    setScError('');
+    setScTracks([]);
+    setScSelectedTrack('');
+    setEpPrompt(null);
+    setPlaylistBlocked(false);
+    setScDropdownOpen(true);
+    try {
+      const res = await fetch(`/api/pk/bandcamp?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setScError(data.error || 'Error al cargar la discografía');
+        return;
+      }
+      const existing = new Set(mixes.map((m) => m.url));
+      const available: SoundcloudTrackOption[] = (data.tracks || []).filter(
+        (t: SoundcloudTrackOption) => !existing.has(t.url)
+      );
+      setScTracks(available);
+      if (available.length > 0) setScSelectedTrack(String(available[0].id));
+      else setScError('No se encontraron releases en ese Bandcamp.');
+    } catch {
+      setScError('Error al conectar con Bandcamp');
+    } finally {
+      setScLoading(false);
+    }
   };
 
   if (authLoading || loading) {
@@ -489,13 +582,19 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
             {scLoading ? '…' : 'Traer de SoundCloud'}
           </button>
         </div>
+        <div className="flex gap-2 items-center">
+          <input ref={bcRef} placeholder="URL Bandcamp del artista (ej. https://artista.bandcamp.com)" className={`${fieldBase} flex-1 min-w-0`} />
+          <button onClick={fetchBcTracks} disabled={scLoading} className="mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1da0c3] text-white disabled:opacity-50 whitespace-nowrap">
+            {scLoading ? '…' : 'Traer de Bandcamp'}
+          </button>
+        </div>
 
         {/* Dropdown de importación: agregar de a uno, eligiendo release/set por cada uno */}
         {scDropdownOpen && (
           <div className="brutalist-border p-4 space-y-3 bg-gray-50">
             {scLoading && (
               <div className="flex items-center gap-2 mono text-xs">
-                <RiLoader4Line className="w-4 h-4 animate-spin" /> Cargando tracks de SoundCloud…
+                <RiLoader4Line className="w-4 h-4 animate-spin" /> Cargando de {importSource === 'bandcamp' ? 'Bandcamp' : 'SoundCloud'}…
               </div>
             )}
             {scError && <p className="mono text-xs text-red-500">{scError}</p>}
@@ -503,17 +602,69 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
               <>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select value={scSelectedTrack} onChange={(e) => setScSelectedTrack(e.target.value)} className={`${fieldBase} flex-1 min-w-0`}>
-                    {scTracks.map((t) => <option key={t.id} value={String(t.id)}>{t.title}</option>)}
+                    {scTracks.map((t) => <option key={t.id} value={String(t.id)}>{importSource === 'bandcamp' && t.isAlbum ? `[EP] ${t.title}` : t.title}</option>)}
                   </select>
-                  <select value={scSelectedType} onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')} className={`${fieldBase} sm:w-32 shrink-0`}>
-                    {MIX_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  {/* En Bandcamp el tipo es siempre release (álbum = EP); no se elige. */}
+                  {importSource !== 'bandcamp' && (
+                    <select value={scSelectedType} onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')} className={`${fieldBase} sm:w-32 shrink-0`}>
+                      {MIX_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={addScTrack} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-[#ff5500] text-white hover:bg-[#cc4400]">+ Agregar</button>
-                  <button onClick={() => { setScDropdownOpen(false); setScTracks([]); setScError(''); setEpPrompt(null); setPlaylistBlocked(false); }} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border hover:bg-black hover:text-white">Cerrar</button>
+                  {(() => {
+                    const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+                    if (!sel) return null;
+                    const isCur = previewUrl === sel.url;
+                    return (
+                      <>
+                        <button onClick={togglePreview} disabled={previewLoading} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border inline-flex items-center gap-1 hover:bg-black hover:text-white disabled:opacity-50">
+                          {previewLoading && !isCur ? <RiLoader4Line className="w-3.5 h-3.5 animate-spin" /> : isCur && previewPlaying ? <RiPauseFill className="w-3.5 h-3.5" /> : <RiPlayFill className="w-3.5 h-3.5" />}
+                          {isCur && previewPlaying ? 'Pausar' : 'Escuchar'}
+                        </button>
+                        <a href={sel.url} target="_blank" rel="noopener noreferrer" className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border inline-flex items-center gap-1 text-blue-700 hover:bg-blue-50">
+                          Ver track <RiExternalLinkLine className="w-3.5 h-3.5" />
+                        </a>
+                      </>
+                    );
+                  })()}
+                  <button onClick={() => { previewAudioRef.current?.pause(); setScDropdownOpen(false); setScTracks([]); setScError(''); setEpPrompt(null); setPlaylistBlocked(false); }} className="mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border hover:bg-black hover:text-white">Cerrar</button>
                   <span className="mono text-[11px] uppercase text-gray-500 self-center">{scTracks.length} por agregar</span>
                 </div>
+                <audio
+                  ref={previewAudioRef}
+                  preload="none"
+                  onPlay={() => setPreviewPlaying(true)}
+                  onPause={() => setPreviewPlaying(false)}
+                  onEnded={() => setPreviewPlaying(false)}
+                  onTimeUpdate={() => setPreviewTime(previewAudioRef.current?.currentTime || 0)}
+                  onLoadedMetadata={() => setPreviewDuration(previewAudioRef.current?.duration || 0)}
+                />
+                {previewUrl && (
+                  <div className="space-y-1">
+                    <p className="mono text-[11px] uppercase text-gray-500 truncate">
+                      {previewLoading ? 'Cargando audio…' : `${previewPlaying ? '▶' : '❚❚'} ${scTracks.find((t) => t.url === previewUrl)?.title || ''}`}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="mono text-[10px] tabular-nums text-gray-500 w-9 text-right">{fmtTime(previewTime)}</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={previewDuration || 0}
+                        step={0.1}
+                        value={Math.min(previewTime, previewDuration || 0)}
+                        onChange={(e) => {
+                          const a = previewAudioRef.current;
+                          if (a) { a.currentTime = +e.target.value; setPreviewTime(+e.target.value); }
+                        }}
+                        aria-label="Avanzar en el track"
+                        className="flex-1 h-1.5 accent-[#ff0055] cursor-pointer"
+                      />
+                      <span className="mono text-[10px] tabular-nums text-gray-500 w-9">{fmtTime(previewDuration)}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Set → preguntar si es EP (publicable) o playlist (no) */}
                 {epPrompt && (

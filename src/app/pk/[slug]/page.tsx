@@ -8,6 +8,7 @@ import { parseRider, setupRows, riderIsEmpty, riderDisplay } from '@/src/lib/rid
 import DownloadPresskitButton from '@/src/components/pk/DownloadPresskitButton';
 import ReleasesPlayer from '@/src/components/ReleasesPlayer';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
+import { isBandcampUrl } from '@/src/lib/bandcamp';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
@@ -243,8 +244,11 @@ export default async function PublicPresskitPage({ params }: PageProps) {
           no se tocan, así que el PDF se sigue generando igual. */}
       {presskit.mixes.length > 0 && (() => {
         const valid = presskit.mixes.filter((m) => m.title?.trim() && m.url?.trim());
-        const scReleases: NationalRelease[] = valid
-          .filter((m) => isSoundcloudUrl(ensureAbsoluteUrl(m.url)))
+        // El player reproduce SoundCloud Y Bandcamp; el resto (YouTube/Spotify…)
+        // queda como tarjetas-link.
+        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u);
+        const playerReleases: NationalRelease[] = valid
+          .filter((m) => playable(ensureAbsoluteUrl(m.url)))
           .map((m) => ({
             title: m.title,
             url: ensureAbsoluteUrl(m.url),
@@ -253,14 +257,14 @@ export default async function PublicPresskitPage({ params }: PageProps) {
             releasedAt: m.released_at ?? null,
             downloadable: false, // se lee en vivo por track
             downloadUrl: null,
-            isEp: m.is_ep === true || /\/sets\//i.test(m.url),
+            isEp: m.is_ep === true || /\/sets\//i.test(m.url) || /\/album\//i.test(m.url),
             kind: m.type === 'set' ? 'set' : 'release',
           }));
-        const others = valid.filter((m) => !isSoundcloudUrl(ensureAbsoluteUrl(m.url)));
+        const others = valid.filter((m) => !playable(ensureAbsoluteUrl(m.url)));
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
-            {scReleases.length > 0 && <ReleasesPlayer releases={scReleases} hideArtistFilter />}
+            {playerReleases.length > 0 && <ReleasesPlayer releases={playerReleases} hideArtistFilter />}
             {others.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 {others.map((mix, i) => (

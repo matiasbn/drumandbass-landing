@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { PresskitMix } from '@/src/types/presskit';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
+import { isBandcampUrl } from '@/src/lib/bandcamp';
 
 export interface NationalRelease {
   title: string;
@@ -62,7 +63,7 @@ export async function getNationalReleases(limit?: number): Promise<NationalRelea
       if (
         m.featured &&
         m.type === 'release' &&
-        isSoundcloudUrl(m.url) &&
+        (isSoundcloudUrl(m.url) || isBandcampUrl(m.url)) &&
         m.title?.trim() &&
         m.url?.trim()
       ) {
@@ -77,7 +78,7 @@ export async function getNationalReleases(limit?: number): Promise<NationalRelea
           // la DB — así refleja al instante si el artista la habilita/inhabilita.
           downloadable: false,
           downloadUrl: null,
-          isEp: m.is_ep === true,
+          isEp: m.is_ep === true || /\/album\//i.test(m.url),
         });
       }
     }

@@ -47,6 +47,7 @@ interface SoundcloudTrackOption {
   id: string;
   title: string;
   url: string;
+  isAlbum?: boolean; // Bandcamp: álbum/EP vs track suelto
 }
 
 function PresskitEditor() {
@@ -97,6 +98,8 @@ function PresskitEditor() {
   const [scError, setScError] = useState('');
   const [scSelectedTrack, setScSelectedTrack] = useState<string>('');
   const [scSelectedType, setScSelectedType] = useState<'set' | 'release'>('set');
+  // Fuente del import abierto (SoundCloud o Bandcamp) — define plataforma al agregar.
+  const [importSource, setImportSource] = useState<'soundcloud' | 'bandcamp'>('soundcloud');
   const [scDropdownOpen, setScDropdownOpen] = useState(false);
   // Item de tipo set pendiente de confirmar (EP vs playlist).
   const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
@@ -531,8 +534,15 @@ function PresskitEditor() {
 
   const hasSoundcloud = soundcloudUrls.length > 0;
 
+  // Bandcamp: el DJ puede tener su Bandcamp en Redes; se importa igual que SoundCloud.
+  const bandcampUrls = socials
+    .filter((s) => s.platform === 'Bandcamp' && s.url.trim())
+    .map((s) => socialToUrl('Bandcamp', s.url));
+  const hasBandcamp = bandcampUrls.length > 0;
+
   const fetchScTracks = async () => {
     if (soundcloudUrls.length === 0) return;
+    setImportSource('soundcloud');
     setScLoading(true);
     setScError('');
     setScTracks([]);
@@ -572,21 +582,63 @@ function PresskitEditor() {
     }
   };
 
+  const fetchBcTracks = async () => {
+    if (bandcampUrls.length === 0) return;
+    setImportSource('bandcamp');
+    setScLoading(true);
+    setScError('');
+    setScTracks([]);
+    setScSelectedTrack('');
+    setEpPrompt(null);
+    setScDropdownOpen(true);
+    try {
+      const perAccount = await Promise.all(
+        bandcampUrls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/bandcamp?url=${encodeURIComponent(u)}`);
+            if (!res.ok) return [] as SoundcloudTrackOption[];
+            const data = await res.json();
+            return (data.tracks || []) as SoundcloudTrackOption[];
+          } catch {
+            return [] as SoundcloudTrackOption[];
+          }
+        })
+      );
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const available: SoundcloudTrackOption[] = [];
+      for (const t of perAccount.flat()) {
+        if (existingUrls.has(t.url) || seen.has(t.url)) continue;
+        seen.add(t.url);
+        available.push(t);
+      }
+      available.sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base', numeric: true }));
+      setScTracks(available);
+      if (available.length > 0) setScSelectedTrack(String(available[0].id));
+      else setScError('No se encontraron releases en tu Bandcamp.');
+    } catch {
+      setScError('Error al conectar con Bandcamp');
+    } finally {
+      setScLoading(false);
+    }
+  };
+
   // Un item de SoundCloud es un "set" (URL /sets/…) cuando es un EP, álbum o
   // playlist. No podemos distinguir un EP de una playlist automáticamente, así
   // que se lo preguntamos al artista y bloqueamos las playlists.
   const isSetUrl = (url: string) => /soundcloud\.com\/[^/]+\/sets\//i.test(url);
 
   const addMixEntry = (track: SoundcloudTrackOption, isEp: boolean) => {
-    autoPendingRef.current = true; // importar desde SoundCloud → auto-guardar
+    autoPendingRef.current = true; // importar → auto-guardar
+    const bandcamp = importSource === 'bandcamp';
     setMixes([
       ...mixes,
       {
         title: track.title,
-        platform: 'SoundCloud',
+        platform: bandcamp ? 'Bandcamp' : 'SoundCloud',
         url: track.url,
-        // Un EP es un release (aparece en Releases Nacionales); marcamos is_ep.
-        type: isEp ? 'release' : scSelectedType,
+        // Un EP/álbum es un release (aparece en Releases Nacionales); marcamos is_ep.
+        type: bandcamp ? 'release' : isEp ? 'release' : scSelectedType,
         ...(isEp ? { is_ep: true } : {}),
       },
     ]);
@@ -599,6 +651,10 @@ function PresskitEditor() {
   const addScTrack = () => {
     const track = scTracks.find((t) => String(t.id) === scSelectedTrack);
     if (!track) return;
+    if (importSource === 'bandcamp') {
+      addMixEntry(track, !!track.isAlbum); // álbum = EP; track = release suelto
+      return;
+    }
     // Si es un set, preguntamos EP vs playlist antes de agregar.
     if (isSetUrl(track.url)) {
       setEpPrompt(track);
@@ -1342,6 +1398,17 @@ function PresskitEditor() {
                     AGREGAR DESDE SOUNDCLOUD
                   </button>
                 )}
+                {hasBandcamp && (
+                  <button
+                    type="button"
+                    onClick={fetchBcTracks}
+                    disabled={scLoading}
+                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#1da0c3] hover:text-white transition-colors"
+                  >
+                    {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                    AGREGAR DESDE BANDCAMP
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={addMix}
@@ -1353,11 +1420,11 @@ function PresskitEditor() {
               </div>
             </div>
 
-            {/* SoundCloud message when no SC in socials */}
-            {!hasSoundcloud && (
+            {/* Mensaje cuando no hay ni SoundCloud ni Bandcamp en redes */}
+            {!hasSoundcloud && !hasBandcamp && (
               <div className="flex items-start gap-2 p-3 bg-orange-50 border-2 border-orange-300 text-orange-800 mono text-xs mb-3">
                 <RiSoundcloudLine className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Agrega tu SoundCloud en redes sociales para importar tus tracks.</span>
+                <span>Agrega tu SoundCloud o Bandcamp en redes sociales para importar tus tracks.</span>
               </div>
             )}
 
@@ -1367,7 +1434,7 @@ function PresskitEditor() {
                 {scLoading && (
                   <div className="flex items-center gap-2 mono text-xs">
                     <RiLoader4Line className="w-4 h-4 animate-spin" />
-                    Cargando tracks de SoundCloud...
+                    Cargando de {importSource === 'bandcamp' ? 'Bandcamp' : 'SoundCloud'}...
                   </div>
                 )}
                 {scError && (
@@ -1383,19 +1450,22 @@ function PresskitEditor() {
                       >
                         {scTracks.map((t) => (
                           <option key={t.id} value={String(t.id)}>
-                            {t.title}
+                            {importSource === 'bandcamp' && t.isAlbum ? `[EP] ${t.title}` : t.title}
                           </option>
                         ))}
                       </select>
-                      <select
-                        value={scSelectedType}
-                        onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')}
-                        className={`${inputClass} sm:w-32`}
-                      >
-                        {MIX_TYPE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      {/* En Bandcamp el tipo es siempre release (álbum = EP); no se elige. */}
+                      {importSource !== 'bandcamp' && (
+                        <select
+                          value={scSelectedType}
+                          onChange={(e) => setScSelectedType(e.target.value as 'set' | 'release')}
+                          className={`${inputClass} sm:w-32`}
+                        >
+                          {MIX_TYPE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
