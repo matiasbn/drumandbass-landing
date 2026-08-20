@@ -603,6 +603,21 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
         </div>
       </section>
 
+      {/* Secciones personalizadas — van justo después de la Bio, como en el
+          presskit público (bio → secciones personalizadas → resto). */}
+      <ListSection
+        title="Secciones personalizadas"
+        items={customSections}
+        onAdd={() => setCustomSections((c) => [...c, { title: '', body: '' }])}
+        onRemove={(i) => setCustomSections((c) => c.filter((_, idx) => idx !== i))}
+        render={(s, i) => (
+          <div className="space-y-2">
+            <input value={s.title} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${inputClass} font-bold uppercase`} />
+            <textarea value={s.body} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, body: e.target.value } : x)))} placeholder="Contenido" className={`${inputClass} min-h-[80px]`} />
+          </div>
+        )}
+      />
+
       {/* Fotos */}
       <section className="brutalist-border p-4 space-y-3">
         <label className={labelClass}>Fotos</label>
@@ -825,20 +840,6 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
           <div className="flex gap-2">
             <input value={l.title} onChange={(e) => setLinks((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${fieldBase} w-40 shrink-0`} />
             <input value={l.url} onChange={(e) => setLinks((arr) => arr.map((x, idx) => (idx === i ? { ...x, url: e.target.value } : x)))} placeholder="URL" className={`${fieldBase} flex-1 min-w-0`} />
-          </div>
-        )}
-      />
-
-      {/* Secciones personalizadas */}
-      <ListSection
-        title="Secciones personalizadas"
-        items={customSections}
-        onAdd={() => setCustomSections((c) => [...c, { title: '', body: '' }])}
-        onRemove={(i) => setCustomSections((c) => c.filter((_, idx) => idx !== i))}
-        render={(s, i) => (
-          <div className="space-y-2">
-            <input value={s.title} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${inputClass} font-bold uppercase`} />
-            <textarea value={s.body} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, body: e.target.value } : x)))} placeholder="Contenido" className={`${inputClass} min-h-[80px]`} />
           </div>
         )}
       />
