@@ -16,6 +16,7 @@ import {
   emptySetup,
 } from '@/src/lib/rider';
 import { emptyPendingData, PendingPresskitData } from '@/src/types/pendingPresskit';
+import RichTextEditor from '@/src/components/pk/RichTextEditor';
 import type { PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
 import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill, RiEyeLine, RiFileCopyLine, RiCheckLine, RiTimeLine, RiSoundcloudLine, RiAlbumFill } from '@remixicon/react';
 
@@ -615,7 +616,7 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
         render={(s, i) => (
           <div className="space-y-2">
             <input value={s.title} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${inputClass} font-bold uppercase`} />
-            <textarea value={s.body} onChange={(e) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, body: e.target.value } : x)))} placeholder="Contenido" className={`${inputClass} min-h-[80px]`} />
+            <RichTextEditor value={s.body} onChange={(v) => setCustomSections((arr) => arr.map((x, idx) => (idx === i ? { ...x, body: v } : x)))} />
           </div>
         )}
       />

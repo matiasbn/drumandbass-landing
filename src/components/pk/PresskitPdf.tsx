@@ -3,6 +3,7 @@ import { Document, Page, View, Text, Image, Link, StyleSheet, Font } from '@reac
 import type { Presskit } from '@/src/types/presskit';
 import { socialToUrl } from '@/src/lib/socials';
 import { parseRider, riderDisplay } from '@/src/lib/rider';
+import { looksLikeHtml, htmlToPlainText } from '@/src/lib/mdFormat';
 
 // PDF "enviable" del presskit: documento propio (no captura), links clickeables,
 // estética brutalista de la marca. Space Mono es una de las tipografías del sitio
@@ -180,13 +181,17 @@ export function PresskitPdf({ presskit, photoData, slug }: { presskit: Presskit;
           </View>
         ) : null}
 
-        {/* Secciones personalizadas (título + contenido), tras la bio */}
-        {customSections.map((sec, i) => (
-          <View key={i} style={s.section} wrap={shouldSplit(sec.body)}>
-            <SectionTitle title={sec.title} />
-            <Text style={s.bio}>{sec.body}</Text>
-          </View>
-        ))}
+        {/* Secciones personalizadas (título + contenido), tras la bio. El body
+            puede ser HTML (WYSIWYG) → se pasa a texto legible para el PDF. */}
+        {customSections.map((sec, i) => {
+          const body = looksLikeHtml(sec.body) ? htmlToPlainText(sec.body) : sec.body;
+          return (
+            <View key={i} style={s.section} wrap={shouldSplit(body)}>
+              <SectionTitle title={sec.title} />
+              <Text style={s.bio}>{body}</Text>
+            </View>
+          );
+        })}
 
         {/* Rider */}
         {riderItems.length > 0 || rider.notes ? (

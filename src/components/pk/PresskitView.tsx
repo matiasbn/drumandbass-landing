@@ -9,6 +9,7 @@ import { isBandcampUrl } from '@/src/lib/bandcamp';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
+import { looksLikeHtml } from '@/src/lib/mdFormat';
 import {
   RiInstagramLine,
   RiSoundcloudLine,
@@ -49,6 +50,66 @@ interface PresskitViewProps {
   // preview = vista previa del admin (presskit no publicado): oculta la descarga
   // del PDF, que necesita un presskit real publicado por slug.
   preview?: boolean;
+}
+
+// Negrita inline: "**texto**" → <strong>. Devuelve nodos (texto + strong).
+function renderInline(text: string, keyBase: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /\*\*(.+?)\*\*/g;
+  let last = 0;
+  let idx = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<strong key={`${keyBase}-b${idx++}`}>{m[1]}</strong>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length ? out : [text];
+}
+
+// Render del cuerpo de una sección personalizada (Markdown-lite): agrupa líneas
+// "- "/"* "/"• " en viñetas, "1. "/"1) " en lista numerada, aplica **negrita**
+// inline, y el resto queda como párrafos con saltos de línea preservados. El DJ
+// escribe en texto plano (así se guarda), sin editor rico.
+function SectionBody({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let ul: string[] = [];
+  let ol: string[] = [];
+  let para: string[] = [];
+  const flushPara = () => {
+    const joined = para.join('\n').replace(/\n+$/, '');
+    if (joined.trim()) blocks.push(<p key={`p${blocks.length}`} className="whitespace-pre-line break-words">{renderInline(joined, `p${blocks.length}`)}</p>);
+    para = [];
+  };
+  const flushUl = () => {
+    if (ul.length) blocks.push(
+      <ul key={`u${blocks.length}`} className="list-disc pl-6 space-y-1 break-words">
+        {ul.map((b, i) => <li key={i}>{renderInline(b, `u${blocks.length}-${i}`)}</li>)}
+      </ul>
+    );
+    ul = [];
+  };
+  const flushOl = () => {
+    if (ol.length) blocks.push(
+      <ol key={`o${blocks.length}`} className="list-decimal pl-6 space-y-1 break-words">
+        {ol.map((b, i) => <li key={i}>{renderInline(b, `o${blocks.length}-${i}`)}</li>)}
+      </ol>
+    );
+    ol = [];
+  };
+  for (const line of lines) {
+    const bl = line.match(/^\s*[-*•]\s+(.*)$/);
+    const nu = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (bl) { flushPara(); flushOl(); ul.push(bl[1]); }
+    else if (nu) { flushPara(); flushUl(); ol.push(nu[1]); }
+    else { flushUl(); flushOl(); para.push(line); }
+  }
+  flushPara();
+  flushUl();
+  flushOl();
+  return <div className="text-lg leading-relaxed max-w-3xl overflow-hidden space-y-4">{blocks}</div>;
 }
 
 // Cuerpo del presskit público, reutilizable: lo usa la página pública
@@ -112,7 +173,14 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
         .map((sec, i) => (
           <section key={i} className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6 break-words">{sec.title}</h2>
-            <p className="text-lg leading-relaxed max-w-3xl whitespace-pre-line break-words overflow-hidden">{sec.body}</p>
+            {looksLikeHtml(sec.body) ? (
+              <div
+                className="text-lg leading-relaxed max-w-3xl break-words overflow-hidden [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_p]:mb-3 [&_strong]:font-black [&_b]:font-black [&_em]:italic [&_u]:underline [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: sec.body }}
+              />
+            ) : (
+              <SectionBody text={sec.body} />
+            )}
           </section>
         ))}
 
