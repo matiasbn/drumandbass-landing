@@ -17,7 +17,7 @@ import {
 } from '@/src/lib/rider';
 import { emptyPendingData, PendingPresskitData } from '@/src/types/pendingPresskit';
 import type { PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
-import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill, RiEyeLine, RiFileCopyLine, RiCheckLine, RiTimeLine } from '@remixicon/react';
+import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine, RiPlayFill, RiPauseFill, RiEyeLine, RiFileCopyLine, RiCheckLine, RiTimeLine, RiSoundcloudLine, RiAlbumFill } from '@remixicon/react';
 
 // Base SIN ancho: en filas flex el ancho lo da flex-1/w-N. `inputClass` (con
 // w-full) es solo para campos de una columna; en filas flex usar `fieldBase` +
@@ -759,11 +759,19 @@ export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' |
 
         {mixes.map((m, i) => {
           const playable = /soundcloud\.com|bandcamp\.com/i.test(m.url);
+          const isBc = /bandcamp\.com/i.test(m.url);
+          const isSc = /soundcloud\.com/i.test(m.url);
           const isCur = previewUrl === m.url;
           const durMs = durations[m.url.trim()];
           const durLong = typeof durMs === 'number' && durMs >= 15 * 60 * 1000; // ≥15min ~ set
           return (
-          <div key={i} className="border-2 border-black p-2 space-y-2 bg-gray-50">
+          <div key={i} className="border-2 border-l-4 border-black p-2 space-y-2 bg-gray-50" style={{ borderLeftColor: isBc ? '#1da0c3' : isSc ? '#FF5500' : undefined }}>
+            {(isBc || isSc) && (
+              <span className="mono text-[10px] font-black uppercase inline-flex items-center gap-1 px-2 py-0.5 text-white w-fit" style={{ backgroundColor: isBc ? '#1da0c3' : '#FF5500' }}>
+                {isBc ? <RiAlbumFill className="w-3 h-3" /> : <RiSoundcloudLine className="w-3 h-3" />}
+                {isBc ? 'Bandcamp' : 'SoundCloud'}
+              </span>
+            )}
             <div className="flex gap-2">
               <input value={m.title} onChange={(e) => setMixes((arr) => arr.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" className={`${fieldBase} flex-1 min-w-0`} />
               <select value={m.type || 'set'} onChange={(e) => setMixes((arr) => arr.map((x, idx) => (idx === i ? { ...x, type: e.target.value as 'set' | 'release' } : x)))} className={`${fieldBase} w-28 shrink-0`}>
