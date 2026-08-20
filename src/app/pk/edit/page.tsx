@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PkAuthProvider, usePkAuth } from '@/src/components/pk/PkAuthContext';
 import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
+import RichTextEditor from '@/src/components/pk/RichTextEditor';
 import { Presskit, PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
@@ -956,13 +957,7 @@ function PresskitEditor() {
                     </div>
                   </div>
                 )}
-                <textarea
-                  value={sec.body}
-                  onChange={(e) => updateCustomSection(i, 'body', e.target.value)}
-                  placeholder="Contenido de la sección…"
-                  className={`${inputClass} min-h-[100px] resize-y`}
-                  rows={4}
-                />
+                <RichTextEditor value={sec.body} onChange={(v) => updateCustomSection(i, 'body', v)} />
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
