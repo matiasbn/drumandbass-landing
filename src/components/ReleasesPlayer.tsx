@@ -16,8 +16,29 @@ import {
 } from '@remixicon/react';
 import dayjs from '@/src/lib/date';
 import { event } from '@/src/lib/gtag';
-import { isYoutubeUrl, youtubeEmbedUrl } from '@/src/lib/youtubeUrl';
+import { isYoutubeUrl, youtubeEmbedUrl, youtubeVideoId, youtubePlaylistId } from '@/src/lib/youtubeUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
+
+// YouTube IFrame Player API (control por JS del iframe): permite que nuestro
+// botón play/pause y el auto-avance controlen el video embebido.
+interface YtPlayer {
+  playVideo(): void;
+  pauseVideo(): void;
+  loadVideoById(id: string): void;
+  loadPlaylist(o: { list: string; listType?: string }): void;
+  getPlayerState(): number;
+  destroy(): void;
+}
+interface YtNamespace {
+  Player: new (el: string | HTMLElement, opts: Record<string, unknown>) => YtPlayer;
+}
+declare global {
+  interface Window {
+    YT?: YtNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+const YT_CONTAINER_ID = 'pk-yt-player';
 
 function fmt(ms: number): string {
   if (!ms || ms < 0 || !isFinite(ms)) return '0:00';
@@ -45,6 +66,11 @@ function PlatformIcon({ url, className, style }: { url: string; className?: stri
   if (isYt(url)) return <RiYoutubeLine className={className} style={style} />;
   return isBc(url) ? <RiAlbumFill className={className} style={style} /> : <RiSoundcloudLine className={className} style={style} />;
 }
+// Punto de montaje del reproductor de YouTube. Memoizado sin props → NUNCA se
+// re-renderiza, así React no pisa el iframe que crea la IFrame API.
+const YtMount = React.memo(function YtMount() {
+  return <div id={YT_CONTAINER_ID} className="w-full h-full" />;
+});
 
 interface SetTrack {
   title: string;
@@ -198,9 +224,11 @@ export default function ReleasesPlayer({
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [nowPlaying, setNowPlaying] = useState<{ title: string; artist: string; artwork: string | null; permalink: string } | null>(null);
-  // Si el track actual es de YouTube, su URL de embed → se muestra el iframe en el
-  // frame central (YouTube no suena por el <audio>; usa su propio reproductor).
+  // Si el track actual es de YouTube, su URL de embed → se muestra el reproductor
+  // de YouTube en el frame central (no suena por el <audio>).
   const [ytEmbed, setYtEmbed] = useState<string | null>(null);
+  const [ytApiReady, setYtApiReady] = useState(false);
+  const ytPlayerRef = useRef<YtPlayer | null>(null);
   // Track que no se pudo reproducir (HLS no soportado, sin stream, etc.) → aviso.
   const [playbackError, setPlaybackError] = useState<{ title: string; permalink: string } | null>(null);
   const errorRetryRef = useRef<string | null>(null); // url que ya reintentamos una vez
@@ -374,6 +402,7 @@ export default function ReleasesPlayer({
         return;
       }
       setYtEmbed(null);
+      ytPlayerRef.current?.pauseVideo(); // por si venía un video de YouTube
       const cached = streamCache.current[item.url];
       if (cached) {
         applyStream(cached, item);
@@ -425,6 +454,46 @@ export default function ReleasesPlayer({
     if (a.paused) void a.play().catch(() => {});
     else a.pause();
   }, []);
+
+  // Carga la IFrame Player API de YouTube una sola vez.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.YT?.Player) { setYtApiReady(true); return; }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { prev?.(); setYtApiReady(true); };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(s);
+    }
+  }, []);
+
+  // Crea (o recarga) el reproductor de YouTube con el track actual. onStateChange
+  // sincroniza play/pause con nuestra UI y, al terminar, salta al siguiente.
+  useEffect(() => {
+    if (!ytEmbed || !ytApiReady || !window.YT) return;
+    const url = nowPlaying?.permalink || '';
+    const vid = youtubeVideoId(url);
+    const pl = youtubePlaylistId(url);
+    const load = (p: YtPlayer) => {
+      if (vid) p.loadVideoById(vid);
+      else if (pl) p.loadPlaylist({ list: pl, listType: 'playlist' });
+    };
+    if (ytPlayerRef.current) { load(ytPlayerRef.current); return; }
+    ytPlayerRef.current = new window.YT.Player(YT_CONTAINER_ID, {
+      videoId: vid || undefined,
+      playerVars: pl ? { list: pl, listType: 'playlist' } : {},
+      events: {
+        onReady: (e: { target: YtPlayer }) => e.target.playVideo(),
+        onStateChange: (e: { data: number }) => {
+          if (e.data === 1) setPlaying(true);
+          else if (e.data === 2) setPlaying(false);
+          else if (e.data === 0) nextRef.current(); // terminó → siguiente track
+        },
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytEmbed, ytApiReady, nowPlaying?.permalink]);
 
   // Precarga (resuelve) el stream del actual y el siguiente → "siguiente" instantáneo.
   useEffect(() => {
@@ -814,7 +883,17 @@ export default function ReleasesPlayer({
               <RiSkipBackFill className="w-5 h-5" />
             </button>
             <button
-              onClick={() => (current < 0 ? (queue.length ? playQueue(0) : undefined) : toggle())}
+              onClick={() => {
+                if (ytEmbed) {
+                  const p = ytPlayerRef.current;
+                  if (!p) return;
+                  if (p.getPlayerState() === 1) p.pauseVideo();
+                  else p.playVideo();
+                  return;
+                }
+                if (current < 0) { if (queue.length) playQueue(0); }
+                else toggle();
+              }}
               disabled={items.length === 0}
               aria-label={playing ? 'Pausar' : 'Reproducir'}
               className="w-10 h-10 flex items-center justify-center bg-[#FF5500] text-black hover:bg-white disabled:opacity-30 shrink-0"
@@ -870,20 +949,17 @@ export default function ReleasesPlayer({
           {/* Carátula (visual limpio, nuestro). Para YouTube, el mismo frame
               muestra el video embebido (su propio reproductor). */}
           <div className="relative w-full aspect-square max-h-[240px] sm:max-h-[300px] lg:max-h-[420px] bg-neutral-900 overflow-hidden flex items-center justify-center">
-            {ytEmbed ? (
-              <iframe
-                src={ytEmbed}
-                title={nowPlaying?.title || 'YouTube'}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : artwork ? (
+            {/* Reproductor de YouTube: SIEMPRE montado (conserva el iframe de la
+                API), visible solo cuando el track actual es de YouTube. */}
+            <div className={`absolute inset-0 bg-black ${ytEmbed ? 'block' : 'hidden'}`}>
+              <YtMount />
+            </div>
+            {!ytEmbed && (artwork ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={artwork} alt="" className="w-full h-full object-cover" />
             ) : (
               <PlatformIcon url={nowPlaying?.permalink || ''} className="w-16 h-16 opacity-40" style={{ color: platformColor(nowPlaying?.permalink || '') }} />
-            )}
+            ))}
             {nowPlaying && !playbackError && !ytEmbed && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
                 <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
