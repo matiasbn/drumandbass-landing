@@ -24,6 +24,7 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
+  RiAlbumFill,
   RiArrowLeftSLine,
   RiArrowRightSLine,
 } from '@remixicon/react';
@@ -1531,8 +1532,9 @@ function PresskitEditor() {
               {mixes.map((mix, i) => {
                 const canFeature =
                   mix.type === 'release' &&
-                  mix.platform === 'SoundCloud' &&
+                  (mix.platform === 'SoundCloud' || mix.platform === 'Bandcamp') &&
                   mix.url.trim().length > 0;
+                const isBc = mix.platform === 'Bandcamp';
                 return (
                   <div key={i} className="space-y-2">
                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1582,9 +1584,9 @@ function PresskitEditor() {
                           type="checkbox"
                           checked={!!mix.featured}
                           onChange={() => toggleMixFeatured(i)}
-                          className="w-4 h-4 accent-[#FF5500]"
+                          className={`w-4 h-4 ${isBc ? 'accent-[#1da0c3]' : 'accent-[#FF5500]'}`}
                         />
-                        <RiSoundcloudLine className="w-4 h-4 text-[#FF5500]" />
+                        {isBc ? <RiAlbumFill className="w-4 h-4 text-[#1da0c3]" /> : <RiSoundcloudLine className="w-4 h-4 text-[#FF5500]" />}
                         Publicar en Releases Nacionales
                       </label>
                     )}
