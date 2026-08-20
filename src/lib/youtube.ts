@@ -32,7 +32,9 @@ export async function getSotanoVideos(max = 6): Promise<YoutubeVideo[]> {
     const url =
       `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet` +
       `&playlistId=${UPLOADS_PLAYLIST}&maxResults=50&key=${key}`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    // 60s: un capítulo nuevo aparece en ~1 min. Con ISR se llama como máximo 1
+    // vez por minuto (~1440/día vs cuota de 10k), no en cada request.
+    const res = await fetch(url, { next: { revalidate: 60 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as { items?: PlaylistItem[] };
