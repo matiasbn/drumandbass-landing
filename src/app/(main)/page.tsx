@@ -4,11 +4,10 @@ import type { Metadata } from 'next';
 import EventItem from '@/src/components/EventItem';
 import EventsCarousel from '@/src/components/EventsCarousel';
 import CommunityZone from '@/src/components/CommunityZone';
-import YoutubeVideos from '@/src/components/YoutubeVideos';
+import SotanoSection from '@/src/components/SotanoSection';
 import NationalReleasesSection from '@/src/components/NationalReleasesSection';
 import dayjs, { CHILE_TZ } from '@/src/lib/date';
 import { getEvents } from '@/src/lib/cms';
-import { getSotanoVideos } from '@/src/lib/youtube';
 import { getMockEvents, MOCK_EVENTS_ENABLED } from '@/src/lib/mockEvents';
 
 export const metadata: Metadata = {
@@ -28,18 +27,14 @@ export const metadata: Metadata = {
   },
 };
 
-// 60s: un capítulo nuevo de El Sótano (que no tiene hook de revalidación como los
-// eventos) aparece en ~1 min. Con ISR el home se regenera como MÁXIMO 1 vez por
-// minuto sin importar el tráfico, así que el costo (1 llamada a YouTube por
-// regeneración, ~1440/día vs. cuota de 10k) es holgado. Los eventos igual se
-// revalidan al instante vía revalidatePath al editar en el admin.
+// ISR del home para los EVENTOS (60s). El Sótano ya NO depende de esto: se carga
+// client-side vía <SotanoSection/> (/api/sotano), así un capítulo nuevo aparece
+// casi al instante sin esperar esta caché. Los eventos igual se revalidan al
+// instante vía revalidatePath al editar en el admin.
 export const revalidate = 60;
 
 const Home = async () => {
-  const [cmsEvents, sotanoVideos] = await Promise.all([
-    getEvents(),
-    getSotanoVideos(2),
-  ]);
+  const cmsEvents = await getEvents();
 
   // En dev, se añaden eventos sintéticos (misma forma que el CMS) para ver
   // todos los estados. En producción MOCK_EVENTS_ENABLED es siempre false.
@@ -101,17 +96,8 @@ const Home = async () => {
       {/* Releases Nacionales — carga client-side (siempre fresco), antes de El Sótano */}
       <NationalReleasesSection />
 
-      {/* Videos de El Sótano (YouTube) */}
-      {sotanoVideos.length > 0 && (
-        <section className="p-6 lg:p-12 border-b-4 border-black">
-          <h2 className="text-5xl font-black uppercase mb-2 italic">El Sótano</h2>
-          <p className="mono text-base lg:text-lg font-bold uppercase opacity-60 mb-6 leading-tight">
-            Nuestra serie audiovisual: le abrimos la cabina a los DJs de drum and bass de Chile
-            para que muestren lo suyo.
-          </p>
-          <YoutubeVideos videos={sotanoVideos} />
-        </section>
-      )}
+      {/* El Sótano (YouTube) — carga client-side (siempre fresco, sin caché del home) */}
+      <SotanoSection />
     </main>
   );
 };
