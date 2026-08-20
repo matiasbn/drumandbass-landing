@@ -1131,7 +1131,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                   <button
                     type="button"
                     onClick={handleSave}
-                    disabled={!dirty || saving}
+                    disabled={saving || (!isAdmin && !dirty)}
                     className="brutalist-border bg-black text-white px-5 py-1.5 mono text-xs font-bold uppercase hover:bg-gray-900 disabled:opacity-40 disabled:cursor-default cursor-pointer"
                   >
                     {saving ? 'Guardando…' : 'Guardar'}
@@ -1299,7 +1299,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={!dirty || saving}
+              disabled={saving || (!isAdmin && !dirty)}
               className="brutalist-border bg-black text-white px-6 py-2 mono text-sm font-bold uppercase hover:bg-gray-900 disabled:opacity-40 disabled:cursor-default cursor-pointer"
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -1887,7 +1887,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
           <div className="flex items-center gap-4">
             <button
               onClick={handleSave}
-              disabled={saving || !dirty || !artistName || photoUrls.length > 5 || logoUrls.length > MAX_LOGOS}
+              // En modo admin no exigimos "dirty" (el slug/email del header no
+              // entran en esa detección): el guardar queda disponible siempre.
+              disabled={saving || !artistName || photoUrls.length > 5 || logoUrls.length > MAX_LOGOS || (!isAdmin && !dirty)}
               className="inline-flex items-center gap-2 bg-[#ff0055] text-white px-8 py-3 font-black uppercase tracking-wider brutalist-border border-black hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
             >
               {saving ? (
