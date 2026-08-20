@@ -523,15 +523,16 @@ function PresskitEditor() {
     return () => clearTimeout(t);
   }, [riderData.setups.length]);
 
-  // SoundCloud helpers
-  const soundcloudUrl = socials.find(
-    (s) => s.platform === 'SoundCloud' && s.url.trim()
-  )?.url;
+  // SoundCloud helpers — un DJ puede tener MÁS DE UNA cuenta de SoundCloud, así
+  // que juntamos los tracks de todas al importar.
+  const soundcloudUrls = socials
+    .filter((s) => s.platform === 'SoundCloud' && s.url.trim())
+    .map((s) => s.url);
 
-  const hasSoundcloud = Boolean(soundcloudUrl);
+  const hasSoundcloud = soundcloudUrls.length > 0;
 
   const fetchScTracks = async () => {
-    if (!soundcloudUrl) return;
+    if (soundcloudUrls.length === 0) return;
     setScLoading(true);
     setScError('');
     setScTracks([]);
@@ -539,21 +540,31 @@ function PresskitEditor() {
     setScDropdownOpen(true);
 
     try {
-      const resolvedUrl = socialToUrl('SoundCloud', soundcloudUrl);
-      const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(resolvedUrl)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setScError(data.error || 'Error al cargar tracks');
-        return;
-      }
-      const existingUrls = new Set(mixes.map((m) => m.url));
-      const available = (data.tracks || []).filter(
-        (t: SoundcloudTrackOption) => !existingUrls.has(t.url)
+      // Traer de todas las cuentas en paralelo y mergear (dedup por URL).
+      const perAccount = await Promise.all(
+        soundcloudUrls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(socialToUrl('SoundCloud', u))}`);
+            if (!res.ok) return [] as SoundcloudTrackOption[];
+            const data = await res.json();
+            return (data.tracks || []) as SoundcloudTrackOption[];
+          } catch {
+            return [] as SoundcloudTrackOption[];
+          }
+        })
       );
-      setScTracks(available);
-      if (available.length > 0) {
-        setScSelectedTrack(String(available[0].id));
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const available: SoundcloudTrackOption[] = [];
+      for (const t of perAccount.flat()) {
+        if (existingUrls.has(t.url) || seen.has(t.url)) continue;
+        seen.add(t.url);
+        available.push(t);
       }
+      available.sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base', numeric: true }));
+      setScTracks(available);
+      if (available.length > 0) setScSelectedTrack(String(available[0].id));
+      else setScError('No se encontraron tracks en tus cuentas de SoundCloud.');
     } catch {
       setScError('Error al conectar con SoundCloud');
     } finally {

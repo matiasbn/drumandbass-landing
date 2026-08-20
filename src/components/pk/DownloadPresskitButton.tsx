@@ -38,7 +38,7 @@ export default function DownloadPresskitButton({ presskit, slug }: { presskit: P
       ]);
       const photo = presskit.photo_urls?.[0] || presskit.photo_url || null;
       const photoData = await toDataUri(photo);
-      const blob = await pdf(<PresskitPdf presskit={presskit} photoData={photoData} />).toBlob();
+      const blob = await pdf(<PresskitPdf presskit={presskit} photoData={photoData} slug={slug} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

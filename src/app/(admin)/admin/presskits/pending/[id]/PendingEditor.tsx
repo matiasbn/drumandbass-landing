@@ -17,7 +17,7 @@ import {
 } from '@/src/lib/rider';
 import { emptyPendingData, PendingPresskitData } from '@/src/types/pendingPresskit';
 import type { PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
-import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine } from '@remixicon/react';
+import { RiLoader4Line, RiDeleteBinLine, RiMailSendLine, RiSaveLine, RiExternalLinkLine, RiImageAddLine } from '@remixicon/react';
 
 // Base SIN ancho: en filas flex el ancho lo da flex-1/w-N. `inputClass` (con
 // w-full) es solo para campos de una columna; en filas flex usar `fieldBase` +
@@ -57,17 +57,21 @@ interface SoundcloudTrackOption {
 }
 const isSetUrl = (url: string) => /soundcloud\.com\/[^/]+\/sets\//i.test(url);
 
-export default function PendingEditor() {
+export default function PendingEditor({ mode = 'pending' }: { mode?: 'pending' | 'presskit' }) {
   const { isAdmin, loading: authLoading } = useAdminAuth();
   const router = useRouter();
   const routeParams = useParams<{ id: string }>();
-  const isNew = routeParams.id === 'new';
+  // mode 'pending' → edita pending_presskits (crear + invitar). mode 'presskit'
+  // → edita un presskit YA publicado (mismo editor, guarda vía /api/admin/presskits).
+  const isPresskit = mode === 'presskit';
+  const isNew = !isPresskit && routeParams.id === 'new';
   const supabase = createClient();
 
   const [id, setId] = useState<string | null>(isNew ? null : routeParams.id);
   const [claimToken, setClaimToken] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('pending');
   const [invitedAt, setInvitedAt] = useState<string | null>(null);
+  const [published, setPublished] = useState(true);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -91,6 +95,8 @@ export default function PendingEditor() {
   const [riderData, setRiderData] = useState<RiderData>({ setups: [] });
   const [uploading, setUploading] = useState(false);
   const scRef = useRef<HTMLInputElement | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   // Importar desde SoundCloud: mismo flujo que el editor del DJ — dropdown de
   // tracks, se agrega de a uno y por cada uno se elige release/set (y EP vs playlist).
   const [scTracks, setScTracks] = useState<SoundcloudTrackOption[]>([]);
@@ -102,35 +108,52 @@ export default function PendingEditor() {
   const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
   const [playlistBlocked, setPlaylistBlocked] = useState(false);
 
+  const applyData = useCallback((d: Partial<PendingPresskitData>) => {
+    setArtistName(d.artist_name || '');
+    setRealName(d.real_name || '');
+    setCity(d.city || '');
+    setCountry(d.country || '');
+    setGenresInput((d.genres || []).join(', '));
+    setBio(d.bio || '');
+    setPhotoUrls(d.photo_urls || []);
+    setLogoUrls(d.logo_urls || []);
+    setSocials((d.socials || []).map((s) => ({ platform: s.platform, url: socialToHandle(s.platform, s.url) })));
+    setMixes(d.mixes || []);
+    setLinks(d.links || []);
+    setCustomSections(d.custom_sections || []);
+    setRiderData(parseRider(d.rider ?? null));
+  }, []);
+
   const load = useCallback(async () => {
     if (isNew) return;
     setLoading(true);
-    const res = await fetch(`/api/admin/pending-presskits?id=${routeParams.id}`);
-    const { pending } = await res.json();
-    if (pending) {
-      const d: PendingPresskitData = pending.data || emptyPendingData();
-      setId(pending.id);
-      setClaimToken(pending.claim_token);
-      setStatus(pending.status);
-      setInvitedAt(pending.invited_at);
-      setEmail(pending.email || '');
-      setSlug(pending.slug || '');
-      setArtistName(d.artist_name || '');
-      setRealName(d.real_name || '');
-      setCity(d.city || '');
-      setCountry(d.country || '');
-      setGenresInput((d.genres || []).join(', '));
-      setBio(d.bio || '');
-      setPhotoUrls(d.photo_urls || []);
-      setLogoUrls(d.logo_urls || []);
-      setSocials((d.socials || []).map((s) => ({ platform: s.platform, url: socialToHandle(s.platform, s.url) })));
-      setMixes(d.mixes || []);
-      setLinks(d.links || []);
-      setCustomSections(d.custom_sections || []);
-      setRiderData(parseRider(d.rider ?? null));
+    if (isPresskit) {
+      // Presskit publicado: la lista admin trae todos con select('*').
+      const res = await fetch('/api/admin/presskits');
+      const { presskits } = await res.json();
+      const pk = (presskits || []).find((p: { id: string }) => p.id === routeParams.id);
+      if (pk) {
+        setId(pk.id);
+        setEmail(pk.email || '');
+        setSlug(pk.slug || '');
+        setPublished(pk.published ?? true);
+        applyData(pk as Partial<PendingPresskitData>);
+      }
+    } else {
+      const res = await fetch(`/api/admin/pending-presskits?id=${routeParams.id}`);
+      const { pending } = await res.json();
+      if (pending) {
+        setId(pending.id);
+        setClaimToken(pending.claim_token);
+        setStatus(pending.status);
+        setInvitedAt(pending.invited_at);
+        setEmail(pending.email || '');
+        setSlug(pending.slug || '');
+        applyData(pending.data || emptyPendingData());
+      }
     }
     setLoading(false);
-  }, [isNew, routeParams.id]);
+  }, [isNew, isPresskit, routeParams.id, applyData]);
 
   useEffect(() => {
     if (isAdmin) void load();
@@ -155,13 +178,29 @@ export default function PendingEditor() {
   });
 
   const save = async (): Promise<string | null> => {
-    if (!email.trim() || !slug.trim() || !artistName.trim()) {
-      setMsg('Faltan email, slug o nombre artístico');
+    if (!artistName.trim() || (!isPresskit && (!email.trim() || !slug.trim()))) {
+      setMsg(isPresskit ? 'Falta el nombre artístico' : 'Faltan email, slug o nombre artístico');
       return null;
     }
     setSaving(true);
     setMsg('');
     try {
+      if (isPresskit) {
+        // Editar presskit publicado → PATCH /api/admin/presskits con todos los campos.
+        const res = await fetch('/api/admin/presskits', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...buildData(), published }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setMsg(`Error: ${data.error}`);
+          return null;
+        }
+        setMsg('Guardado');
+        setTimeout(() => setMsg(''), 2500);
+        return id;
+      }
       const body = { id, email: email.trim(), slug: slug.trim(), data: buildData() };
       const res = await fetch('/api/admin/pending-presskits', {
         method: id ? 'PUT' : 'POST',
@@ -209,16 +248,18 @@ export default function PendingEditor() {
     }
   };
 
-  const uploadPhotos = async (files: FileList | null, kind: 'photo' | 'logo') => {
-    if (!files?.length) return;
+  const uploadPhotos = async (files: File[], kind: 'photo' | 'logo') => {
+    if (!files.length) return;
     setUploading(true);
+    setMsg('');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      setMsg('Sesión no encontrada. Recarga la página.');
       setUploading(false);
       return;
     }
     const out: string[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       const blob = file.size > 4 * 1024 * 1024 && kind === 'photo' ? await compress(file) : file;
       const ext = blob === file ? file.name.split('.').pop() || 'jpg' : 'webp';
       const path = `${user.id}/${kind}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
@@ -231,14 +272,21 @@ export default function PendingEditor() {
     }
     if (kind === 'photo') setPhotoUrls((p) => [...p, ...out]);
     else setLogoUrls((p) => [...p, ...out].slice(0, 3));
+    if (out.length) {
+      setMsg(`${out.length} ${kind === 'photo' ? 'foto(s)' : 'logo(s)'} subida(s)`);
+      setTimeout(() => setMsg(''), 2500);
+    }
     setUploading(false);
   };
 
   const fetchScTracks = async () => {
-    const scUrl = socials.find((s) => s.platform === 'SoundCloud' && s.url.trim())?.url;
+    // URL manual → esa cuenta puntual. Si no, TODAS las cuentas de SoundCloud
+    // del DJ (puede tener más de una) y se mergean.
     const manual = scRef.current?.value.trim();
-    const url = manual || (scUrl ? socialToUrl('SoundCloud', scUrl) : '');
-    if (!url) {
+    const urls = manual
+      ? [manual]
+      : socials.filter((s) => s.platform === 'SoundCloud' && s.url.trim()).map((s) => socialToUrl('SoundCloud', s.url));
+    if (urls.length === 0) {
       setMsg('Agrega el SoundCloud del DJ (en Redes) o pega la URL del perfil');
       return;
     }
@@ -250,18 +298,30 @@ export default function PendingEditor() {
     setPlaylistBlocked(false);
     setScDropdownOpen(true);
     try {
-      const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setScError(data.error || 'Error al cargar tracks');
-        return;
-      }
-      const existing = new Set(mixes.map((m) => m.url));
-      const available: SoundcloudTrackOption[] = (data.tracks || []).filter(
-        (t: SoundcloudTrackOption) => !existing.has(t.url)
+      const perAccount = await Promise.all(
+        urls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/soundcloud?url=${encodeURIComponent(u)}`);
+            if (!res.ok) return [] as SoundcloudTrackOption[];
+            const data = await res.json();
+            return (data.tracks || []) as SoundcloudTrackOption[];
+          } catch {
+            return [] as SoundcloudTrackOption[];
+          }
+        })
       );
+      const existing = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const available: SoundcloudTrackOption[] = [];
+      for (const t of perAccount.flat()) {
+        if (existing.has(t.url) || seen.has(t.url)) continue;
+        seen.add(t.url);
+        available.push(t);
+      }
+      available.sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base', numeric: true }));
       setScTracks(available);
       if (available.length > 0) setScSelectedTrack(String(available[0].id));
+      else setScError('No se encontraron tracks.');
     } catch {
       setScError('Error al conectar con SoundCloud');
     } finally {
@@ -315,25 +375,37 @@ export default function PendingEditor() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <button onClick={() => router.push('/admin/presskits')} className="mono text-xs font-bold uppercase text-gray-500 hover:text-black">← Volver</button>
-          <h1 className="text-3xl font-black uppercase italic tracking-tighter">{isNew ? 'Nuevo PK para un DJ' : 'Editar PK pendiente'}</h1>
+          <h1 className="text-3xl font-black uppercase italic tracking-tighter">{isPresskit ? 'Editar presskit' : isNew ? 'Nuevo PK para un DJ' : 'Editar PK pendiente'}</h1>
         </div>
-        {status !== 'pending' && (
+        {!isPresskit && status !== 'pending' && (
           <span className="mono text-xs font-black uppercase bg-[#00b341] text-white px-2 py-1">{status === 'claimed' ? 'Reclamado' : status}</span>
         )}
       </div>
 
-      {/* Identidad del pendiente */}
-      <section className="brutalist-border p-4 space-y-3 bg-yellow-50">
-        <div>
-          <label className={labelClass}>Email del DJ *</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dj@correo.com" className={inputClass} type="email" />
-          <p className="mono text-[11px] text-gray-500 mt-1">A este correo le llega la invitación. Debe ser el mismo con el que el DJ inicia sesión en Google.</p>
-        </div>
-        <div>
-          <label className={labelClass}>Slug (URL: /artistas/&lt;slug&gt;) *</label>
-          <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="dj-nombre" className={inputClass} />
-        </div>
-      </section>
+      {/* Identidad */}
+      {isPresskit ? (
+        <section className="brutalist-border p-4 flex flex-wrap items-center justify-between gap-3 bg-gray-50">
+          <div className="mono text-xs text-gray-600">
+            <span className="font-black uppercase">{email || 'sin email'}</span> · /artistas/{slug}
+          </div>
+          <label className="mono text-xs font-black uppercase flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
+            {published ? 'Publicado' : 'Borrador (no público)'}
+          </label>
+        </section>
+      ) : (
+        <section className="brutalist-border p-4 space-y-3 bg-yellow-50">
+          <div>
+            <label className={labelClass}>Email del DJ *</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dj@correo.com" className={inputClass} type="email" />
+            <p className="mono text-[11px] text-gray-500 mt-1">A este correo le llega la invitación. Debe ser el mismo con el que el DJ inicia sesión en Google.</p>
+          </div>
+          <div>
+            <label className={labelClass}>Slug (URL: /artistas/&lt;slug&gt;) *</label>
+            <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="dj-nombre" className={inputClass} />
+          </div>
+        </section>
+      )}
 
       {/* Datos básicos */}
       <section className="space-y-3">
@@ -362,7 +434,10 @@ export default function PendingEditor() {
             </div>
           ))}
         </div>
-        <input type="file" accept="image/*" multiple onChange={(e) => uploadPhotos(e.target.files, 'photo')} className="mono text-xs" />
+        <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ''; void uploadPhotos(fs, 'photo'); }} className="hidden" />
+        <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 mono text-xs font-black uppercase px-4 py-2 brutalist-border bg-black text-white hover:bg-gray-900 disabled:opacity-50">
+          <RiImageAddLine className="w-4 h-4" /> Subir fotos
+        </button>
       </section>
 
       {/* Logos */}
@@ -377,7 +452,12 @@ export default function PendingEditor() {
             </div>
           ))}
         </div>
-        {logoUrls.length < 3 && <input type="file" accept="image/*" multiple onChange={(e) => uploadPhotos(e.target.files, 'logo')} className="mono text-xs" />}
+        <input ref={logoInputRef} type="file" accept="image/*" multiple onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ''; void uploadPhotos(fs, 'logo'); }} className="hidden" />
+        {logoUrls.length < 3 && (
+          <button type="button" onClick={() => logoInputRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 mono text-xs font-black uppercase px-4 py-2 brutalist-border bg-black text-white hover:bg-gray-900 disabled:opacity-50">
+            <RiImageAddLine className="w-4 h-4" /> Subir logos
+          </button>
+        )}
       </section>
       {uploading && <p className="mono text-xs uppercase text-[#ff0055]">Subiendo…</p>}
 
@@ -552,16 +632,23 @@ export default function PendingEditor() {
         <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 brutalist-border bg-black text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-gray-900 disabled:opacity-50">
           {saving ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSaveLine className="w-4 h-4" />} Guardar
         </button>
-        <button onClick={sendInvite} disabled={inviting || status !== 'pending'} className="inline-flex items-center gap-2 brutalist-border bg-[#ff0055] text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-black disabled:opacity-50">
-          {inviting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiMailSendLine className="w-4 h-4" />} {invitedAt ? 'Reenviar invitación' : 'Enviar invitación'}
-        </button>
-        {claimUrl && (
+        {!isPresskit && (
+          <button onClick={sendInvite} disabled={inviting || status !== 'pending'} className="inline-flex items-center gap-2 brutalist-border bg-[#ff0055] text-white px-5 py-2.5 mono text-sm font-black uppercase hover:bg-black disabled:opacity-50">
+            {inviting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiMailSendLine className="w-4 h-4" />} {invitedAt ? 'Reenviar invitación' : 'Enviar invitación'}
+          </button>
+        )}
+        {isPresskit && slug && (
+          <a href={`/artistas/${slug}`} target="_blank" rel="noopener noreferrer" className="mono text-xs font-bold uppercase text-blue-700 inline-flex items-center gap-1">
+            Ver PK <RiExternalLinkLine className="w-3 h-3" />
+          </a>
+        )}
+        {!isPresskit && claimUrl && (
           <a href={claimUrl} target="_blank" rel="noopener noreferrer" className="mono text-xs font-bold uppercase text-blue-700 inline-flex items-center gap-1">
             Ver link de claim <RiExternalLinkLine className="w-3 h-3" />
           </a>
         )}
         {msg && <span className="mono text-xs font-bold uppercase text-[#ff0055]">{msg}</span>}
-        {invitedAt && <span className="mono text-[11px] uppercase text-gray-500">Invitado</span>}
+        {!isPresskit && invitedAt && <span className="mono text-[11px] uppercase text-gray-500">Invitado</span>}
       </div>
     </main>
   );

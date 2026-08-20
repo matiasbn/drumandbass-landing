@@ -390,12 +390,12 @@ export default function PresskitsClient() {
                         </td>
                         <td className="py-2">
                           <div className="flex gap-2">
-                            <button
-                              onClick={() => startEdit(pk)}
+                            <Link
+                              href={`/admin/presskits/edit/${pk.id}`}
                               className="border-2 border-black px-3 py-1 text-xs font-bold uppercase hover:bg-gray-100 cursor-pointer"
                             >
                               Editar
-                            </button>
+                            </Link>
                             <button
                               onClick={() => handleDelete(pk)}
                               className="border-2 border-red-600 text-red-600 px-3 py-1 text-xs font-bold uppercase hover:bg-red-50 cursor-pointer"

@@ -214,12 +214,14 @@ export default async function PublicPresskitPage({ params }: PageProps) {
         <section className="border-b-4 border-black p-6 lg:p-12">
           <h2 className="text-5xl font-black uppercase italic mb-6">SOCIAL</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {presskit.socials.map(({ platform, url }) => {
+            {presskit.socials.map(({ platform, url }, index) => {
               const config = getPlatformConfig(platform);
               const Icon = config.icon;
               return (
                 <BrutalistButton
-                  key={platform}
+                  // Key por índice: un DJ puede tener 2 cuentas de la misma
+                  // plataforma (p.ej. dos SoundCloud) y no deben colisionar.
+                  key={`${platform}-${index}`}
                   variant={config.variant}
                   href={socialToUrl(platform, url)}
                   external
