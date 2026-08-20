@@ -10,11 +10,13 @@ import {
   RiShuffleLine,
   RiSoundcloudLine,
   RiAlbumFill,
+  RiYoutubeLine,
   RiDownloadLine,
   RiArrowDownSLine,
 } from '@remixicon/react';
 import dayjs from '@/src/lib/date';
 import { event } from '@/src/lib/gtag';
+import { isYoutubeUrl, youtubeEmbedUrl } from '@/src/lib/youtubeUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 
 function fmt(ms: number): string {
@@ -29,16 +31,18 @@ const sameUrl = (a: string, b: string) => a.split('?')[0] === b.split('?')[0];
 const bigArt = (art: string | null) => (art ? art.replace('-large', '-t500x500') : null);
 // Plataforma por URL → elige los endpoints correctos (SoundCloud vs Bandcamp).
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
+const isYt = (url: string) => isYoutubeUrl(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
 const setApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/set' : '/api/pk/soundcloud/set');
 const downloadApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/download' : '/api/pk/soundcloud/download');
 // Marca/branding por plataforma (ícono, color, nombre, URL de "abrir").
-const platformColor = (url: string) => (isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const platformColor = (url: string) => (isYt(url) ? '#FF0000' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isYt(url) ? 'YouTube' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 // Los tracks de un álbum de Bandcamp usan una URL sintética (álbum#i); para el
 // enlace "abrir" limpiamos el fragmento y apuntamos al álbum real.
 const openUrl = (url: string) => (isBc(url) ? url.split('#')[0] : url);
 function PlatformIcon({ url, className, style }: { url: string; className?: string; style?: React.CSSProperties }) {
+  if (isYt(url)) return <RiYoutubeLine className={className} style={style} />;
   return isBc(url) ? <RiAlbumFill className={className} style={style} /> : <RiSoundcloudLine className={className} style={style} />;
 }
 
@@ -194,6 +198,9 @@ export default function ReleasesPlayer({
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [nowPlaying, setNowPlaying] = useState<{ title: string; artist: string; artwork: string | null; permalink: string } | null>(null);
+  // Si el track actual es de YouTube, su URL de embed → se muestra el iframe en el
+  // frame central (YouTube no suena por el <audio>; usa su propio reproductor).
+  const [ytEmbed, setYtEmbed] = useState<string | null>(null);
   // Track que no se pudo reproducir (HLS no soportado, sin stream, etc.) → aviso.
   const [playbackError, setPlaybackError] = useState<{ title: string; permalink: string } | null>(null);
   const errorRetryRef = useRef<string | null>(null); // url que ya reintentamos una vez
@@ -262,6 +269,7 @@ export default function ReleasesPlayer({
     (async () => {
       const entries = await Promise.all(
         releases.map(async (r) => {
+          if (isYt(r.url)) return null; // YouTube no tiene descarga vía nuestros endpoints
           try {
             const res = await fetch(`${downloadApi(r.url)}?url=${encodeURIComponent(r.url)}`);
             if (!res.ok) return null;
@@ -292,6 +300,7 @@ export default function ReleasesPlayer({
 
   // ── Stream propio ──────────────────────────────────────────────────────────
   const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
+    if (isYt(trackUrl)) return null; // YouTube no usa stream de audio
     if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
     try {
       const res = await fetch(`${streamApi(trackUrl)}?url=${encodeURIComponent(trackUrl)}`);
@@ -354,6 +363,17 @@ export default function ReleasesPlayer({
       event('release_play', { release_title: item.title, artist: item.artist });
       setPlaybackError(null);
       errorRetryRef.current = null;
+      // YouTube: no se resuelve stream; se muestra el iframe embebido en el frame
+      // central. Pausamos el <audio> por si venía sonando otro track.
+      const yt = isYt(item.url) ? youtubeEmbedUrl(item.url) : null;
+      if (yt) {
+        audioRef.current?.pause();
+        loadedUrlRef.current = item.url;
+        setYtEmbed(yt);
+        setNowPlaying({ title: item.title, artist: item.artist, artwork: null, permalink: item.url });
+        return;
+      }
+      setYtEmbed(null);
       const cached = streamCache.current[item.url];
       if (cached) {
         applyStream(cached, item);
@@ -675,17 +695,41 @@ export default function ReleasesPlayer({
                           </span>
                         )}
                       </div>
-                      <a
-                        href={openUrl(r.url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Abrir ${r.title} en ${platformName(r.url)}`}
-                        onClick={() => event('release_open_soundcloud', { release_title: r.title, artist: r.artistName, platform: platformName(r.url) })}
-                        className="inline-flex items-start gap-1 text-sm font-black uppercase leading-tight break-words hover:underline"
-                      >
-                        {r.title}
-                        <PlatformIcon url={r.url} className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: isCurrentSingle ? '#fff' : platformColor(r.url) }} />
-                      </a>
+                      {isYt(r.url) ? (
+                        // YouTube: el título SELECCIONA/reproduce (se ve en el frame
+                        // central). Solo el ícono abre el video en YouTube.
+                        <span className="inline-flex items-start gap-1.5">
+                          <button
+                            onClick={() => (isCurrent ? toggle() : playRelease(vi))}
+                            className="text-left text-sm font-black uppercase leading-tight break-words hover:underline"
+                          >
+                            {r.title}
+                          </button>
+                          <a
+                            href={openUrl(r.url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Ir al video en YouTube`}
+                            title="Ir al video en YouTube"
+                            onClick={() => event('release_open_soundcloud', { release_title: r.title, artist: r.artistName, platform: platformName(r.url) })}
+                            className="shrink-0 mt-0.5 hover:opacity-70"
+                          >
+                            <PlatformIcon url={r.url} className="w-3.5 h-3.5" style={{ color: isCurrentSingle ? '#fff' : platformColor(r.url) }} />
+                          </a>
+                        </span>
+                      ) : (
+                        <a
+                          href={openUrl(r.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Abrir ${r.title} en ${platformName(r.url)}`}
+                          onClick={() => event('release_open_soundcloud', { release_title: r.title, artist: r.artistName, platform: platformName(r.url) })}
+                          className="inline-flex items-start gap-1 text-sm font-black uppercase leading-tight break-words hover:underline"
+                        >
+                          {r.title}
+                          <PlatformIcon url={r.url} className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: isCurrentSingle ? '#fff' : platformColor(r.url) }} />
+                        </a>
+                      )}
                       <div className="flex items-center justify-between gap-2 mt-0.5">
                         <span className={`mono text-[11px] font-bold uppercase truncate ${isCurrentSingle ? 'opacity-90' : 'opacity-70'}`}>
                           {r.slug ? <Link href={`/pk/${r.slug}`} className="hover:underline">{r.artistName}</Link> : r.artistName}
@@ -784,7 +828,7 @@ export default function ReleasesPlayer({
             <div className="min-w-0 flex-1 px-1">
               <p className="font-black uppercase text-sm leading-tight truncate">{nowPlaying?.title || 'Elige un track'}</p>
               <p className="mono text-[11px] uppercase opacity-60 truncate">
-                {nowPlaying ? `${nowPlaying.artist} · ${fmt(position)} / ${fmt(duration)}` : 'Reproductor de releases'}
+                {nowPlaying ? (ytEmbed ? `${nowPlaying.artist} · YouTube` : `${nowPlaying.artist} · ${fmt(position)} / ${fmt(duration)}`) : 'Reproductor de releases'}
               </p>
             </div>
 
@@ -807,28 +851,40 @@ export default function ReleasesPlayer({
             )}
           </div>
 
-          {/* Barra de progreso (clickeable) */}
-          <button
-            aria-label="Buscar en la pista"
-            className="block w-full h-2 bg-white/15"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const a = audioRef.current;
-              if (a && duration) a.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * (duration / 1000);
-            }}
-          >
-            <span className="block h-full bg-[#FF5500]" style={{ width: `${progressRatio * 100}%` }} />
-          </button>
+          {/* Barra de progreso (clickeable). Oculta en YouTube: el video usa sus
+              propios controles dentro del iframe. */}
+          {!ytEmbed && (
+            <button
+              aria-label="Buscar en la pista"
+              className="block w-full h-2 bg-white/15"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const a = audioRef.current;
+                if (a && duration) a.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * (duration / 1000);
+              }}
+            >
+              <span className="block h-full bg-[#FF5500]" style={{ width: `${progressRatio * 100}%` }} />
+            </button>
+          )}
 
-          {/* Carátula (visual limpio, nuestro) */}
+          {/* Carátula (visual limpio, nuestro). Para YouTube, el mismo frame
+              muestra el video embebido (su propio reproductor). */}
           <div className="relative w-full aspect-square max-h-[240px] sm:max-h-[300px] lg:max-h-[420px] bg-neutral-900 overflow-hidden flex items-center justify-center">
-            {artwork ? (
+            {ytEmbed ? (
+              <iframe
+                src={ytEmbed}
+                title={nowPlaying?.title || 'YouTube'}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : artwork ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={artwork} alt="" className="w-full h-full object-cover" />
             ) : (
               <PlatformIcon url={nowPlaying?.permalink || ''} className="w-16 h-16 opacity-40" style={{ color: platformColor(nowPlaying?.permalink || '') }} />
             )}
-            {nowPlaying && !playbackError && (
+            {nowPlaying && !playbackError && !ytEmbed && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
                 <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
                 <p className="mono text-xs uppercase opacity-80">{nowPlaying.artist}</p>

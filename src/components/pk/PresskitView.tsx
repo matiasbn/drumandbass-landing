@@ -6,6 +6,7 @@ import DownloadPresskitButton from '@/src/components/pk/DownloadPresskitButton';
 import ReleasesPlayer from '@/src/components/ReleasesPlayer';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
 import { isBandcampUrl } from '@/src/lib/bandcamp';
+import { isYoutubeUrl } from '@/src/lib/youtubeUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
@@ -259,9 +260,10 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
           no se tocan, así que el PDF se sigue generando igual. */}
       {presskit.mixes.length > 0 && (() => {
         const valid = presskit.mixes.filter((m) => m.title?.trim() && m.url?.trim());
-        // El player reproduce SoundCloud Y Bandcamp; el resto (YouTube/Spotify…)
-        // queda como tarjetas-link.
-        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u);
+        // El player reproduce SoundCloud, Bandcamp Y YouTube (este último con su
+        // iframe embebido en el frame central). El resto (Spotify…) queda como
+        // tarjetas-link.
+        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u) || isYoutubeUrl(u);
         const playerReleases: NationalRelease[] = valid
           .filter((m) => playable(ensureAbsoluteUrl(m.url)))
           .map((m) => ({

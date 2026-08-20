@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
-import PendingEditor from '../../pending/[id]/PendingEditor';
+import AdminEditClient from './AdminEditClient';
 
 export const metadata: Metadata = {
   title: 'Editar presskit - Admin - Drum and Bass Chile',
   robots: { index: false, follow: false },
 };
 
-// Reutiliza el editor COMPLETO (el mismo del flujo de pending) en modo 'presskit':
-// edita un presskit ya publicado y guarda vía /api/admin/presskits.
-export default function EditPresskitPage() {
-  return <PendingEditor mode="presskit" />;
+// Edita un presskit publicado reutilizando el MISMO editor del DJ (pk/edit) en
+// modo admin (driver). Antes usaba PendingEditor; ahora es el editor unificado.
+export default async function EditPresskitPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <AdminEditClient id={id} />;
 }
