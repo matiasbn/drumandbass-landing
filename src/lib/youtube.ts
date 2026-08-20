@@ -32,9 +32,11 @@ export async function getSotanoVideos(max = 6): Promise<YoutubeVideo[]> {
     const url =
       `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet` +
       `&playlistId=${UPLOADS_PLAYLIST}&maxResults=50&key=${key}`;
-    // 60s: un capítulo nuevo aparece en ~1 min. Con ISR se llama como máximo 1
-    // vez por minuto (~1440/día vs cuota de 10k), no en cada request.
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    // 30s: guarda de cuota. La sección de El Sótano se sirve por /api/sotano
+    // (sin cache de ruta), así que esta es la frescura real (~30s). Aunque haya
+    // mucho tráfico, la API de YouTube se llama como máximo 1 vez cada 30s
+    // (~2880/día vs cuota de 10k). No confundir con el ISR del home (eventos).
+    const res = await fetch(url, { next: { revalidate: 30 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as { items?: PlaylistItem[] };
