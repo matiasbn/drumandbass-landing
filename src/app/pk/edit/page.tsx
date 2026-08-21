@@ -1984,6 +1984,11 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                         Publicar en Releases Nacionales
                       </label>
                     )}
+                    {/* Preview del track (SoundCloud/Bandcamp/Spotify). YouTube se
+                        reproduce embebido en la página, no acá. */}
+                    {!isYt && mix.url.trim() && (
+                      <ImportPreviewPlayer url={mix.url} />
+                    )}
                   </div>
                 );
               })}
