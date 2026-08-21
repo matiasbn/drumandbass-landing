@@ -138,6 +138,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   // Aviso "cómo activar el import" cuando la red aún no está en Perfiles y redes.
   const [importHint, setImportHint] = useState<string | null>(null);
   const socialsSectionRef = useRef<HTMLDivElement>(null);
+  const mixesSectionRef = useRef<HTMLDivElement>(null);
 
   // ── Cambios sin guardar (dirty) + auto-guardado ───────────────────────────
   // Snapshot en memoria (barato) para saber si hay cambios sin guardar. Los TEXTOS
@@ -531,6 +532,16 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
     setImportHint(null);
     requestAnimationFrame(() =>
       socialsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    );
+  };
+  // Importa desde la fila de la red (SoundCloud/Bandcamp/YouTube) y baja al
+  // selector de Sets & Releases, que es donde aparecen los tracks a elegir.
+  const importFromSocialRow = (platform: string) => {
+    if (platform === 'SoundCloud') fetchScTracks();
+    else if (platform === 'Bandcamp') fetchBcTracks();
+    else if (platform === 'YouTube') fetchYtItems();
+    requestAnimationFrame(() =>
+      mixesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     );
   };
   const removeSocial = (i: number) => { autoPendingRef.current = true; setSocials(socials.filter((_, idx) => idx !== i)); };
@@ -1618,6 +1629,37 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       completa. Si pegas la URL, la recortamos sola.</>
                     )}
                   </p>
+                  {/* Feedback: perfil resuelto (confirma lo que se guardó / recortó). */}
+                  {social.url.trim() && (
+                    <a
+                      href={socialToUrl(social.platform, social.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mono text-[10px] text-green-700 hover:underline break-all"
+                    >
+                      <RiCheckLine className="w-3.5 h-3.5 shrink-0" />
+                      {socialToUrl(social.platform, social.url)}
+                    </a>
+                  )}
+                  {/* Import desde esta red hacia Sets & Releases (SoundCloud/Bandcamp/YouTube). */}
+                  {(social.platform === 'SoundCloud' || social.platform === 'Bandcamp' || social.platform === 'YouTube') && social.url.trim() && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => importFromSocialRow(social.platform)}
+                        disabled={scLoading}
+                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        style={{ backgroundColor: social.platform === 'SoundCloud' ? '#FF5500' : social.platform === 'Bandcamp' ? '#1da0c3' : '#FF0000' }}
+                      >
+                        {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                        {social.platform === 'YouTube'
+                          ? 'IMPORTAR VIDEOS A SETS & RELEASES'
+                          : social.platform === 'Bandcamp'
+                            ? 'IMPORTAR RELEASES A SETS & RELEASES'
+                            : 'IMPORTAR TRACKS A SETS & RELEASES'}
+                      </button>
+                    </div>
+                  )}
                   {/* Spotify: importa toda la discografía como tracks individuales
                       en Sets & Releases (el artista borra los que no quiera). */}
                   {social.platform === 'Spotify' && social.url.trim() && (
@@ -1645,7 +1687,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
           </div>
 
           {/* Mixes */}
-          <div>
+          <div ref={mixesSectionRef} className="scroll-mt-24">
             <div className="flex items-center justify-between mb-3">
               <label className={labelClass}>Sets & Releases</label>
               <div className="flex gap-2">
