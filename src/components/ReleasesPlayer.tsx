@@ -723,12 +723,19 @@ export default function ReleasesPlayer({
               const tracks = epTracks[r.url];
               const info = dl[r.url];
               return (
-                <div key={`${r.url}-${vi}`} className={`brutalist-border transition-colors ${isCurrentSingle ? 'bg-[#FF5500] text-white' : 'bg-white'}`}>
+                <div
+                  key={`${r.url}-${vi}`}
+                  className={`brutalist-border transition-colors ${isCurrentSingle ? 'text-white' : 'bg-white'}`}
+                  style={isCurrentSingle ? { backgroundColor: platformColor(r.url) } : undefined}
+                >
                   <div className="flex items-stretch">
                     <button
                       onClick={() => (isCurrent ? toggle() : playRelease(vi))}
                       aria-label={isCurrent && playing ? `Pausar ${r.title}` : `Reproducir ${r.title}`}
-                      className={`shrink-0 w-12 flex items-center justify-center border-r-4 border-black ${isCurrentSingle ? 'bg-black text-[#FF5500]' : 'bg-[#FF5500] text-white hover:bg-[#e64d00]'}`}
+                      // Rectángulo de play con el COLOR de la plataforma (rojo YouTube,
+                      // naranja SoundCloud, teal Bandcamp).
+                      className={`shrink-0 w-12 flex items-center justify-center border-r-4 border-black ${isCurrentSingle ? 'bg-black' : 'text-white hover:brightness-90'}`}
+                      style={isCurrentSingle ? { color: platformColor(r.url) } : { backgroundColor: platformColor(r.url) }}
                     >
                       {isCurrent && playing ? <RiPauseFill className="w-6 h-6" /> : <RiPlayFill className="w-6 h-6" />}
                     </button>
