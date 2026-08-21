@@ -24,9 +24,10 @@ import {
   RiTiktokLine,
   RiTwitterXLine,
   RiAlbumFill,
+  RiDiscLine,
 } from '@remixicon/react';
 
-const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; variant: 'instagram' | 'soundcloud' | 'spotify' | 'youtube' | 'primary' | 'bandcamp' }> = {
+const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; variant: 'instagram' | 'soundcloud' | 'spotify' | 'youtube' | 'primary' | 'bandcamp' | 'beatport' }> = {
   instagram: { icon: RiInstagramLine, variant: 'instagram' },
   soundcloud: { icon: RiSoundcloudLine, variant: 'soundcloud' },
   spotify: { icon: RiSpotifyLine, variant: 'spotify' },
@@ -35,6 +36,7 @@ const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: 
   tiktok: { icon: RiTiktokLine, variant: 'primary' },
   twitter: { icon: RiTwitterXLine, variant: 'primary' },
   bandcamp: { icon: RiAlbumFill, variant: 'bandcamp' },
+  beatport: { icon: RiDiscLine, variant: 'beatport' },
 };
 
 function getPlatformConfig(platform: string) {
@@ -162,19 +164,16 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
     );
   })();
 
-  // Beatport se muestra como reproductor embebido (sección propia), no como
-  // botón social genérico.
-  const socialButtons = presskit.socials.filter((s) => s.platform !== 'Beatport' && !isBeatportUrl(s.url));
-  const socialSection = socialButtons.length > 0 ? (
+  const socialSection = presskit.socials.length > 0 ? (
     <section className="border-b-4 border-black p-6 lg:p-12">
       <h2 className="text-5xl font-black uppercase italic mb-6">SOCIAL</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {(() => {
-          const counts = socialButtons.reduce<Record<string, number>>((acc, s) => {
+          const counts = presskit.socials.reduce<Record<string, number>>((acc, s) => {
             acc[s.platform] = (acc[s.platform] || 0) + 1;
             return acc;
           }, {});
-          return socialButtons.map(({ platform, url }, index) => {
+          return presskit.socials.map(({ platform, url }, index) => {
             const config = getPlatformConfig(platform);
             const Icon = config.icon;
             const handle = socialToHandle(platform, url);
