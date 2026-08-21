@@ -1804,10 +1804,21 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                         </select>
                       )}
                     </div>
-                    {/* Preview del track seleccionado (SoundCloud/Bandcamp) antes de agregarlo. */}
+                    {/* Preview del track seleccionado (SoundCloud/Bandcamp) antes de
+                        agregarlo, con anterior/siguiente para recorrer la lista. */}
                     {importSource !== 'youtube' && (() => {
-                      const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
-                      return sel?.url ? <ImportPreviewPlayer key={sel.url} url={sel.url} /> : null;
+                      const idx = scTracks.findIndex((t) => String(t.id) === scSelectedTrack);
+                      const sel = idx >= 0 ? scTracks[idx] : undefined;
+                      return sel?.url ? (
+                        <ImportPreviewPlayer
+                          key={sel.url}
+                          url={sel.url}
+                          hasPrev={idx > 0}
+                          hasNext={idx < scTracks.length - 1}
+                          onPrev={() => setScSelectedTrack(String(scTracks[idx - 1].id))}
+                          onNext={() => setScSelectedTrack(String(scTracks[idx + 1].id))}
+                        />
+                      ) : null;
                     })()}
                     <div className="flex gap-2">
                       <button

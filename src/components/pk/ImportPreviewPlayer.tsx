@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RiPlayFill, RiPauseFill, RiLoader4Line } from '@remixicon/react';
+import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFill } from '@remixicon/react';
 
 // Mini-reproductor para previsualizar un track ANTES de agregarlo, dentro del
 // dropdown de import (SoundCloud / Bandcamp). Resuelve el stream con los mismos
@@ -20,7 +20,19 @@ const fmt = (s: number) => {
   return `${m}:${String(ss).padStart(2, '0')}`;
 };
 
-export default function ImportPreviewPlayer({ url }: { url: string }) {
+export default function ImportPreviewPlayer({
+  url,
+  onPrev,
+  onNext,
+  hasPrev = false,
+  hasNext = false,
+}: {
+  url: string;
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resolvedRef = useRef<string>(''); // URL cuyo stream ya está cargado en el <audio>
   const [loading, setLoading] = useState(false);
@@ -99,6 +111,18 @@ export default function ImportPreviewPlayer({ url }: { url: string }) {
           setPos(0);
         }}
       />
+      {onPrev && (
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={!hasPrev}
+          aria-label="Track anterior"
+          title="Track anterior"
+          className="shrink-0 w-7 h-9 flex items-center justify-center brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-current"
+        >
+          <RiSkipBackFill className="w-4 h-4" />
+        </button>
+      )}
       <button
         type="button"
         onClick={toggle}
@@ -114,6 +138,18 @@ export default function ImportPreviewPlayer({ url }: { url: string }) {
           <RiPlayFill className="w-5 h-5" />
         )}
       </button>
+      {onNext && (
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!hasNext}
+          aria-label="Track siguiente"
+          title="Track siguiente"
+          className="shrink-0 w-7 h-9 flex items-center justify-center brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-current"
+        >
+          <RiSkipForwardFill className="w-4 h-4" />
+        </button>
+      )}
       <input
         type="range"
         min={0}
