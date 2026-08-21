@@ -38,10 +38,23 @@ const shouldSplit = (text?: string | null) => (text || '').length > SECTION_SPLI
 
 const ROSE = '#ff0055';
 const BLUE = '#0000ff';
-const ORANGE = '#ff5500';
 const VIOLET = '#7C3AED';
 const BLACK = '#000000';
 const GRAY = '#666666';
+
+// Plataforma de un mix por su URL → nombre corto (para el chip) y color de marca.
+const SC = '#ff5500';
+const BC = '#1da0c3';
+const SP = '#1DB954';
+const YT = '#FF0000';
+function mixPlatform(url: string): { label: string; color: string } {
+  const u = url || '';
+  if (/youtube\.com|youtu\.be/i.test(u)) return { label: 'YOUTUBE', color: YT };
+  if (/open\.spotify\.com|spotify\.com/i.test(u)) return { label: 'SPOTIFY', color: SP };
+  if (/bandcamp\.com/i.test(u)) return { label: 'BANDCAMP', color: BC };
+  if (/soundcloud\.com/i.test(u)) return { label: 'SOUNDCLOUD', color: SC };
+  return { label: 'LINK', color: BLUE };
+}
 
 const s = StyleSheet.create({
   page: { paddingHorizontal: 30, paddingTop: 30, paddingBottom: 54, fontFamily: 'SpaceMono', color: BLACK, fontSize: 9, lineHeight: 1.45 },
@@ -138,6 +151,9 @@ export function PresskitPdf({ presskit, photoData, slug }: { presskit: Presskit;
   const rider = parseRider(presskit.rider);
   const riderItems = riderDisplay(rider); // controladores ya numerados ("Controlador N")
   const mixes = (presskit.mixes || []).filter((m) => m.title?.trim() && m.url?.trim());
+  // Sets & Releases en 2 columnas (más compacto, sin tanto blanco a la derecha).
+  const mixPairs: (typeof mixes)[] = [];
+  for (let i = 0; i < mixes.length; i += 2) mixPairs.push(mixes.slice(i, i + 2));
   const socials = (presskit.socials || []).filter((so) => so.url?.trim());
   const links = (presskit.links || []).filter((l) => l.title?.trim() && l.url?.trim());
   const metaLine = [presskit.city, presskit.country].filter(Boolean).join(' · ');
@@ -219,16 +235,22 @@ export function PresskitPdf({ presskit, photoData, slug }: { presskit: Presskit;
           />
         ) : null}
 
-        {/* Releases */}
+        {/* Sets & Releases — 2 columnas, chip con la plataforma y su color. */}
         <BlockSection
           title="Sets & Releases"
-          blocks={mixes.map((m, i) => (
-            <Link key={i} src={absUrl(m.url)} style={s.item} wrap={false}>
-              <Text style={{ ...s.chip, backgroundColor: m.type === 'release' ? ORANGE : BLACK }}>
-                {m.type === 'release' ? 'REL' : 'SET'}
-              </Text>
-              <Text style={s.linkBold}>{m.title}</Text>
-            </Link>
+          atomicMax={6}
+          blocks={mixPairs.map((pair, i) => (
+            <View key={i} style={{ flexDirection: 'row' }} wrap={false}>
+              {pair.map((m, j) => {
+                const p = mixPlatform(m.url);
+                return (
+                  <Link key={j} src={absUrl(m.url)} style={{ ...s.item, width: '50%', paddingRight: 12 }} wrap={false}>
+                    <Text style={{ ...s.chip, width: 66, textAlign: 'center', backgroundColor: p.color }}>{p.label}</Text>
+                    <Text style={s.linkBold}>{m.title}</Text>
+                  </Link>
+                );
+              })}
+            </View>
           ))}
         />
 
