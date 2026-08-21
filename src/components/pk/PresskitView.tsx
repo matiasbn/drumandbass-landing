@@ -49,8 +49,9 @@ function ensureAbsoluteUrl(url: string): string {
 interface PresskitViewProps {
   presskit: Presskit;
   slug: string;
-  // preview = vista previa del admin (presskit no publicado): oculta la descarga
-  // del PDF, que necesita un presskit real publicado por slug.
+  // preview = vista previa / presskit no publicado (borrador). Se acepta por
+  // compatibilidad con los callers; ya NO oculta la descarga del PDF (se genera
+  // client-side desde el objeto presskit, no necesita estar publicado).
   preview?: boolean;
 }
 
@@ -118,7 +119,7 @@ function SectionBody({ text }: { text: string }) {
 // (/pk/[slug]) y la vista previa del admin (/pk/preview/[id]) para renderizar
 // EXACTAMENTE lo mismo que verá el DJ.
 // presskit view
-export default function PresskitView({ presskit, slug, preview = false }: PresskitViewProps) {
+export default function PresskitView({ presskit, slug }: PresskitViewProps) {
   // URLs de Spotify del presskit → sus tracks (previews) se integran al MISMO
   // reproductor de Sets & Releases (no una sección aparte).
   const spotifyUrls = (presskit.mixes || [])
@@ -221,11 +222,12 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
               ))}
             </div>
           )}
-          {!preview && (
-            <div className="mt-6">
-              <DownloadPresskitButton presskit={presskit} slug={slug} />
-            </div>
-          )}
+          {/* El PDF se genera client-side desde el objeto presskit, así que
+              funciona también en la vista previa / presskit pendiente (el DJ
+              aún no acepta), no solo en el publicado. */}
+          <div className="mt-6">
+            <DownloadPresskitButton presskit={presskit} slug={slug} />
+          </div>
         </div>
       </section>
 
