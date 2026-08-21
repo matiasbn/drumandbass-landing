@@ -36,14 +36,14 @@ import {
 
 // Instagram NO va acá: es un campo dedicado y obligatorio del formulario.
 const PLATFORM_OPTIONS = [
-  'SoundCloud', 'Spotify', 'YouTube',
+  'SoundCloud', 'Spotify', 'YouTube', 'Beatport',
   'Facebook', 'TikTok', 'Twitter', 'Bandcamp',
 ];
 
 const MAX_LOGOS = 3;
 const LOGO_MAX_SIZE = 3 * 1024 * 1024; // 3MB — logos are lightweight brand assets
 
-const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Beatport', 'Mixcloud'];
+const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
 const MIX_TYPE_OPTIONS: { value: 'set' | 'release'; label: string }[] = [
   { value: 'set', label: 'Set' },
   { value: 'release', label: 'Release' },
@@ -1629,13 +1629,17 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
                     className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
-                    placeholder={social.platform === 'Spotify' ? 'Spotify ID del artista' : 'Solo tu nombre de usuario'}
+                    placeholder={social.platform === 'Spotify' ? 'Spotify ID del artista' : social.platform === 'Beatport' ? 'URL de tu perfil de Beatport' : 'Solo tu nombre de usuario'}
                   />
                   <p className="mono text-[10px] opacity-40">
                     {social.platform === 'Spotify' ? (
                       <>El <span className="font-bold">Spotify ID</span> del artista (ej.{' '}
                       <span className="font-bold">1B1vRzgKU4B5Ad1N68To4m</span>). Si pegas la URL del
                       perfil, la recortamos sola.</>
+                    ) : social.platform === 'Beatport' ? (
+                      <>Pega la <span className="font-bold">URL completa</span> de tu perfil de Beatport
+                      (ej. <span className="font-bold">beatport.com/artist/tu-nombre/000000</span>). Se
+                      muestra como reproductor embebido en tu presskit.</>
                     ) : (
                       <>Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
                       completa. Si pegas la URL, la recortamos sola.</>

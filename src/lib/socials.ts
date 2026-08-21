@@ -19,6 +19,9 @@ export const PLATFORM_BASE_URLS: Record<string, string> = {
 export function socialToHandle(platform: string, value: string): string {
   const t = (value || '').trim();
   if (!t) return '';
+  // Beatport NO se puede reducir a un handle: su URL es /artist|track|release/
+  // <slug>/<id> y el embed necesita el id + el tipo. Se guarda la URL completa.
+  if (platform === 'Beatport') return t.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
   // Bandcamp usa SUBDOMINIO (https://<handle>.bandcamp.com), no un path. El handle
   // es el subdominio; aceptamos URL completa o handle pelado.
   if (platform === 'Bandcamp') {
@@ -51,6 +54,8 @@ export function socialToHandle(platform: string, value: string): string {
 export function socialToUrl(platform: string, value: string): string {
   const t = (value || '').trim();
   if (!t) return '';
+  // Beatport: se guarda la URL completa (con o sin esquema) → devolver absoluta.
+  if (platform === 'Beatport') return /^https?:\/\//i.test(t) ? t : `https://${t}`;
   if (/^https?:\/\//i.test(t)) return t;
   // Bandcamp: subdominio. "djfatpablo" → https://djfatpablo.bandcamp.com
   if (platform === 'Bandcamp') {

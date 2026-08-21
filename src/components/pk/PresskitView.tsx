@@ -162,16 +162,19 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
     );
   })();
 
-  const socialSection = presskit.socials.length > 0 ? (
+  // Beatport se muestra como reproductor embebido (sección propia), no como
+  // botón social genérico.
+  const socialButtons = presskit.socials.filter((s) => s.platform !== 'Beatport' && !isBeatportUrl(s.url));
+  const socialSection = socialButtons.length > 0 ? (
     <section className="border-b-4 border-black p-6 lg:p-12">
       <h2 className="text-5xl font-black uppercase italic mb-6">SOCIAL</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {(() => {
-          const counts = presskit.socials.reduce<Record<string, number>>((acc, s) => {
+          const counts = socialButtons.reduce<Record<string, number>>((acc, s) => {
             acc[s.platform] = (acc[s.platform] || 0) + 1;
             return acc;
           }, {});
-          return presskit.socials.map(({ platform, url }, index) => {
+          return socialButtons.map(({ platform, url }, index) => {
             const config = getPlatformConfig(platform);
             const Icon = config.icon;
             const handle = socialToHandle(platform, url);
@@ -317,23 +320,24 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
         );
       })()}
 
-      {/* Beatport — embed oficial (iframe). No se puede reproducir en el player
-          propio (Cloudflare + API con OAuth), así que se muestra su widget. */}
+      {/* Beatport — embed oficial (iframe) desde el/los perfil(es) de Beatport en
+          Perfiles y redes. No se puede reproducir en el player propio (Cloudflare
+          + API con OAuth), así que se muestra su widget. */}
       {(() => {
-        const bp = (presskit.mixes || [])
-          .filter((m) => m.url?.trim() && isBeatportUrl(m.url))
-          .map((m) => ({ mix: m, emb: beatportEmbed(ensureAbsoluteUrl(m.url)) }))
-          .filter((x): x is { mix: typeof x.mix; emb: NonNullable<typeof x.emb> } => x.emb !== null);
+        const bp = (presskit.socials || [])
+          .filter((so) => so.url?.trim() && (so.platform === 'Beatport' || isBeatportUrl(so.url)))
+          .map((so) => beatportEmbed(socialToUrl('Beatport', so.url)))
+          .filter((emb): emb is NonNullable<typeof emb> => emb !== null);
         if (bp.length === 0) return null;
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">BEATPORT</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {bp.map(({ mix, emb }, i) => (
+              {bp.map((emb, i) => (
                 <div key={i} className="brutalist-border overflow-hidden bg-white">
                   <iframe
                     src={emb.src}
-                    title={mix.title || `Beatport ${emb.type}`}
+                    title={`Beatport ${emb.type}`}
                     height={beatportEmbedHeight(emb.type)}
                     className="w-full block border-0"
                     loading="lazy"
