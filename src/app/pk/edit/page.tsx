@@ -25,7 +25,6 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
-  RiSpotifyLine,
   RiAlbumFill,
   RiYoutubeLine,
   RiArrowLeftSLine,
@@ -618,7 +617,6 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   const spotifyUrls = socials
     .filter((s) => s.platform === 'Spotify' && s.url.trim())
     .map((s) => socialToUrl('Spotify', s.url));
-  const hasSpotify = spotifyUrls.length > 0;
 
   const fetchSpotifyTracks = async () => {
     if (spotifyUrls.length === 0) return;
@@ -1588,6 +1586,24 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
                     completa. Si pegas la URL, la recortamos sola.
                   </p>
+                  {/* Spotify: importa toda la discografía como tracks individuales
+                      en Sets & Releases (el artista borra los que no quiera). */}
+                  {social.platform === 'Spotify' && social.url.trim() && (
+                    <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={fetchSpotifyTracks}
+                        disabled={spImporting}
+                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1DB954] text-white hover:bg-[#159c43] transition-colors disabled:opacity-60"
+                      >
+                        {spImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                        {spImporting ? 'AGREGANDO…' : 'AGREGAR TRACKS A SETS & RELEASES'}
+                      </button>
+                      {spMsg && (
+                        <p className="mono text-[11px] text-[#0a7d38] leading-snug">{spMsg}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {socials.length === 0 && (
@@ -1638,17 +1654,6 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     AGREGAR DESDE YOUTUBE
                   </button>
                 )}
-                {hasSpotify && (
-                  <button
-                    type="button"
-                    onClick={fetchSpotifyTracks}
-                    disabled={spImporting}
-                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#1DB954] hover:text-white transition-colors"
-                  >
-                    {spImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSpotifyLine className="w-4 h-4" />}
-                    {spImporting ? 'IMPORTANDO…' : 'AGREGAR DESDE SPOTIFY'}
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={addMix}
@@ -1659,14 +1664,6 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 </button>
               </div>
             </div>
-
-            {/* Feedback del import masivo de Spotify */}
-            {spMsg && (
-              <div className="flex items-start gap-2 p-3 bg-[#1DB954]/10 border-2 border-[#1DB954] text-[#0a7d38] mono text-xs mb-3">
-                <RiSpotifyLine className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{spMsg}</span>
-              </div>
-            )}
 
             {/* Mensaje cuando no hay ni SoundCloud ni Bandcamp en redes */}
             {!hasSoundcloud && !hasBandcamp && (
