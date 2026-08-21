@@ -216,7 +216,7 @@ export default function ImportPreviewPlayer({
           setPos(Number(e.target.value));
         }}
         aria-label="Barra de reproducción"
-        className="flex-1 h-1 cursor-pointer"
+        className="flex-1 min-w-0 h-1 cursor-pointer"
         style={{ accentColor: accent }}
       />
       <span className="mono text-[10px] tabular-nums opacity-70 shrink-0 w-16 text-right">
