@@ -537,6 +537,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   // Importa desde la fila de la red (SoundCloud/Bandcamp/YouTube) y baja al
   // selector de Sets & Releases, que es donde aparecen los tracks a elegir.
   const importFromSocialRow = (platform: string) => {
+    void persist(false); // guarda el perfil recién escrito (los textos no auto-guardan)
     if (platform === 'SoundCloud') fetchScTracks();
     else if (platform === 'Bandcamp') fetchBcTracks();
     else if (platform === 'YouTube') fetchYtItems();
@@ -657,6 +658,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
 
   const fetchSpotifyTracks = async () => {
     if (spotifyUrls.length === 0) return;
+    void persist(false); // guarda el perfil de Spotify recién escrito
     setSpImporting(true);
     setSpMsg('');
     try {
