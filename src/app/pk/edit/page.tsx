@@ -1643,42 +1643,50 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       {socialToUrl(social.platform, social.url)}
                     </a>
                   )}
-                  {/* Import desde esta red hacia Sets & Releases (SoundCloud/Bandcamp/YouTube). */}
-                  {(social.platform === 'SoundCloud' || social.platform === 'Bandcamp' || social.platform === 'YouTube') && social.url.trim() && (
-                    <div className="pt-1">
+                  {/* Acciones de la fila: Guardar (persistir el perfil sin importar
+                      nada) + Importar tracks (según la plataforma). */}
+                  {social.url.trim() && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => importFromSocialRow(social.platform)}
-                        disabled={scLoading}
-                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                        style={{ backgroundColor: social.platform === 'SoundCloud' ? '#FF5500' : social.platform === 'Bandcamp' ? '#1da0c3' : '#FF0000' }}
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border hover:bg-black hover:text-white transition-colors disabled:opacity-60"
                       >
-                        {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
-                        {social.platform === 'YouTube'
-                          ? 'IMPORTAR VIDEOS A SETS & RELEASES'
-                          : social.platform === 'Bandcamp'
-                            ? 'IMPORTAR RELEASES A SETS & RELEASES'
-                            : 'IMPORTAR TRACKS A SETS & RELEASES'}
+                        {saving ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSaveLine className="w-4 h-4" />}
+                        Guardar
                       </button>
-                    </div>
-                  )}
-                  {/* Spotify: importa toda la discografía como tracks individuales
-                      en Sets & Releases (el artista borra los que no quiera). */}
-                  {social.platform === 'Spotify' && social.url.trim() && (
-                    <div className="space-y-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={fetchSpotifyTracks}
-                        disabled={spImporting}
-                        className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1DB954] text-white hover:bg-[#159c43] transition-colors disabled:opacity-60"
-                      >
-                        {spImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
-                        {spImporting ? 'AGREGANDO…' : 'AGREGAR TRACKS A SETS & RELEASES'}
-                      </button>
-                      {spMsg && (
-                        <p className="mono text-[11px] text-[#0a7d38] leading-snug">{spMsg}</p>
+                      {(social.platform === 'SoundCloud' || social.platform === 'Bandcamp' || social.platform === 'YouTube') && (
+                        <button
+                          type="button"
+                          onClick={() => importFromSocialRow(social.platform)}
+                          disabled={scLoading}
+                          className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                          style={{ backgroundColor: social.platform === 'SoundCloud' ? '#FF5500' : social.platform === 'Bandcamp' ? '#1da0c3' : '#FF0000' }}
+                        >
+                          {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                          {social.platform === 'YouTube'
+                            ? 'IMPORTAR VIDEOS A SETS & RELEASES'
+                            : social.platform === 'Bandcamp'
+                              ? 'IMPORTAR RELEASES A SETS & RELEASES'
+                              : 'IMPORTAR TRACKS A SETS & RELEASES'}
+                        </button>
+                      )}
+                      {social.platform === 'Spotify' && (
+                        <button
+                          type="button"
+                          onClick={fetchSpotifyTracks}
+                          disabled={spImporting}
+                          className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#1DB954] text-white hover:bg-[#159c43] transition-colors disabled:opacity-60"
+                        >
+                          {spImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                          {spImporting ? 'AGREGANDO…' : 'AGREGAR TRACKS A SETS & RELEASES'}
+                        </button>
                       )}
                     </div>
+                  )}
+                  {social.platform === 'Spotify' && spMsg && (
+                    <p className="mono text-[11px] text-[#0a7d38] leading-snug">{spMsg}</p>
                   )}
                 </div>
               ))}
