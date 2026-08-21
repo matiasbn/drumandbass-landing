@@ -1631,43 +1631,39 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
             <div className="flex items-center justify-between mb-3">
               <label className={labelClass}>Sets & Releases</label>
               <div className="flex gap-2">
-                {hasSoundcloud && (
-                  <button
-                    type="button"
-                    onClick={fetchScTracks}
-                    disabled={scLoading}
-                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#ff5500] hover:text-white transition-colors"
-                  >
-                    {scLoading ? (
-                      <RiLoader4Line className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RiSoundcloudLine className="w-4 h-4" />
-                    )}
-                    AGREGAR DESDE SOUNDCLOUD
-                  </button>
-                )}
-                {hasBandcamp && (
-                  <button
-                    type="button"
-                    onClick={fetchBcTracks}
-                    disabled={scLoading}
-                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#1da0c3] hover:text-white transition-colors"
-                  >
-                    {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
-                    AGREGAR DESDE BANDCAMP
-                  </button>
-                )}
-                {hasYoutube && (
-                  <button
-                    type="button"
-                    onClick={fetchYtItems}
-                    disabled={scLoading}
-                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#FF0000] hover:text-white transition-colors"
-                  >
-                    {scLoading ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiYoutubeLine className="w-4 h-4" />}
-                    AGREGAR DESDE YOUTUBE
-                  </button>
-                )}
+                {/* Import por plataforma: el botón se muestra siempre, pero queda
+                    deshabilitado + atenuado con un tooltip cuando esa red no está
+                    en Redes Sociales (así el DJ sabe QUÉ hacer para habilitarlo). */}
+                <button
+                  type="button"
+                  onClick={fetchScTracks}
+                  disabled={scLoading || !hasSoundcloud}
+                  title={hasSoundcloud ? 'Importar tracks desde tu SoundCloud' : 'Agrega tu SoundCloud en Redes Sociales para importar tus tracks'}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasSoundcloud ? 'hover:bg-[#ff5500] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  {scLoading && hasSoundcloud ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSoundcloudLine className="w-4 h-4" />}
+                  AGREGAR DESDE SOUNDCLOUD
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchBcTracks}
+                  disabled={scLoading || !hasBandcamp}
+                  title={hasBandcamp ? 'Importar releases desde tu Bandcamp' : 'Agrega tu Bandcamp en Redes Sociales para importar tus releases'}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasBandcamp ? 'hover:bg-[#1da0c3] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  {scLoading && hasBandcamp ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAlbumFill className="w-4 h-4" />}
+                  AGREGAR DESDE BANDCAMP
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchYtItems}
+                  disabled={scLoading || !hasYoutube}
+                  title={hasYoutube ? 'Importar videos desde tu canal de YouTube' : 'Agrega tu YouTube en Redes Sociales para importar tus videos'}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasYoutube ? 'hover:bg-[#FF0000] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  {scLoading && hasYoutube ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiYoutubeLine className="w-4 h-4" />}
+                  AGREGAR DESDE YOUTUBE
+                </button>
                 <button
                   type="button"
                   onClick={addMix}
@@ -1678,14 +1674,6 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 </button>
               </div>
             </div>
-
-            {/* Mensaje cuando no hay ninguna fuente de import en redes */}
-            {!hasSoundcloud && !hasBandcamp && !hasYoutube && spotifyUrls.length === 0 && (
-              <div className="flex items-start gap-2 p-3 bg-orange-50 border-2 border-orange-300 text-orange-800 mono text-xs mb-3">
-                <RiSoundcloudLine className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Agrega tu SoundCloud, Bandcamp, YouTube o Spotify en redes sociales para importar tus tracks.</span>
-              </div>
-            )}
 
             {/* SoundCloud import dropdown */}
             {scDropdownOpen && (
