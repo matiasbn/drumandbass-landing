@@ -35,13 +35,48 @@ export default function ImportPreviewPlayer({
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resolvedRef = useRef<string>(''); // URL cuyo stream ya está cargado en el <audio>
+  const mountedRef = useRef(false); // false en el primer render (no auto-reproduce al abrir)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
 
-  // Reinicia al cambiar el track seleccionado.
+  const resolve = async (nextUrl: string): Promise<boolean> => {
+    if (resolvedRef.current === nextUrl && audioRef.current?.src) return true;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${streamApi(nextUrl)}?url=${encodeURIComponent(nextUrl)}`);
+      if (!res.ok) throw new Error();
+      const s = await res.json();
+      if (!s?.streamUrl) throw new Error();
+      const a = audioRef.current;
+      if (!a) return false;
+      a.src = s.streamUrl;
+      resolvedRef.current = nextUrl;
+      return true;
+    } catch {
+      setError('No se pudo previsualizar este track (puede ser un EP o solo HLS).');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const play = async (target: string) => {
+    const ok = await resolve(target);
+    if (!ok) return;
+    try {
+      await audioRef.current?.play();
+    } catch {
+      setError('No se pudo reproducir.');
+    }
+  };
+
+  // Al cambiar de track: reinicia el <audio>. En el primer render NO reproduce
+  // (recién se abrió el selector); en cada cambio POSTERIOR (next/anterior o
+  // cambio de selección) reproduce de inmediato.
   useEffect(() => {
     const a = audioRef.current;
     if (a) {
@@ -54,29 +89,10 @@ export default function ImportPreviewPlayer({
     setPos(0);
     setDur(0);
     setError('');
+    if (mountedRef.current) void play(url);
+    mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
-
-  const resolve = async (): Promise<boolean> => {
-    if (resolvedRef.current === url && audioRef.current?.src) return true;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${streamApi(url)}?url=${encodeURIComponent(url)}`);
-      if (!res.ok) throw new Error();
-      const s = await res.json();
-      if (!s?.streamUrl) throw new Error();
-      const a = audioRef.current;
-      if (!a) return false;
-      a.src = s.streamUrl;
-      resolvedRef.current = url;
-      return true;
-    } catch {
-      setError('No se pudo previsualizar este track (puede ser un EP o solo HLS).');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const toggle = async () => {
     const a = audioRef.current;
@@ -85,13 +101,7 @@ export default function ImportPreviewPlayer({
       a.pause();
       return;
     }
-    const ok = await resolve();
-    if (!ok) return;
-    try {
-      await a.play();
-    } catch {
-      setError('No se pudo reproducir.');
-    }
+    await play(url);
   };
 
   const accent = accentFor(url);

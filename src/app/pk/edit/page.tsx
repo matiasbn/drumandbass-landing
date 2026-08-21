@@ -1813,7 +1813,6 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       const sel = idx >= 0 ? scTracks[idx] : undefined;
                       return sel?.url ? (
                         <ImportPreviewPlayer
-                          key={sel.url}
                           url={sel.url}
                           hasPrev={idx > 0}
                           hasNext={idx < scTracks.length - 1}
