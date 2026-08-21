@@ -164,9 +164,10 @@ export default function ReleasesPlayer({
     ).then((results) => {
       if (cancelled) return;
       type SpTrack = { id: string; title: string; subtitle: string; previewUrl?: string | null; artwork?: string | null };
+      const seen = new Set<string>();
       const rel: NationalRelease[] = results.flatMap((d) =>
         ((d.tracks || []) as SpTrack[])
-          .filter((t) => t.previewUrl && t.id)
+          .filter((t) => t.previewUrl && t.id && !seen.has(t.id) && seen.add(t.id))
           .map((t) => ({
             title: t.title,
             url: `https://open.spotify.com/track/${t.id}`,

@@ -25,6 +25,7 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
+  RiSpotifyLine,
   RiAlbumFill,
   RiYoutubeLine,
   RiArrowLeftSLine,
@@ -128,6 +129,10 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   // Item de tipo set pendiente de confirmar (EP vs playlist).
   const [epPrompt, setEpPrompt] = useState<SoundcloudTrackOption | null>(null);
   const [playlistBlocked, setPlaylistBlocked] = useState(false);
+  // Spotify: import masivo (scrapea toda la discografía y agrega cada track como
+  // una fila propia en Sets & Releases; el artista borra las que no quiera).
+  const [spImporting, setSpImporting] = useState(false);
+  const [spMsg, setSpMsg] = useState('');
 
   // ── Cambios sin guardar (dirty) + auto-guardado ───────────────────────────
   // Snapshot en memoria (barato) para saber si hay cambios sin guardar. Los TEXTOS
@@ -607,6 +612,54 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
     .filter((s) => s.platform === 'YouTube' && s.url.trim())
     .map((s) => socialToUrl('YouTube', s.url));
   const hasYoutube = youtubeUrls.length > 0;
+
+  // Spotify: el/los perfil(es) de artista en Redes. "Traer de Spotify" scrapea
+  // TODA la discografía y agrega cada track como fila propia (import masivo).
+  const spotifyUrls = socials
+    .filter((s) => s.platform === 'Spotify' && s.url.trim())
+    .map((s) => socialToUrl('Spotify', s.url));
+  const hasSpotify = spotifyUrls.length > 0;
+
+  const fetchSpotifyTracks = async () => {
+    if (spotifyUrls.length === 0) return;
+    setSpImporting(true);
+    setSpMsg('');
+    try {
+      const perAccount = await Promise.all(
+        spotifyUrls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/spotify?preview=1&url=${encodeURIComponent(u)}`);
+            if (!res.ok) return [] as { id: string; title: string; subtitle?: string }[];
+            const data = await res.json();
+            return (data.tracks || []) as { id: string; title: string; subtitle?: string }[];
+          } catch {
+            return [] as { id: string; title: string; subtitle?: string }[];
+          }
+        })
+      );
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const nuevos: PresskitMix[] = [];
+      for (const t of perAccount.flat()) {
+        if (!t.id || !t.title?.trim()) continue;
+        const url = `https://open.spotify.com/track/${t.id}`;
+        if (existingUrls.has(url) || seen.has(url)) continue;
+        seen.add(url);
+        nuevos.push({ title: t.title, platform: 'Spotify', url, type: 'release' });
+      }
+      if (nuevos.length === 0) {
+        setSpMsg('No se encontraron tracks nuevos en Spotify.');
+        return;
+      }
+      autoPendingRef.current = true; // import → auto-guardar
+      setMixes([...mixes, ...nuevos]);
+      setSpMsg(`${nuevos.length} track${nuevos.length === 1 ? '' : 's'} importado${nuevos.length === 1 ? '' : 's'}. Borra los que no quieras mostrar.`);
+    } catch {
+      setSpMsg('Error al conectar con Spotify.');
+    } finally {
+      setSpImporting(false);
+    }
+  };
 
   const fetchScTracks = async () => {
     if (soundcloudUrls.length === 0) return;
@@ -1585,6 +1638,17 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     AGREGAR DESDE YOUTUBE
                   </button>
                 )}
+                {hasSpotify && (
+                  <button
+                    type="button"
+                    onClick={fetchSpotifyTracks}
+                    disabled={spImporting}
+                    className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border hover:bg-[#1DB954] hover:text-white transition-colors"
+                  >
+                    {spImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSpotifyLine className="w-4 h-4" />}
+                    {spImporting ? 'IMPORTANDO…' : 'AGREGAR DESDE SPOTIFY'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={addMix}
@@ -1595,6 +1659,14 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 </button>
               </div>
             </div>
+
+            {/* Feedback del import masivo de Spotify */}
+            {spMsg && (
+              <div className="flex items-start gap-2 p-3 bg-[#1DB954]/10 border-2 border-[#1DB954] text-[#0a7d38] mono text-xs mb-3">
+                <RiSpotifyLine className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{spMsg}</span>
+              </div>
+            )}
 
             {/* Mensaje cuando no hay ni SoundCloud ni Bandcamp en redes */}
             {!hasSoundcloud && !hasBandcamp && (

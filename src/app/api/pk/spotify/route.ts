@@ -60,6 +60,35 @@ function findTrackList(o: unknown): Record<string, unknown>[] | null {
   return null;
 }
 
+// Scrapea un track individual (título, artista, artwork y preview MP3) desde su
+// embed. Lo usa el import masivo (fila por track) y el player para reproducir
+// una URL de track suelta.
+async function scrapeSingleTrack(trackId: string): Promise<Track | null> {
+  try {
+    const res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, { headers: HEADERS, next: { revalidate: 86400 } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return null;
+    const json = JSON.parse(m[1]) as unknown;
+    const ap = findKey(json, 'audioPreview') as { url?: string } | null;
+    const title = findKey(json, 'title');
+    const subtitle = findKey(json, 'subtitle');
+    const cover = findKey(json, 'coverArt') as { sources?: { url?: string }[] } | null;
+    const artwork = cover?.sources?.[0]?.url || null;
+    return {
+      id: trackId,
+      title: typeof title === 'string' ? title : '',
+      subtitle: typeof subtitle === 'string' ? subtitle : '',
+      durationMs: null,
+      previewUrl: ap && typeof ap.url === 'string' ? ap.url : null,
+      artwork,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Busca en profundidad la primera propiedad `key` del JSON.
 function findKey(o: unknown, key: string): unknown {
   if (!o || typeof o !== 'object') return null;
@@ -169,6 +198,14 @@ export async function GET(req: NextRequest) {
   const forcePreview = req.nextUrl.searchParams.get('preview') === '1';
 
   try {
+    // URL de un track suelto → devolver ese único track (con preview MP3).
+    if (emb.type === 'track' && id) {
+      const t = await scrapeSingleTrack(id);
+      return NextResponse.json(
+        { tracks: t ? [t] : [], source: 'track' },
+        { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } }
+      );
+    }
     if (emb.type === 'artist' && id) {
       const token = await getToken();
       if (token) {
