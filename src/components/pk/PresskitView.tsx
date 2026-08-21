@@ -7,11 +7,10 @@ import ReleasesPlayer from '@/src/components/ReleasesPlayer';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
 import { isBandcampUrl } from '@/src/lib/bandcamp';
 import { isYoutubeUrl } from '@/src/lib/youtubeUrl';
-import { isSpotifyUrl, spotifyEmbed } from '@/src/lib/spotifyUrl';
+import { isSpotifyUrl } from '@/src/lib/spotifyUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
-import SpotifyReleasesPlayer from '@/src/components/pk/SpotifyReleasesPlayer';
 import { looksLikeHtml } from '@/src/lib/mdFormat';
 import {
   RiInstagramLine,
@@ -118,47 +117,14 @@ function SectionBody({ text }: { text: string }) {
 // Cuerpo del presskit público, reutilizable: lo usa la página pública
 // (/pk/[slug]) y la vista previa del admin (/pk/preview/[id]) para renderizar
 // EXACTAMENTE lo mismo que verá el DJ.
+// presskit view
 export default function PresskitView({ presskit, slug, preview = false }: PresskitViewProps) {
-  // Spotify: sección propia automática "{ARTISTA} EN SPOTIFY" con el/los embeds.
-  const spotifyEmbeds = (presskit.mixes || [])
+  // URLs de Spotify del presskit → sus tracks (previews) se integran al MISMO
+  // reproductor de Sets & Releases (no una sección aparte).
+  const spotifyUrls = (presskit.mixes || [])
     .filter((m) => m.title?.trim() && m.url?.trim())
     .filter((m) => isSpotifyUrl(m.url) && !isSoundcloudUrl(m.url) && !isBandcampUrl(m.url) && !isYoutubeUrl(m.url))
-    .map((m) => ({ mix: m, sp: spotifyEmbed(ensureAbsoluteUrl(m.url)) }))
-    .filter((x): x is { mix: typeof x.mix; sp: { src: string; type: string } } => !!x.sp);
-  const spotifySection = spotifyEmbeds.length > 0 ? (
-    <section className="border-b-4 border-black p-6 lg:p-12">
-      <h2 className="text-5xl font-black uppercase italic mb-6 break-words">{presskit.artist_name} EN SPOTIFY</h2>
-      <div className="space-y-4 max-w-3xl">
-        {spotifyEmbeds.map(({ mix, sp }, i) => (
-          <div key={i}>
-            {spotifyEmbeds.length > 1 && (
-              <p className="mono text-xs font-black uppercase text-[#1DB954] mb-1 break-words">{mix.title}</p>
-            )}
-            {sp.type === 'artist' ? (
-              // Artista: su discografía en NUESTRO player (previews de 30s), en vez
-              // del widget de artista de Spotify.
-              <SpotifyReleasesPlayer
-                artistUrl={ensureAbsoluteUrl(mix.url)}
-                artistName={presskit.artist_name}
-                slug={slug}
-                fallbackEmbed={sp.src}
-              />
-            ) : (
-              <iframe
-                src={sp.src}
-                title={mix.title}
-                className="w-full"
-                height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
-                style={{ border: 0, borderRadius: 12 }}
-                loading="lazy"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  ) : null;
+    .map((m) => ensureAbsoluteUrl(m.url));
 
   // Rider y Social se renderizan al FINAL (definidos acá, colocados abajo).
   const riderSection = (() => {
@@ -315,7 +281,9 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
-            {playerReleases.length > 0 && <ReleasesPlayer releases={playerReleases} hideArtistFilter />}
+            {(playerReleases.length > 0 || spotifyUrls.length > 0) && (
+              <ReleasesPlayer releases={playerReleases} spotifyUrls={spotifyUrls} hideArtistFilter />
+            )}
             {others.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 {others.map((mix, i) => (
@@ -342,9 +310,6 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
           </section>
         );
       })()}
-
-      {/* {ARTISTA} EN SPOTIFY — sección propia automática, tras Sets & Releases. */}
-      {spotifySection}
 
       {/* Links */}
       {presskit.links?.length > 0 && (
