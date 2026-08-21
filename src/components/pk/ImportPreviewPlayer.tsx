@@ -217,6 +217,7 @@ export default function ImportPreviewPlayer({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => audioRef.current?.pause()}
         aria-label={`Ir a ${platformName(url)}`}
         title={`Ir a ${platformName(url)}`}
         className="inline-flex items-center gap-1 mono text-[10px] font-bold uppercase px-2 h-9 brutalist-border text-white shrink-0 transition-opacity hover:opacity-90"
