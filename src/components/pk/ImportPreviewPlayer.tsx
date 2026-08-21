@@ -35,16 +35,19 @@ export default function ImportPreviewPlayer({
   onNext,
   hasPrev = false,
   hasNext = false,
+  playSignal = 0,
 }: {
   url: string;
   onPrev?: () => void;
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
+  // Señal EXPLÍCITA de "reproducir ahora": el padre la incrementa al usar
+  // anterior/siguiente. NUNCA reproduce solo al montar/recargar (0 = no tocar).
+  playSignal?: number;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resolvedRef = useRef<string>(''); // URL cuyo stream ya está cargado en el <audio>
-  const mountedRef = useRef(false); // false en el primer render (no auto-reproduce al abrir)
   const pauseSelfRef = useRef(() => audioRef.current?.pause()); // estable, para el registro global
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -106,9 +109,9 @@ export default function ImportPreviewPlayer({
     };
   }, []);
 
-  // Al cambiar de track: reinicia el <audio>. En el primer render NO reproduce
-  // (recién se abrió el selector); en cada cambio POSTERIOR (next/anterior o
-  // cambio de selección) reproduce de inmediato.
+  // Al cambiar de track: reinicia el <audio> (detenido). NUNCA reproduce solo
+  // (ni al montar, ni al recargar): la reproducción es siempre por gesto del
+  // usuario (botón play) o por la señal explícita playSignal (next/anterior).
   useEffect(() => {
     const a = audioRef.current;
     if (a) {
@@ -121,10 +124,14 @@ export default function ImportPreviewPlayer({
     setPos(0);
     setDur(0);
     setError('');
-    if (mountedRef.current) void play(url);
-    mountedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
+
+  // Reproducir SOLO cuando el padre lo pide explícitamente (next/anterior). En
+  // el montaje playSignal es 0 → no toca nada.
+  useEffect(() => {
+    if (playSignal > 0) void play(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playSignal]);
 
   const toggle = async () => {
     const a = audioRef.current;

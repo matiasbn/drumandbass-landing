@@ -138,6 +138,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   const [spMsg, setSpMsg] = useState('');
   // Aviso "cómo activar el import" cuando la red aún no está en Perfiles y redes.
   const [importHint, setImportHint] = useState<string | null>(null);
+  // Señal de auto-play del preview: se incrementa al usar anterior/siguiente en
+  // el dropdown de import, para que reproduzca solo por gesto (nunca al recargar).
+  const [previewSignal, setPreviewSignal] = useState(0);
   const socialsSectionRef = useRef<HTMLDivElement>(null);
   const mixesSectionRef = useRef<HTMLDivElement>(null);
 
@@ -1838,8 +1841,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                           url={sel.url}
                           hasPrev={idx > 0}
                           hasNext={idx < scTracks.length - 1}
-                          onPrev={() => setScSelectedTrack(String(scTracks[idx - 1].id))}
-                          onNext={() => setScSelectedTrack(String(scTracks[idx + 1].id))}
+                          playSignal={previewSignal}
+                          onPrev={() => { setScSelectedTrack(String(scTracks[idx - 1].id)); setPreviewSignal((n) => n + 1); }}
+                          onNext={() => { setScSelectedTrack(String(scTracks[idx + 1].id)); setPreviewSignal((n) => n + 1); }}
                         />
                       ) : null;
                     })()}
