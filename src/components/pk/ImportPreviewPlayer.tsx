@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFill } from '@remixicon/react';
+import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFill, RiExternalLinkLine } from '@remixicon/react';
 
 // Mini-reproductor para previsualizar un track ANTES de agregarlo, dentro del
 // dropdown de import (SoundCloud / Bandcamp). Resuelve el stream con los mismos
@@ -12,6 +12,7 @@ import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFi
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
 const accentFor = (url: string) => (isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isBc(url) ? 'Bandcamp' : 'SoundCloud');
 
 const fmt = (s: number) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -178,6 +179,18 @@ export default function ImportPreviewPlayer({
       <span className="mono text-[10px] tabular-nums opacity-70 shrink-0 w-16 text-right">
         {fmt(pos)} / {fmt(dur)}
       </span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Ir a ${platformName(url)}`}
+        title={`Ir a ${platformName(url)}`}
+        className="inline-flex items-center gap-1 mono text-[10px] font-bold uppercase px-2 h-9 brutalist-border text-white shrink-0 transition-opacity hover:opacity-90"
+        style={{ backgroundColor: accent }}
+      >
+        <RiExternalLinkLine className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Ir a {platformName(url)}</span>
+      </a>
       </div>
       {error && (
         <p className="mono text-[10px] text-red-500 leading-tight">{error}</p>
