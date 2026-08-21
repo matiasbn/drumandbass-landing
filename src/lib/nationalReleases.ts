@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PresskitMix } from '@/src/types/presskit';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
 import { isBandcampUrl } from '@/src/lib/bandcamp';
+import { isSpotifyUrl } from '@/src/lib/spotifyUrl';
 
 export interface NationalRelease {
   title: string;
@@ -67,7 +68,7 @@ export async function getNationalReleases(limit?: number): Promise<NationalRelea
       if (
         m.featured &&
         m.type === 'release' &&
-        (isSoundcloudUrl(m.url) || isBandcampUrl(m.url)) &&
+        (isSoundcloudUrl(m.url) || isBandcampUrl(m.url) || isSpotifyUrl(m.url)) &&
         m.title?.trim() &&
         m.url?.trim()
       ) {
