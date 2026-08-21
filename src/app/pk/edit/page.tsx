@@ -79,6 +79,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   const [adminSlug, setAdminSlug] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState('');
   const [presskit, setPresskit] = useState<Presskit | null>(null);
   const [loadingPk, setLoadingPk] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1009,20 +1010,29 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
             </a>
           )}
           {isPending && driver?.invite && (
-            <button
-              onClick={async () => {
-                setInviting(true);
-                const r = await driver.invite!();
-                setInviting(false);
-                setSaveMessage(r.ok ? 'Invitación enviada ✓' : `Error: ${r.error || 'no se pudo enviar'}`);
-                setTimeout(() => setSaveMessage(''), 3000);
-              }}
-              disabled={inviting}
-              className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border bg-[#ff0055] text-white hover:bg-black transition-colors disabled:opacity-50"
-            >
-              {inviting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiExternalLinkLine className="w-4 h-4" />}
-              {driver.invitedAt ? 'Reenviar invitación' : 'Enviar invitación'}
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={async () => {
+                  setInviting(true);
+                  setInviteMsg('');
+                  const r = await driver.invite!();
+                  setInviting(false);
+                  setInviteMsg(r.ok ? 'Invitación enviada ✓' : `Error: ${r.error || 'no se pudo enviar'}`);
+                  if (r.ok) setTimeout(() => setInviteMsg(''), 6000);
+                }}
+                disabled={inviting}
+                className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border bg-[#ff0055] text-white hover:bg-black transition-colors disabled:opacity-50"
+              >
+                {inviting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiExternalLinkLine className="w-4 h-4" />}
+                {inviting ? 'Enviando…' : driver.invitedAt ? 'Reenviar invitación' : 'Enviar invitación'}
+              </button>
+              {inviteMsg && (
+                <span className={`inline-flex items-center gap-1 mono text-xs font-bold ${inviteMsg.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>
+                  {!inviteMsg.startsWith('Error') && <RiCheckLine className="w-4 h-4" />}
+                  {inviteMsg}
+                </span>
+              )}
+            </div>
           )}
           {isAdmin ? (
             <a href="/admin/presskits" className="inline-flex items-center gap-2 mono text-xs font-bold uppercase px-4 py-2 brutalist-border hover:bg-black hover:text-white transition-colors">
