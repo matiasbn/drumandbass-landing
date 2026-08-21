@@ -1716,7 +1716,8 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 const isYt = mix.platform === 'YouTube' || /youtube\.com|youtu\.be/i.test(mix.url);
                 // Espina lateral con el color de la plataforma: agrupa cada track
                 // como una tarjeta inequívoca y encoda de qué plataforma es.
-                const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : '#0000ff';
+                const isSp = mix.platform === 'Spotify' || /open\.spotify\.com|spotify\.com/i.test(mix.url);
+                const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : isSp ? '#1DB954' : '#0000ff';
                 return (
                   <div
                     key={i}
