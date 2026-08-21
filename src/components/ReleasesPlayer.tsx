@@ -133,13 +133,60 @@ function buildQueue(len: number, shuffle: boolean, curIdx: number): { queue: num
 // (Media Session), auto-avance, shuffle, sin gate. Es frágil por depender de la
 // web de SoundCloud; si cambia, se reimplementa.
 export default function ReleasesPlayer({
-  releases,
+  releases: releasesInput,
   hideArtistFilter = false,
+  spotifyUrls,
 }: {
   releases: NationalRelease[];
   // En un presskit (un solo artista) el filtro por artista sobra: se oculta.
   hideArtistFilter?: boolean;
+  // URLs de Spotify (artista/álbum/playlist) a integrar: sus tracks (previews de
+  // 30s) se suman a la misma lista del reproductor.
+  spotifyUrls?: string[];
 }) {
+  // Tracks de Spotify (previews) traídos aparte y fusionados con los del prop.
+  const [spotifyReleases, setSpotifyReleases] = useState<NationalRelease[]>([]);
+  const releases = useMemo(
+    () => (spotifyReleases.length ? [...releasesInput, ...spotifyReleases] : releasesInput),
+    [releasesInput, spotifyReleases]
+  );
+  const spKey = (spotifyUrls || []).join('|');
+  useEffect(() => {
+    const urls = spotifyUrls || [];
+    if (!urls.length) return;
+    let cancelled = false;
+    Promise.all(
+      urls.map((u) =>
+        fetch(`/api/pk/spotify?preview=1&url=${encodeURIComponent(u)}`)
+          .then((r) => (r.ok ? r.json() : { tracks: [] }))
+          .catch(() => ({ tracks: [] }))
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      type SpTrack = { id: string; title: string; subtitle: string; previewUrl?: string | null; artwork?: string | null };
+      const rel: NationalRelease[] = results.flatMap((d) =>
+        ((d.tracks || []) as SpTrack[])
+          .filter((t) => t.previewUrl && t.id)
+          .map((t) => ({
+            title: t.title,
+            url: `https://open.spotify.com/track/${t.id}`,
+            artistName: t.subtitle || '',
+            slug: null,
+            releasedAt: null,
+            downloadable: false,
+            downloadUrl: null,
+            isEp: false,
+            kind: 'release' as const,
+            streamUrl: t.previewUrl ?? null,
+            artwork: t.artwork ?? null,
+          }))
+      );
+      setSpotifyReleases(rel);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spKey]);
+
   const [filterArtist, setFilterArtist] = useState<string>('');
   // Filtro por tipo (release/set). Solo tiene sentido si conviven ambos tipos
   // (presskit); en /releases todos son 'release' y el filtro no se muestra.
