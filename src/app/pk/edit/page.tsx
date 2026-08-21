@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PkAuthProvider, usePkAuth } from '@/src/components/pk/PkAuthContext';
 import { PkAuthModal } from '@/src/components/pk/PkAuthModal';
 import RichTextEditor from '@/src/components/pk/RichTextEditor';
+import ImportPreviewPlayer from '@/src/components/pk/ImportPreviewPlayer';
 import { Presskit, PresskitSocial, PresskitMix, PresskitLink, PresskitCustomSection } from '@/src/types/presskit';
 import { createClient } from '@/src/lib/supabase';
 import { event } from '@/src/lib/gtag';
@@ -1728,6 +1729,11 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                         </select>
                       )}
                     </div>
+                    {/* Preview del track seleccionado (SoundCloud/Bandcamp) antes de agregarlo. */}
+                    {importSource !== 'youtube' && (() => {
+                      const sel = scTracks.find((t) => String(t.id) === scSelectedTrack);
+                      return sel?.url ? <ImportPreviewPlayer key={sel.url} url={sel.url} /> : null;
+                    })()}
                     <div className="flex gap-2">
                       <button
                         type="button"
