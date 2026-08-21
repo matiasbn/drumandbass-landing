@@ -989,7 +989,20 @@ export default function ReleasesPlayer({
             </button>
 
             <div className="min-w-0 flex-1 px-1">
-              <p className="font-black uppercase text-sm leading-tight truncate">{nowPlaying?.title || 'Elige un track'}</p>
+              {nowPlaying?.permalink ? (
+                <a
+                  href={openUrl(nowPlaying.permalink)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => event('release_open_soundcloud', { release_title: nowPlaying.title, artist: nowPlaying.artist, platform: platformName(nowPlaying.permalink) })}
+                  className="font-black uppercase text-sm leading-tight truncate block hover:underline"
+                  title={`Abrir ${nowPlaying.title} en ${platformName(nowPlaying.permalink)}`}
+                >
+                  {nowPlaying.title}
+                </a>
+              ) : (
+                <p className="font-black uppercase text-sm leading-tight truncate">{nowPlaying?.title || 'Elige un track'}</p>
+              )}
               <p className="mono text-[11px] uppercase opacity-60 truncate">
                 {nowPlaying ? (ytEmbed ? `${nowPlaying.artist} · YouTube` : `${nowPlaying.artist} · ${fmt(position)} / ${fmt(duration)}`) : 'Reproductor de releases'}
               </p>
@@ -1046,7 +1059,19 @@ export default function ReleasesPlayer({
             ))}
             {nowPlaying && !playbackError && !ytEmbed && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
-                <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
+                {nowPlaying.permalink ? (
+                  <a
+                    href={openUrl(nowPlaying.permalink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => event('release_open_soundcloud', { release_title: nowPlaying.title, artist: nowPlaying.artist, platform: platformName(nowPlaying.permalink) })}
+                    className="font-black uppercase text-lg leading-tight break-words block hover:underline"
+                  >
+                    {nowPlaying.title}
+                  </a>
+                ) : (
+                  <p className="font-black uppercase text-lg leading-tight break-words">{nowPlaying.title}</p>
+                )}
                 <p className="mono text-xs uppercase opacity-80">{nowPlaying.artist}</p>
               </div>
             )}
