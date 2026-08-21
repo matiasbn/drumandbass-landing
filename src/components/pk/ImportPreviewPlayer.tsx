@@ -58,7 +58,7 @@ export default function ImportPreviewPlayer({
       resolvedRef.current = nextUrl;
       return true;
     } catch {
-      setError('No se pudo previsualizar este track (puede ser un EP o solo HLS).');
+      setError(`No se pudo previsualizar aquí (track protegido o EP). Escúchalo en ${platformName(nextUrl)} →`);
       return false;
     } finally {
       setLoading(false);

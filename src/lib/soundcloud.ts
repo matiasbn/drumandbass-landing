@@ -390,37 +390,44 @@ export async function resolveSoundcloudStream(url: string): Promise<SoundcloudSt
     const sound = hydration.find((h) => h.hydratable === 'sound');
     const d = sound?.data;
     const transcodings = d?.media?.transcodings || [];
-    const chosen =
-      transcodings.find((t) => t.format?.protocol === 'progressive') ||
-      transcodings.find((t) => t.format?.protocol === 'hls');
-    if (!d || !chosen?.url) return null;
+    // Solo los transcodings NO encriptados son reproducibles con un <audio>/hls
+    // nativo. Los `*-encrypted-hls` de SoundCloud usan FairPlay DRM (SAMPLE-AES
+    // con com.apple.streamingkeydelivery) → imposible fuera de su widget; se
+    // descartan. Se prueban progressive (reproduce en todos lados) y luego hls,
+    // uno por uno, porque un mismo track puede listar un transcoding que igual
+    // devuelve 404 al resolverlo (SoundCloud está migrando a HLS encriptado).
+    const candidates = [
+      ...transcodings.filter((t) => t.url && t.format?.protocol === 'progressive'),
+      ...transcodings.filter((t) => t.url && t.format?.protocol === 'hls'),
+    ];
+    if (!d || candidates.length === 0) return null;
 
-    const resolveWith = async (cid: string) => {
-      const r = await fetch(`${chosen.url}?client_id=${cid}`, { headers: { 'User-Agent': SC_DESKTOP_UA } });
-      return r;
-    };
     let cid = await getClientId();
     if (!cid) return null;
-    let r = await resolveWith(cid);
-    if (r.status === 401 || r.status === 403) {
-      // client_id expirado/rotado → refrescar y reintentar una vez.
-      cid = await getClientId(true);
-      if (!cid) return null;
-      r = await resolveWith(cid);
-    }
-    if (!r.ok) return null;
-    const j = (await r.json()) as { url?: string };
-    if (!j.url) return null;
 
-    return {
-      streamUrl: j.url,
-      protocol: chosen.format?.protocol === 'hls' ? 'hls' : 'progressive',
-      title: d.title || '',
-      artist: d.user?.username || '',
-      artwork: d.artwork_url || d.user?.avatar_url || null,
-      durationMs: typeof d.duration === 'number' ? d.duration : null,
-      permalinkUrl: d.permalink_url || null,
-    };
+    for (const cand of candidates) {
+      let r = await fetch(`${cand.url}?client_id=${cid}`, { headers: { 'User-Agent': SC_DESKTOP_UA } });
+      if (r.status === 401 || r.status === 403) {
+        // client_id expirado/rotado → refrescar y reintentar una vez.
+        const fresh = await getClientId(true);
+        if (!fresh) return null;
+        cid = fresh;
+        r = await fetch(`${cand.url}?client_id=${cid}`, { headers: { 'User-Agent': SC_DESKTOP_UA } });
+      }
+      if (!r.ok) continue; // p.ej. 404: probar el siguiente candidato
+      const j = (await r.json()) as { url?: string };
+      if (!j.url) continue;
+      return {
+        streamUrl: j.url,
+        protocol: cand.format?.protocol === 'hls' ? 'hls' : 'progressive',
+        title: d.title || '',
+        artist: d.user?.username || '',
+        artwork: d.artwork_url || d.user?.avatar_url || null,
+        durationMs: typeof d.duration === 'number' ? d.duration : null,
+        permalinkUrl: d.permalink_url || null,
+      };
+    }
+    return null; // ningún transcoding reproducible (probable DRM) → el front ofrece "Ir a SoundCloud"
   } catch {
     return null;
   }
