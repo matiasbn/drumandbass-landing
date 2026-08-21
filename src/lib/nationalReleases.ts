@@ -15,6 +15,10 @@ export interface NationalRelease {
   // Tipo declarado por el DJ (mix.type): 'release' | 'set'. Opcional — en /releases
   // todos son 'release'; en el presskit hay ambos y habilita el filtro por tipo.
   kind?: 'set' | 'release';
+  // Stream/carátula YA resueltos (p.ej. previews de Spotify): el player los usa
+  // directo, sin llamar a los endpoints de resolución.
+  streamUrl?: string | null;
+  artwork?: string | null;
 }
 
 // Cliente anónimo sin cookies: lo usa el home (ISR). No debe usar el cliente

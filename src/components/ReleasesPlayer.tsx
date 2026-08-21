@@ -11,12 +11,14 @@ import {
   RiSoundcloudLine,
   RiAlbumFill,
   RiYoutubeLine,
+  RiSpotifyLine,
   RiDownloadLine,
   RiArrowDownSLine,
 } from '@remixicon/react';
 import dayjs from '@/src/lib/date';
 import { event } from '@/src/lib/gtag';
 import { isYoutubeUrl, youtubeEmbedUrl, youtubeVideoId, youtubePlaylistId } from '@/src/lib/youtubeUrl';
+import { isSpotifyUrl } from '@/src/lib/spotifyUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 
 // YouTube IFrame Player API (control por JS del iframe): permite que nuestro
@@ -53,17 +55,19 @@ const bigArt = (art: string | null) => (art ? art.replace('-large', '-t500x500')
 // Plataforma por URL → elige los endpoints correctos (SoundCloud vs Bandcamp).
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
 const isYt = (url: string) => isYoutubeUrl(url);
+const isSp = (url: string) => isSpotifyUrl(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
 const setApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/set' : '/api/pk/soundcloud/set');
 const downloadApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/download' : '/api/pk/soundcloud/download');
 // Marca/branding por plataforma (ícono, color, nombre, URL de "abrir").
-const platformColor = (url: string) => (isYt(url) ? '#FF0000' : isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isYt(url) ? 'YouTube' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const platformColor = (url: string) => (isYt(url) ? '#FF0000' : isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isYt(url) ? 'YouTube' : isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 // Los tracks de un álbum de Bandcamp usan una URL sintética (álbum#i); para el
 // enlace "abrir" limpiamos el fragmento y apuntamos al álbum real.
 const openUrl = (url: string) => (isBc(url) ? url.split('#')[0] : url);
 function PlatformIcon({ url, className, style }: { url: string; className?: string; style?: React.CSSProperties }) {
   if (isYt(url)) return <RiYoutubeLine className={className} style={style} />;
+  if (isSp(url)) return <RiSpotifyLine className={className} style={style} />;
   return isBc(url) ? <RiAlbumFill className={className} style={style} /> : <RiSoundcloudLine className={className} style={style} />;
 }
 // Punto de montaje del reproductor de YouTube. Memoizado sin props → NUNCA se
@@ -291,13 +295,31 @@ export default function ReleasesPlayer({
     });
   }, [view, epTracks, loadEp]);
 
+  // Siembra el cache de streams con los que ya vienen resueltos (previews de
+  // Spotify): así el player los reproduce directo por <audio>, sin resolver nada.
+  useEffect(() => {
+    for (const r of releases) {
+      if (r.streamUrl && !streamCache.current[r.url]) {
+        streamCache.current[r.url] = {
+          streamUrl: r.streamUrl,
+          protocol: 'progressive',
+          title: r.title,
+          artist: r.artistName,
+          artwork: r.artwork ?? null,
+          durationMs: null,
+          permalinkUrl: r.url,
+        };
+      }
+    }
+  }, [releases]);
+
   // Descarga en vivo (release suelto). Los EP traen su descarga por track.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const entries = await Promise.all(
         releases.map(async (r) => {
-          if (isYt(r.url)) return null; // YouTube no tiene descarga vía nuestros endpoints
+          if (isYt(r.url) || isSp(r.url)) return null; // YouTube/Spotify no tienen descarga
           try {
             const res = await fetch(`${downloadApi(r.url)}?url=${encodeURIComponent(r.url)}`);
             if (!res.ok) return null;
@@ -330,6 +352,7 @@ export default function ReleasesPlayer({
   const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
     if (isYt(trackUrl)) return null; // YouTube no usa stream de audio
     if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
+    if (isSp(trackUrl)) return null; // Spotify: solo desde el cache pre-sembrado (preview MP3)
     try {
       const res = await fetch(`${streamApi(trackUrl)}?url=${encodeURIComponent(trackUrl)}`);
       if (!res.ok) return null;
@@ -753,6 +776,13 @@ export default function ReleasesPlayer({
                         ) : (
                           <span className={`mono text-[9px] font-black uppercase px-1.5 py-0.5 ${isCurrentSingle ? 'bg-black text-white' : 'bg-[#FF5500] text-white'}`}>RELEASE</span>
                         )}
+                        {/* Plataforma del track (YouTube/SoundCloud/Bandcamp) junto al tipo. */}
+                        <span
+                          className="mono text-[9px] font-black uppercase px-1.5 py-0.5 border-2"
+                          style={{ borderColor: platformColor(r.url), color: isCurrentSingle ? '#fff' : platformColor(r.url) }}
+                        >
+                          {platformName(r.url)}
+                        </span>
                         {!r.isEp && info?.downloadable && (
                           <a
                             href={downloadHref(info.downloadUrl, r.url)}
