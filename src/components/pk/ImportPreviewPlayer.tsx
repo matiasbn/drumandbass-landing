@@ -22,6 +22,13 @@ const fmt = (s: number) => {
   return `${m}:${String(ss).padStart(2, '0')}`;
 };
 
+// Registro global de todos los previews montados: al reproducir uno, se pausan
+// los demás (solo suena uno a la vez en toda la página).
+const pausers = new Set<() => void>();
+function pauseOthers(self: () => void) {
+  for (const p of pausers) if (p !== self) p();
+}
+
 export default function ImportPreviewPlayer({
   url,
   onPrev,
@@ -38,6 +45,7 @@ export default function ImportPreviewPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resolvedRef = useRef<string>(''); // URL cuyo stream ya está cargado en el <audio>
   const mountedRef = useRef(false); // false en el primer render (no auto-reproduce al abrir)
+  const pauseSelfRef = useRef(() => audioRef.current?.pause()); // estable, para el registro global
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState(false);
@@ -89,6 +97,15 @@ export default function ImportPreviewPlayer({
     }
   };
 
+  // Registro global: al desmontar, se saca del set de pausables.
+  useEffect(() => {
+    const self = pauseSelfRef.current;
+    pausers.add(self);
+    return () => {
+      pausers.delete(self);
+    };
+  }, []);
+
   // Al cambiar de track: reinicia el <audio>. En el primer render NO reproduce
   // (recién se abrió el selector); en cada cambio POSTERIOR (next/anterior o
   // cambio de selección) reproduce de inmediato.
@@ -127,7 +144,10 @@ export default function ImportPreviewPlayer({
       <audio
         ref={audioRef}
         preload="none"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          pauseOthers(pauseSelfRef.current); // solo uno suena a la vez
+        }}
         onPause={() => setPlaying(false)}
         onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
