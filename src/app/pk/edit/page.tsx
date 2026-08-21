@@ -28,6 +28,7 @@ import {
   RiSoundcloudLine,
   RiSpotifyLine,
   RiAlbumFill,
+  RiInformationLine,
   RiYoutubeLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
@@ -134,6 +135,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   // una fila propia en Sets & Releases; el artista borra las que no quiera).
   const [spImporting, setSpImporting] = useState(false);
   const [spMsg, setSpMsg] = useState('');
+  // Aviso "cómo activar el import" cuando la red aún no está en Perfiles y redes.
+  const [importHint, setImportHint] = useState<string | null>(null);
+  const socialsSectionRef = useRef<HTMLDivElement>(null);
 
   // ── Cambios sin guardar (dirty) + auto-guardado ───────────────────────────
   // Snapshot en memoria (barato) para saber si hay cambios sin guardar. Los TEXTOS
@@ -515,6 +519,20 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
 
   // Social handlers
   const addSocial = () => setSocials([...socials, { platform: 'SoundCloud', url: '' }]);
+  // Agrega (si no existe ya vacía) una red de la plataforma pedida y lleva al DJ
+  // a la sección para completar su usuario. Lo dispara el aviso de "cómo activar
+  // el import" cuando esa red todavía no está.
+  const addSocialPreset = (platform: string) => {
+    setSocials((prev) =>
+      prev.some((s) => s.platform === platform && !s.url.trim())
+        ? prev
+        : [...prev, { platform, url: '' }]
+    );
+    setImportHint(null);
+    requestAnimationFrame(() =>
+      socialsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    );
+  };
   const removeSocial = (i: number) => { autoPendingRef.current = true; setSocials(socials.filter((_, idx) => idx !== i)); };
   const updateSocial = (i: number, field: keyof PresskitSocial, value: string) => {
     const updated = [...socials];
@@ -1550,9 +1568,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
           </div>
 
           {/* Socials */}
-          <div>
+          <div ref={socialsSectionRef} className="scroll-mt-24">
             <div className="flex items-center justify-between mb-3">
-              <label className={labelClass}>Redes sociales</label>
+              <label className={labelClass}>Perfiles y redes</label>
               <button
                 type="button"
                 onClick={addSocial}
@@ -1621,7 +1639,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 </div>
               ))}
               {socials.length === 0 && (
-                <p className="mono text-xs opacity-40">Sin redes sociales agregadas</p>
+                <p className="mono text-xs opacity-40">Sin perfiles ni redes agregados</p>
               )}
             </div>
           </div>
@@ -1631,37 +1649,35 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
             <div className="flex items-center justify-between mb-3">
               <label className={labelClass}>Sets & Releases</label>
               <div className="flex gap-2">
-                {/* Import por plataforma: el botón se muestra siempre, pero queda
-                    deshabilitado + atenuado con un tooltip cuando esa red no está
-                    en Redes Sociales (así el DJ sabe QUÉ hacer para habilitarlo). */}
+                {/* Import por plataforma: el botón siempre es clickeable. Si esa
+                    red aún no está en Perfiles y redes, en vez de importar abre un
+                    aviso con un botón directo para agregarla (más obvio que un
+                    tooltip, que no funciona al tap en móvil). */}
                 <button
                   type="button"
-                  onClick={fetchScTracks}
-                  disabled={scLoading || !hasSoundcloud}
-                  title={hasSoundcloud ? 'Importar tracks desde tu SoundCloud' : 'Agrega tu SoundCloud en Redes Sociales para importar tus tracks'}
-                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasSoundcloud ? 'hover:bg-[#ff5500] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                  onClick={() => (hasSoundcloud ? fetchScTracks() : setImportHint('SoundCloud'))}
+                  disabled={scLoading && hasSoundcloud}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors hover:bg-[#ff5500] hover:text-white ${hasSoundcloud ? '' : 'border-dashed opacity-70'}`}
                 >
-                  {scLoading && hasSoundcloud ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSoundcloudLine className="w-4 h-4" />}
+                  {scLoading && hasSoundcloud ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : hasSoundcloud ? <RiSoundcloudLine className="w-4 h-4" /> : <RiInformationLine className="w-4 h-4" />}
                   AGREGAR DESDE SOUNDCLOUD
                 </button>
                 <button
                   type="button"
-                  onClick={fetchBcTracks}
-                  disabled={scLoading || !hasBandcamp}
-                  title={hasBandcamp ? 'Importar releases desde tu Bandcamp' : 'Agrega tu Bandcamp en Redes Sociales para importar tus releases'}
-                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasBandcamp ? 'hover:bg-[#1da0c3] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                  onClick={() => (hasBandcamp ? fetchBcTracks() : setImportHint('Bandcamp'))}
+                  disabled={scLoading && hasBandcamp}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors hover:bg-[#1da0c3] hover:text-white ${hasBandcamp ? '' : 'border-dashed opacity-70'}`}
                 >
-                  {scLoading && hasBandcamp ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAlbumFill className="w-4 h-4" />}
+                  {scLoading && hasBandcamp ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : hasBandcamp ? <RiAlbumFill className="w-4 h-4" /> : <RiInformationLine className="w-4 h-4" />}
                   AGREGAR DESDE BANDCAMP
                 </button>
                 <button
                   type="button"
-                  onClick={fetchYtItems}
-                  disabled={scLoading || !hasYoutube}
-                  title={hasYoutube ? 'Importar videos desde tu canal de YouTube' : 'Agrega tu YouTube en Redes Sociales para importar tus videos'}
-                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors ${hasYoutube ? 'hover:bg-[#FF0000] hover:text-white' : 'opacity-40 cursor-not-allowed'}`}
+                  onClick={() => (hasYoutube ? fetchYtItems() : setImportHint('YouTube'))}
+                  disabled={scLoading && hasYoutube}
+                  className={`inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1 brutalist-border transition-colors hover:bg-[#FF0000] hover:text-white ${hasYoutube ? '' : 'border-dashed opacity-70'}`}
                 >
-                  {scLoading && hasYoutube ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiYoutubeLine className="w-4 h-4" />}
+                  {scLoading && hasYoutube ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : hasYoutube ? <RiYoutubeLine className="w-4 h-4" /> : <RiInformationLine className="w-4 h-4" />}
                   AGREGAR DESDE YOUTUBE
                 </button>
                 <button
@@ -1674,6 +1690,35 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 </button>
               </div>
             </div>
+
+            {/* Aviso "cómo activar el import": aparece al tocar un botón cuya red
+                aún no está en Perfiles y redes. Trae un CTA que agrega esa red y
+                sube a la sección para completar el usuario. */}
+            {importHint && (
+              <div className="flex flex-wrap items-center gap-3 p-3 brutalist-border bg-yellow-50 mono text-xs mb-3">
+                <RiInformationLine className="w-5 h-5 shrink-0" />
+                <span className="flex-1 min-w-0">
+                  Para importar desde {importHint}, primero agrégalo en{' '}
+                  <span className="font-bold">Perfiles y redes</span> y completa tu usuario.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => addSocialPreset(importHint)}
+                  className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-1.5 brutalist-border bg-black text-white hover:opacity-90 shrink-0"
+                >
+                  <RiAddLine className="w-4 h-4" />
+                  Agregar {importHint}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportHint(null)}
+                  aria-label="Cerrar aviso"
+                  className="p-1.5 hover:bg-black hover:text-white transition-colors shrink-0"
+                >
+                  <RiCloseLine className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* SoundCloud import dropdown */}
             {scDropdownOpen && (
