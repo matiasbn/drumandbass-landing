@@ -7,6 +7,7 @@ import ReleasesPlayer from '@/src/components/ReleasesPlayer';
 import { isSoundcloudUrl } from '@/src/lib/soundcloud';
 import { isBandcampUrl } from '@/src/lib/bandcamp';
 import { isYoutubeUrl } from '@/src/lib/youtubeUrl';
+import { isSpotifyUrl, spotifyEmbed } from '@/src/lib/spotifyUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
@@ -287,11 +288,43 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
             isEp: m.is_ep === true || /\/sets\//i.test(m.url) || /\/album\//i.test(m.url),
             kind: m.type === 'set' ? 'set' : 'release',
           }));
-        const others = valid.filter((m) => !playable(ensureAbsoluteUrl(m.url)));
+        // Spotify: reproductor EMBEBIDO oficial (previews 30s / completo con
+        // Premium). No entra al player de audio (Spotify protege sus streams).
+        const spotifyItems = valid
+          .filter((m) => !playable(ensureAbsoluteUrl(m.url)) && isSpotifyUrl(m.url))
+          .map((m) => ({ mix: m, sp: spotifyEmbed(ensureAbsoluteUrl(m.url)) }))
+          .filter((x): x is { mix: typeof x.mix; sp: { src: string; type: string } } => !!x.sp);
+        const others = valid.filter((m) => !playable(ensureAbsoluteUrl(m.url)) && !isSpotifyUrl(m.url));
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
             {playerReleases.length > 0 && <ReleasesPlayer releases={playerReleases} hideArtistFilter />}
+            {spotifyItems.length > 0 && (
+              <div className="mt-6 space-y-4">
+                {spotifyItems.map(({ mix, sp }, i) => (
+                  <div key={i} className="bg-white brutalist-border border-l-[6px] border-l-[#1DB954] p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RiSpotifyLine className="w-5 h-5 text-[#1DB954] shrink-0" />
+                      <h3 className="text-lg font-black uppercase break-words min-w-0">{mix.title}</h3>
+                      {mix.type && (
+                        <span className={`mono text-[10px] font-black uppercase px-2 py-0.5 shrink-0 ${mix.type === 'release' ? 'bg-[#ff0055] text-white' : 'bg-black text-white'}`}>
+                          {mix.type}
+                        </span>
+                      )}
+                    </div>
+                    <iframe
+                      src={sp.src}
+                      title={mix.title}
+                      className="w-full"
+                      height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
+                      style={{ border: 0, borderRadius: 12 }}
+                      loading="lazy"
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             {others.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 {others.map((mix, i) => (
