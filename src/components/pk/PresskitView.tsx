@@ -11,6 +11,7 @@ import { isSpotifyUrl, spotifyEmbed } from '@/src/lib/spotifyUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
+import SpotifyArtistTracks from '@/src/components/pk/SpotifyArtistTracks';
 import { looksLikeHtml } from '@/src/lib/mdFormat';
 import {
   RiInstagramLine,
@@ -133,15 +134,21 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
             {spotifyEmbeds.length > 1 && (
               <p className="mono text-xs font-black uppercase text-[#1DB954] mb-1 break-words">{mix.title}</p>
             )}
-            <iframe
-              src={sp.src}
-              title={mix.title}
-              className="w-full"
-              height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
-              style={{ border: 0, borderRadius: 12 }}
-              loading="lazy"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            />
+            {sp.type === 'artist' ? (
+              // Artista: lista de reproductores por track (top tracks) en vez del
+              // widget de artista, que es menos útil.
+              <SpotifyArtistTracks url={ensureAbsoluteUrl(mix.url)} fallbackEmbed={sp.src} />
+            ) : (
+              <iframe
+                src={sp.src}
+                title={mix.title}
+                className="w-full"
+                height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
+                style={{ border: 0, borderRadius: 12 }}
+                loading="lazy"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              />
+            )}
           </div>
         ))}
       </div>
