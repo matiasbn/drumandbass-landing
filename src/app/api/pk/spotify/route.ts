@@ -12,7 +12,42 @@ const HEADERS = {
 };
 const MAX_TRACKS = 60;
 
-type Track = { id: string; title: string; subtitle: string; durationMs: number | null };
+type Track = { id: string; title: string; subtitle: string; durationMs: number | null; previewUrl?: string | null; artwork?: string | null };
+
+// Scrapea el preview MP3 de 30s de un track desde su página de embed (la API ya
+// no entrega preview_url). Devuelve la URL o null.
+async function scrapeTrackPreview(trackId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, { headers: HEADERS, next: { revalidate: 86400 } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return null;
+    const ap = findKey(JSON.parse(m[1]) as unknown, 'audioPreview') as { url?: string } | null;
+    return ap && typeof ap.url === 'string' ? ap.url : null;
+  } catch {
+    return null;
+  }
+}
+
+// Enriquece los tracks con su preview MP3 (scrape por track, concurrencia limitada).
+async function enrichPreviews(tracks: Track[]): Promise<Track[]> {
+  const queue = [...tracks];
+  const out: Track[] = [];
+  const worker = async () => {
+    while (queue.length) {
+      const t = queue.shift();
+      if (!t) break;
+      const preview = await scrapeTrackPreview(t.id);
+      out.push({ ...t, previewUrl: preview });
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  // Mantener el orden original (por id).
+  const order = new Map(tracks.map((t, i) => [t.id, i]));
+  out.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return out;
+}
 
 function findTrackList(o: unknown): Record<string, unknown>[] | null {
   if (!o || typeof o !== 'object') return null;
@@ -21,6 +56,18 @@ function findTrackList(o: unknown): Record<string, unknown>[] | null {
   for (const k of Object.keys(obj)) {
     const r = findTrackList(obj[k]);
     if (r) return r;
+  }
+  return null;
+}
+
+// Busca en profundidad la primera propiedad `key` del JSON.
+function findKey(o: unknown, key: string): unknown {
+  if (!o || typeof o !== 'object') return null;
+  const obj = o as Record<string, unknown>;
+  if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+  for (const k of Object.keys(obj)) {
+    const r = findKey(obj[k], key);
+    if (r !== null && r !== undefined) return r;
   }
   return null;
 }
@@ -68,6 +115,7 @@ async function allArtistTracksApi(artistId: string, token: string): Promise<Trac
     if (!r.ok) continue;
     const d = await r.json();
     for (const alb of d.albums || []) {
+      const art = (alb?.images || [])[0]?.url || null;
       for (const t of alb?.tracks?.items || []) {
         const isHis = (t.artists || []).some((ar: { id: string }) => ar.id === artistId);
         if (isHis && t.id && !seen.has(t.id)) {
@@ -77,6 +125,7 @@ async function allArtistTracksApi(artistId: string, token: string): Promise<Trac
             title: t.name || '',
             subtitle: (t.artists || []).map((a: { name: string }) => a.name).join(', '),
             durationMs: typeof t.duration_ms === 'number' ? t.duration_ms : null,
+            artwork: art,
           });
         }
       }
@@ -97,11 +146,13 @@ async function scrapeTracks(embedSrc: string): Promise<Track[]> {
     .map((t) => {
       const uri = typeof t.uri === 'string' ? t.uri : '';
       const id = uri.startsWith('spotify:track:') ? uri.slice('spotify:track:'.length) : '';
+      const ap = t.audioPreview as { url?: string } | undefined;
       return {
         id,
         title: typeof t.title === 'string' ? t.title : '',
         subtitle: typeof t.subtitle === 'string' ? t.subtitle : '',
         durationMs: typeof t.duration === 'number' ? t.duration : null,
+        previewUrl: ap && typeof ap.url === 'string' ? ap.url : null,
       };
     })
     .filter((t) => t.id);
@@ -113,22 +164,33 @@ export async function GET(req: NextRequest) {
   const emb = spotifyEmbed(url);
   if (!emb) return NextResponse.json({ error: 'URL de Spotify inválida' }, { status: 400 });
   const id = emb.src.split('/').pop() || '';
+  // preview=1 → fuerza el scrape (trae el MP3 de preview de 30s, que la API ya no
+  // entrega) para reproducir en nuestro player propio.
+  const forcePreview = req.nextUrl.searchParams.get('preview') === '1';
 
   try {
-    // Artista + credenciales → discografía completa vía API.
     if (emb.type === 'artist' && id) {
       const token = await getToken();
       if (token) {
-        const tracks = await allArtistTracksApi(id, token);
-        if (tracks.length) {
+        const apiTracks = await allArtistTracksApi(id, token);
+        if (apiTracks.length) {
+          // preview=1 → combinar: ids de la API + preview MP3 por scrape de cada
+          // track → TODA la discografía, reproducible en nuestro player.
+          if (forcePreview) {
+            const enriched = (await enrichPreviews(apiTracks)).filter((t) => t.previewUrl);
+            return NextResponse.json(
+              { tracks: enriched, source: 'api+preview' },
+              { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } }
+            );
+          }
           return NextResponse.json(
-            { tracks, source: 'api' },
+            { tracks: apiTracks, source: 'api' },
             { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
           );
         }
       }
     }
-    // Fallback: scrape del embed (10 top tracks).
+    // Fallback: scrape del embed (10 top tracks, con preview).
     const tracks = await scrapeTracks(emb.src);
     return NextResponse.json(
       { tracks, source: 'scrape' },
