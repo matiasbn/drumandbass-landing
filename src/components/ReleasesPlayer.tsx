@@ -400,7 +400,29 @@ export default function ReleasesPlayer({
   const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
     if (isYt(trackUrl)) return null; // YouTube no usa stream de audio
     if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
-    if (isSp(trackUrl)) return null; // Spotify: solo desde el cache pre-sembrado (preview MP3)
+    // Spotify: resolver el preview MP3 (30s) del track por su URL.
+    if (isSp(trackUrl)) {
+      try {
+        const res = await fetch(`/api/pk/spotify?url=${encodeURIComponent(trackUrl)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const t = (data.tracks || [])[0] as { title?: string; subtitle?: string; previewUrl?: string | null; artwork?: string | null } | undefined;
+        if (!t?.previewUrl) return null;
+        const s: Stream = {
+          streamUrl: t.previewUrl,
+          protocol: 'progressive',
+          title: t.title || '',
+          artist: t.subtitle || '',
+          artwork: t.artwork ?? null,
+          durationMs: null,
+          permalinkUrl: trackUrl,
+        };
+        streamCache.current[trackUrl] = s;
+        return s;
+      } catch {
+        return null;
+      }
+    }
     try {
       const res = await fetch(`${streamApi(trackUrl)}?url=${encodeURIComponent(trackUrl)}`);
       if (!res.ok) return null;

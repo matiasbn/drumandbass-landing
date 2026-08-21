@@ -25,6 +25,7 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiSoundcloudLine,
+  RiSpotifyLine,
   RiAlbumFill,
   RiYoutubeLine,
   RiArrowLeftSLine,
@@ -529,6 +530,12 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
     updated[i] = { ...updated[i], [field]: value };
     // Si cambia la URL de un release marcado, invalida la fecha para recapturarla al guardar.
     if (field === 'url') updated[i].released_at = null;
+    // Spotify siempre es release; YouTube siempre set. Fuerza el tipo al cambiar
+    // de plataforma para que el feed nacional lo tome correctamente.
+    if (field === 'platform') {
+      if (value === 'Spotify') updated[i].type = 'release';
+      else if (value === 'YouTube') updated[i].type = 'set';
+    }
     setMixes(updated);
   };
 
@@ -1580,11 +1587,17 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
                     className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
-                    placeholder="Solo tu nombre de usuario"
+                    placeholder={social.platform === 'Spotify' ? 'Spotify ID del artista' : 'Solo tu nombre de usuario'}
                   />
                   <p className="mono text-[10px] opacity-40">
-                    Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
-                    completa. Si pegas la URL, la recortamos sola.
+                    {social.platform === 'Spotify' ? (
+                      <>El <span className="font-bold">Spotify ID</span> del artista (ej.{' '}
+                      <span className="font-bold">1B1vRzgKU4B5Ad1N68To4m</span>). Si pegas la URL del
+                      perfil, la recortamos sola.</>
+                    ) : (
+                      <>Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
+                      completa. Si pegas la URL, la recortamos sola.</>
+                    )}
                   </p>
                   {/* Spotify: importa toda la discografía como tracks individuales
                       en Sets & Releases (el artista borra los que no quiera). */}
@@ -1665,11 +1678,11 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
               </div>
             </div>
 
-            {/* Mensaje cuando no hay ni SoundCloud ni Bandcamp en redes */}
-            {!hasSoundcloud && !hasBandcamp && (
+            {/* Mensaje cuando no hay ninguna fuente de import en redes */}
+            {!hasSoundcloud && !hasBandcamp && !hasYoutube && spotifyUrls.length === 0 && (
               <div className="flex items-start gap-2 p-3 bg-orange-50 border-2 border-orange-300 text-orange-800 mono text-xs mb-3">
                 <RiSoundcloudLine className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Agrega tu SoundCloud o Bandcamp en redes sociales para importar tus tracks.</span>
+                <span>Agrega tu SoundCloud, Bandcamp, YouTube o Spotify en redes sociales para importar tus tracks.</span>
               </div>
             )}
 
@@ -1777,15 +1790,15 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
 
             <div className="space-y-3">
               {mixes.map((mix, i) => {
-                const canFeature =
-                  mix.type === 'release' &&
-                  (mix.platform === 'SoundCloud' || mix.platform === 'Bandcamp') &&
-                  mix.url.trim().length > 0;
                 const isBc = mix.platform === 'Bandcamp';
                 const isYt = mix.platform === 'YouTube' || /youtube\.com|youtu\.be/i.test(mix.url);
                 // Espina lateral con el color de la plataforma: agrupa cada track
                 // como una tarjeta inequívoca y encoda de qué plataforma es.
                 const isSp = mix.platform === 'Spotify' || /open\.spotify\.com|spotify\.com/i.test(mix.url);
+                const canFeature =
+                  mix.type === 'release' &&
+                  (mix.platform === 'SoundCloud' || mix.platform === 'Bandcamp' || isSp) &&
+                  mix.url.trim().length > 0;
                 const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : isSp ? '#1DB954' : '#0000ff';
                 return (
                   <div
@@ -1826,6 +1839,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       {isYt ? (
                         // YouTube es siempre set (nunca release).
                         <span className="mono text-xs font-black uppercase px-3 py-2 brutalist-border bg-black text-white sm:w-28 shrink-0 text-center flex items-center justify-center">Set</span>
+                      ) : isSp ? (
+                        // Spotify es siempre release (nunca set).
+                        <span className="mono text-xs font-black uppercase px-3 py-2 brutalist-border bg-black text-white sm:w-28 shrink-0 text-center flex items-center justify-center">Release</span>
                       ) : (
                         <select
                           value={mix.type || 'set'}
@@ -1851,9 +1867,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                           type="checkbox"
                           checked={!!mix.featured}
                           onChange={() => toggleMixFeatured(i)}
-                          className={`w-4 h-4 ${isBc ? 'accent-[#1da0c3]' : 'accent-[#FF5500]'}`}
+                          className={`w-4 h-4 ${isSp ? 'accent-[#1DB954]' : isBc ? 'accent-[#1da0c3]' : 'accent-[#FF5500]'}`}
                         />
-                        {isBc ? <RiAlbumFill className="w-4 h-4 text-[#1da0c3]" /> : <RiSoundcloudLine className="w-4 h-4 text-[#FF5500]" />}
+                        {isSp ? <RiSpotifyLine className="w-4 h-4 text-[#1DB954]" /> : isBc ? <RiAlbumFill className="w-4 h-4 text-[#1da0c3]" /> : <RiSoundcloudLine className="w-4 h-4 text-[#FF5500]" />}
                         Publicar en Releases Nacionales
                       </label>
                     )}
