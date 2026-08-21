@@ -43,7 +43,7 @@ const PLATFORM_OPTIONS = [
 const MAX_LOGOS = 3;
 const LOGO_MAX_SIZE = 3 * 1024 * 1024; // 3MB — logos are lightweight brand assets
 
-const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Mixcloud'];
+const MIX_PLATFORM_OPTIONS = ['SoundCloud', 'YouTube', 'Spotify', 'Bandcamp', 'Beatport', 'Mixcloud'];
 const MIX_TYPE_OPTIONS: { value: 'set' | 'release'; label: string }[] = [
   { value: 'set', label: 'Set' },
   { value: 'release', label: 'Release' },
@@ -1906,11 +1906,12 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                 // Espina lateral con el color de la plataforma: agrupa cada track
                 // como una tarjeta inequívoca y encoda de qué plataforma es.
                 const isSp = mix.platform === 'Spotify' || /open\.spotify\.com|spotify\.com/i.test(mix.url);
+                const isBeatport = mix.platform === 'Beatport' || /beatport\.com/i.test(mix.url);
                 const canFeature =
                   mix.type === 'release' &&
                   (mix.platform === 'SoundCloud' || mix.platform === 'Bandcamp' || isSp) &&
                   mix.url.trim().length > 0;
-                const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : isSp ? '#1DB954' : '#0000ff';
+                const accent = isYt ? '#FF0000' : mix.platform === 'SoundCloud' ? '#FF5500' : isBc ? '#1da0c3' : isSp ? '#1DB954' : isBeatport ? '#01FF95' : '#0000ff';
                 return (
                   <div
                     key={i}
@@ -1985,8 +1986,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       </label>
                     )}
                     {/* Preview del track (SoundCloud/Bandcamp/Spotify). YouTube se
-                        reproduce embebido en la página, no acá. */}
-                    {!isYt && mix.url.trim() && (
+                        embebe en la página; Beatport no se puede reproducir acá
+                        (se muestra su embed oficial en el presskit). */}
+                    {!isYt && !isBeatport && mix.url.trim() && (
                       <ImportPreviewPlayer url={mix.url} />
                     )}
                   </div>

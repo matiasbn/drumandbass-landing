@@ -8,6 +8,7 @@ import { isSoundcloudUrl } from '@/src/lib/soundcloud';
 import { isBandcampUrl } from '@/src/lib/bandcamp';
 import { isYoutubeUrl } from '@/src/lib/youtubeUrl';
 import { isSpotifyUrl } from '@/src/lib/spotifyUrl';
+import { isBeatportUrl, beatportEmbed, beatportEmbedHeight } from '@/src/lib/beatportUrl';
 import type { NationalRelease } from '@/src/lib/nationalReleases';
 import PhotoCarousel from '@/src/components/pk/PhotoCarousel';
 import LogosSection from '@/src/components/pk/LogosSection';
@@ -278,8 +279,11 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
             isEp: m.is_ep === true || /\/sets\//i.test(m.url) || /\/album\//i.test(m.url),
             kind: m.type === 'set' ? 'set' : 'release',
           }));
-        // Spotify se muestra en su propia sección ("{ARTISTA} EN SPOTIFY"), no acá.
-        const others = valid.filter((m) => !playable(ensureAbsoluteUrl(m.url)) && !isSpotifyUrl(m.url));
+        // Spotify va integrado al player; Beatport tiene su propia sección embed.
+        // El resto (links sueltos) quedan como tarjetas-link.
+        const others = valid.filter(
+          (m) => !playable(ensureAbsoluteUrl(m.url)) && !isSpotifyUrl(m.url) && !isBeatportUrl(m.url)
+        );
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
@@ -309,6 +313,35 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
                 ))}
               </div>
             )}
+          </section>
+        );
+      })()}
+
+      {/* Beatport — embed oficial (iframe). No se puede reproducir en el player
+          propio (Cloudflare + API con OAuth), así que se muestra su widget. */}
+      {(() => {
+        const bp = (presskit.mixes || [])
+          .filter((m) => m.url?.trim() && isBeatportUrl(m.url))
+          .map((m) => ({ mix: m, emb: beatportEmbed(ensureAbsoluteUrl(m.url)) }))
+          .filter((x): x is { mix: typeof x.mix; emb: NonNullable<typeof x.emb> } => x.emb !== null);
+        if (bp.length === 0) return null;
+        return (
+          <section className="border-b-4 border-black p-6 lg:p-12">
+            <h2 className="text-5xl font-black uppercase italic mb-6">BEATPORT</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {bp.map(({ mix, emb }, i) => (
+                <div key={i} className="brutalist-border overflow-hidden bg-white">
+                  <iframe
+                    src={emb.src}
+                    title={mix.title || `Beatport ${emb.type}`}
+                    height={beatportEmbedHeight(emb.type)}
+                    className="w-full block border-0"
+                    loading="lazy"
+                    allow="autoplay; clipboard-write; encrypted-media"
+                  />
+                </div>
+              ))}
+            </div>
           </section>
         );
       })()}
