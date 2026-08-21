@@ -118,6 +118,96 @@ function SectionBody({ text }: { text: string }) {
 // (/pk/[slug]) y la vista previa del admin (/pk/preview/[id]) para renderizar
 // EXACTAMENTE lo mismo que verá el DJ.
 export default function PresskitView({ presskit, slug, preview = false }: PresskitViewProps) {
+  // Spotify: sección propia automática "{ARTISTA} EN SPOTIFY" con el/los embeds.
+  const spotifyEmbeds = (presskit.mixes || [])
+    .filter((m) => m.title?.trim() && m.url?.trim())
+    .filter((m) => isSpotifyUrl(m.url) && !isSoundcloudUrl(m.url) && !isBandcampUrl(m.url) && !isYoutubeUrl(m.url))
+    .map((m) => ({ mix: m, sp: spotifyEmbed(ensureAbsoluteUrl(m.url)) }))
+    .filter((x): x is { mix: typeof x.mix; sp: { src: string; type: string } } => !!x.sp);
+  const spotifySection = spotifyEmbeds.length > 0 ? (
+    <section className="border-b-4 border-black p-6 lg:p-12">
+      <h2 className="text-5xl font-black uppercase italic mb-6 break-words">{presskit.artist_name} EN SPOTIFY</h2>
+      <div className="space-y-4 max-w-3xl">
+        {spotifyEmbeds.map(({ mix, sp }, i) => (
+          <div key={i}>
+            {spotifyEmbeds.length > 1 && (
+              <p className="mono text-xs font-black uppercase text-[#1DB954] mb-1 break-words">{mix.title}</p>
+            )}
+            <iframe
+              src={sp.src}
+              title={mix.title}
+              className="w-full"
+              height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
+              style={{ border: 0, borderRadius: 12 }}
+              loading="lazy"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  ) : null;
+
+  // Rider y Social se renderizan al FINAL (definidos acá, colocados abajo).
+  const riderSection = (() => {
+    const rider = parseRider(presskit.rider);
+    if (riderIsEmpty(rider)) return null;
+    const items = riderDisplay(rider);
+    if (items.length === 0) return null;
+    const rawSole = rider.setups.filter((s) => setupRows(s).length > 0 || s.notes);
+    const single = items.length === 1 && !items[0].isController && !rawSole[0]?.name;
+    return (
+      <section className="border-b-4 border-black p-6 lg:p-12">
+        <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
+        <div className="grid gap-6 max-w-7xl grid-cols-[repeat(auto-fit,minmax(min(400px,100%),1fr))]">
+          {items.map((it, i) => (
+            <div key={i} className={single ? 'md:col-span-2 max-w-2xl' : 'brutalist-border p-4'}>
+              {!single && <h3 className="font-black uppercase text-xl mb-3">{it.name}</h3>}
+              <div className="space-y-2">
+                {it.rows.map((r) => (
+                  <div key={r.label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-3 border-b-2 border-black/10 pb-1.5">
+                    <span className="mono text-xs font-black uppercase text-gray-500 sm:w-28 shrink-0">{r.label}</span>
+                    <span className="text-lg font-bold min-w-0 flex-1">{r.value}</span>
+                  </div>
+                ))}
+                {it.notes && <p className="mono text-sm leading-relaxed whitespace-pre-line break-words pt-1">{it.notes}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {rider.notes && (
+          <p className="mono text-base leading-relaxed whitespace-pre-line break-words max-w-3xl mt-6">{rider.notes}</p>
+        )}
+      </section>
+    );
+  })();
+
+  const socialSection = presskit.socials.length > 0 ? (
+    <section className="border-b-4 border-black p-6 lg:p-12">
+      <h2 className="text-5xl font-black uppercase italic mb-6">SOCIAL</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {(() => {
+          const counts = presskit.socials.reduce<Record<string, number>>((acc, s) => {
+            acc[s.platform] = (acc[s.platform] || 0) + 1;
+            return acc;
+          }, {});
+          return presskit.socials.map(({ platform, url }, index) => {
+            const config = getPlatformConfig(platform);
+            const Icon = config.icon;
+            const handle = socialToHandle(platform, url);
+            const label = counts[platform] > 1 && handle ? `@${handle}` : platform;
+            return (
+              <BrutalistButton key={`${platform}-${index}`} variant={config.variant} href={socialToUrl(platform, url)} external className="p-6 flex-col text-center">
+                <div className="text-2xl flex justify-center mb-2"><Icon /></div>
+                <span className="break-all">{label}</span>
+              </BrutalistButton>
+            );
+          });
+        })()}
+      </div>
+    </section>
+  ) : null;
+
   return (
     <>
       {/* Hero */}
@@ -186,86 +276,6 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
           </section>
         ))}
 
-      {/* Rider técnico (opcional): uno o varios setups */}
-      {(() => {
-        const rider = parseRider(presskit.rider);
-        if (riderIsEmpty(rider)) return null;
-        const items = riderDisplay(rider);
-        if (items.length === 0) return null;
-        // "single" = un único setup de reproductores sin nombre → layout simple.
-        // Un controlador siempre muestra su encabezado "Controlador N".
-        const rawSole = rider.setups.filter((s) => setupRows(s).length > 0 || s.notes);
-        const single = items.length === 1 && !items[0].isController && !rawSole[0]?.name;
-        return (
-          <section className="border-b-4 border-black p-6 lg:p-12">
-            <h2 className="text-5xl font-black uppercase italic mb-6">RIDER TÉCNICO</h2>
-            {/* auto-fit: tantas columnas como quepan con ≥400px cada una (para que
-                el valor del rider no se parta). Ancho → 3 en fila; angosto → 2 o 1.
-                El min(400px,100%) evita overflow horizontal en móvil. */}
-            <div className="grid gap-6 max-w-7xl grid-cols-[repeat(auto-fit,minmax(min(400px,100%),1fr))]">
-              {items.map((it, i) => (
-                <div key={i} className={single ? 'md:col-span-2 max-w-2xl' : 'brutalist-border p-4'}>
-                  {!single && (
-                    <h3 className="font-black uppercase text-xl mb-3">{it.name}</h3>
-                  )}
-                  <div className="space-y-2">
-                    {it.rows.map((r) => (
-                      <div key={r.label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-3 border-b-2 border-black/10 pb-1.5">
-                        <span className="mono text-xs font-black uppercase text-gray-500 sm:w-28 shrink-0">{r.label}</span>
-                        <span className="text-lg font-bold min-w-0 flex-1">{r.value}</span>
-                      </div>
-                    ))}
-                    {it.notes && <p className="mono text-sm leading-relaxed whitespace-pre-line break-words pt-1">{it.notes}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {rider.notes && (
-              <p className="mono text-base leading-relaxed whitespace-pre-line break-words max-w-3xl mt-6">{rider.notes}</p>
-            )}
-          </section>
-        );
-      })()}
-
-      {/* Social */}
-      {presskit.socials.length > 0 && (
-        <section className="border-b-4 border-black p-6 lg:p-12">
-          <h2 className="text-5xl font-black uppercase italic mb-6">SOCIAL</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(() => {
-              // Si hay 2+ cuentas de la misma plataforma (p.ej. dos SoundCloud),
-              // cada botón muestra el nombre de usuario para distinguirlas.
-              const counts = presskit.socials.reduce<Record<string, number>>((acc, s) => {
-                acc[s.platform] = (acc[s.platform] || 0) + 1;
-                return acc;
-              }, {});
-              return presskit.socials.map(({ platform, url }, index) => {
-                const config = getPlatformConfig(platform);
-                const Icon = config.icon;
-                const handle = socialToHandle(platform, url);
-                const label = counts[platform] > 1 && handle ? `@${handle}` : platform;
-                return (
-                  <BrutalistButton
-                    // Key por índice: un DJ puede tener 2 cuentas de la misma
-                    // plataforma (p.ej. dos SoundCloud) y no deben colisionar.
-                    key={`${platform}-${index}`}
-                    variant={config.variant}
-                    href={socialToUrl(platform, url)}
-                    external
-                    className="p-6 flex-col text-center"
-                  >
-                    <div className="text-2xl flex justify-center mb-2">
-                      <Icon />
-                    </div>
-                    <span className="break-all">{label}</span>
-                  </BrutalistButton>
-                );
-              });
-            })()}
-          </div>
-        </section>
-      )}
-
       {/* Sets & Releases — reproductor con playlist (como /releases) para los
           tracks de SoundCloud, con expansión de EPs. Los datos (presskit.mixes)
           no se tocan, así que el PDF se sigue generando igual. */}
@@ -288,43 +298,12 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
             isEp: m.is_ep === true || /\/sets\//i.test(m.url) || /\/album\//i.test(m.url),
             kind: m.type === 'set' ? 'set' : 'release',
           }));
-        // Spotify: reproductor EMBEBIDO oficial (previews 30s / completo con
-        // Premium). No entra al player de audio (Spotify protege sus streams).
-        const spotifyItems = valid
-          .filter((m) => !playable(ensureAbsoluteUrl(m.url)) && isSpotifyUrl(m.url))
-          .map((m) => ({ mix: m, sp: spotifyEmbed(ensureAbsoluteUrl(m.url)) }))
-          .filter((x): x is { mix: typeof x.mix; sp: { src: string; type: string } } => !!x.sp);
+        // Spotify se muestra en su propia sección ("{ARTISTA} EN SPOTIFY"), no acá.
         const others = valid.filter((m) => !playable(ensureAbsoluteUrl(m.url)) && !isSpotifyUrl(m.url));
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">SETS &amp; RELEASES</h2>
             {playerReleases.length > 0 && <ReleasesPlayer releases={playerReleases} hideArtistFilter />}
-            {spotifyItems.length > 0 && (
-              <div className="mt-6 space-y-4">
-                {spotifyItems.map(({ mix, sp }, i) => (
-                  <div key={i} className="bg-white brutalist-border border-l-[6px] border-l-[#1DB954] p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <RiSpotifyLine className="w-5 h-5 text-[#1DB954] shrink-0" />
-                      <h3 className="text-lg font-black uppercase break-words min-w-0">{mix.title}</h3>
-                      {mix.type && (
-                        <span className={`mono text-[10px] font-black uppercase px-2 py-0.5 shrink-0 ${mix.type === 'release' ? 'bg-[#ff0055] text-white' : 'bg-black text-white'}`}>
-                          {mix.type}
-                        </span>
-                      )}
-                    </div>
-                    <iframe
-                      src={sp.src}
-                      title={mix.title}
-                      className="w-full"
-                      height={sp.type === 'track' || sp.type === 'episode' ? 152 : 352}
-                      style={{ border: 0, borderRadius: 12 }}
-                      loading="lazy"
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
             {others.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 {others.map((mix, i) => (
@@ -352,6 +331,9 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
         );
       })()}
 
+      {/* {ARTISTA} EN SPOTIFY — sección propia automática, tras Sets & Releases. */}
+      {spotifySection}
+
       {/* Links */}
       {presskit.links?.length > 0 && (
         <section className="border-b-4 border-black p-6 lg:p-12">
@@ -374,6 +356,10 @@ export default function PresskitView({ presskit, slug, preview = false }: Pressk
           </div>
         </section>
       )}
+
+      {/* Rider técnico y Social van al FINAL (definidos arriba). */}
+      {riderSection}
+      {socialSection}
 
       {/* Logos — al final del presskit, colapsables tras "Mostrar logos" */}
       <LogosSection
