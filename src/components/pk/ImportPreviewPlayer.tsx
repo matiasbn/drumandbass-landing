@@ -11,9 +11,10 @@ import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFi
 
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
 const isSp = (url: string) => /open\.spotify\.com|spotify\.com/i.test(url);
+const isBp = (url: string) => /beatport\.com/i.test(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
-const accentFor = (url: string) => (isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const accentFor = (url: string) => (isBp(url) ? '#01FF95' : isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isBp(url) ? 'Beatport' : isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 
 const fmt = (s: number) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -63,8 +64,9 @@ export default function ImportPreviewPlayer({
       // Spotify: preview MP3 de 30s vía el endpoint propio. SoundCloud/Bandcamp:
       // stream real resuelto por sus endpoints.
       let streamUrl: string | null = null;
-      if (isSp(nextUrl)) {
-        const res = await fetch(`/api/pk/spotify?url=${encodeURIComponent(nextUrl)}`);
+      if (isSp(nextUrl) || isBp(nextUrl)) {
+        const api = isBp(nextUrl) ? '/api/pk/beatport' : '/api/pk/spotify';
+        const res = await fetch(`${api}?url=${encodeURIComponent(nextUrl)}`);
         if (res.ok) {
           const data = await res.json();
           streamUrl = data?.tracks?.[0]?.previewUrl || null;

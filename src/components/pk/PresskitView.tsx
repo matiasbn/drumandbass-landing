@@ -267,7 +267,7 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
         // El player reproduce SoundCloud, Bandcamp Y YouTube (este último con su
         // iframe embebido en el frame central). El resto (Spotify…) queda como
         // tarjetas-link.
-        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u) || isYoutubeUrl(u);
+        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u) || isYoutubeUrl(u) || isBeatportUrl(u);
         const playerReleases: NationalRelease[] = valid
           .filter((m) => playable(ensureAbsoluteUrl(m.url)))
           .map((m) => ({
