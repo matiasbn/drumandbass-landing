@@ -959,7 +959,7 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   const labelClass = 'mono text-sm font-bold uppercase block mb-1';
 
   return (
-    <main className="flex-1">
+    <main className="flex-1 overflow-x-hidden">
       {/* Header */}
       <section className="border-b-4 border-black p-6 lg:p-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -1779,9 +1779,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
 
           {/* Mixes */}
           <div ref={mixesSectionRef} className="scroll-mt-24">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <label className={labelClass}>Sets & Releases</label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {/* Import por plataforma: el botón siempre es clickeable. Si esa
                     red aún no está en Perfiles y redes, en vez de importar abre un
                     aviso con un botón directo para agregarla (más obvio que un
