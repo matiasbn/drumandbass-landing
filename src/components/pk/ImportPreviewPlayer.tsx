@@ -10,9 +10,10 @@ import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFi
 // una resolución por cada cambio de selección en el dropdown).
 
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
+const isSp = (url: string) => /open\.spotify\.com|spotify\.com/i.test(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
-const accentFor = (url: string) => (isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const accentFor = (url: string) => (isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 
 const fmt = (s: number) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -48,13 +49,26 @@ export default function ImportPreviewPlayer({
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${streamApi(nextUrl)}?url=${encodeURIComponent(nextUrl)}`);
-      if (!res.ok) throw new Error();
-      const s = await res.json();
-      if (!s?.streamUrl) throw new Error();
+      // Spotify: preview MP3 de 30s vía el endpoint propio. SoundCloud/Bandcamp:
+      // stream real resuelto por sus endpoints.
+      let streamUrl: string | null = null;
+      if (isSp(nextUrl)) {
+        const res = await fetch(`/api/pk/spotify?url=${encodeURIComponent(nextUrl)}`);
+        if (res.ok) {
+          const data = await res.json();
+          streamUrl = data?.tracks?.[0]?.previewUrl || null;
+        }
+      } else {
+        const res = await fetch(`${streamApi(nextUrl)}?url=${encodeURIComponent(nextUrl)}`);
+        if (res.ok) {
+          const s = await res.json();
+          streamUrl = s?.streamUrl || null;
+        }
+      }
+      if (!streamUrl) throw new Error();
       const a = audioRef.current;
       if (!a) return false;
-      a.src = s.streamUrl;
+      a.src = streamUrl;
       resolvedRef.current = nextUrl;
       return true;
     } catch {
