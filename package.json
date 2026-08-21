@@ -1,9 +1,10 @@
 {
   "name": "drumandbass-landing",
-  "version": "3.38.0",
+  "version": "3.39.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3600",
+    "dev:webpack": "next dev --webpack -p 3600",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

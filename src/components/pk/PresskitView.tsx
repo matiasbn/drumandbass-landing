@@ -24,9 +24,10 @@ import {
   RiTiktokLine,
   RiTwitterXLine,
   RiAlbumFill,
+  RiDiscLine,
 } from '@remixicon/react';
 
-const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; variant: 'instagram' | 'soundcloud' | 'spotify' | 'youtube' | 'primary' | 'bandcamp' }> = {
+const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; variant: 'instagram' | 'soundcloud' | 'spotify' | 'youtube' | 'primary' | 'bandcamp' | 'beatport' }> = {
   instagram: { icon: RiInstagramLine, variant: 'instagram' },
   soundcloud: { icon: RiSoundcloudLine, variant: 'soundcloud' },
   spotify: { icon: RiSpotifyLine, variant: 'spotify' },
@@ -35,6 +36,7 @@ const PLATFORM_CONFIG: Record<string, { icon: React.ComponentType<{ className?: 
   tiktok: { icon: RiTiktokLine, variant: 'primary' },
   twitter: { icon: RiTwitterXLine, variant: 'primary' },
   bandcamp: { icon: RiAlbumFill, variant: 'bandcamp' },
+  beatport: { icon: RiDiscLine, variant: 'beatport' },
 };
 
 function getPlatformConfig(platform: string) {
@@ -265,7 +267,7 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
         // El player reproduce SoundCloud, Bandcamp Y YouTube (este último con su
         // iframe embebido en el frame central). El resto (Spotify…) queda como
         // tarjetas-link.
-        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u) || isYoutubeUrl(u);
+        const playable = (u: string) => isSoundcloudUrl(u) || isBandcampUrl(u) || isYoutubeUrl(u) || isBeatportUrl(u);
         const playerReleases: NationalRelease[] = valid
           .filter((m) => playable(ensureAbsoluteUrl(m.url)))
           .map((m) => ({
@@ -317,23 +319,24 @@ export default function PresskitView({ presskit, slug }: PresskitViewProps) {
         );
       })()}
 
-      {/* Beatport — embed oficial (iframe). No se puede reproducir en el player
-          propio (Cloudflare + API con OAuth), así que se muestra su widget. */}
+      {/* Beatport — embed oficial (iframe) desde el/los perfil(es) de Beatport en
+          Perfiles y redes. No se puede reproducir en el player propio (Cloudflare
+          + API con OAuth), así que se muestra su widget. */}
       {(() => {
-        const bp = (presskit.mixes || [])
-          .filter((m) => m.url?.trim() && isBeatportUrl(m.url))
-          .map((m) => ({ mix: m, emb: beatportEmbed(ensureAbsoluteUrl(m.url)) }))
-          .filter((x): x is { mix: typeof x.mix; emb: NonNullable<typeof x.emb> } => x.emb !== null);
+        const bp = (presskit.socials || [])
+          .filter((so) => so.url?.trim() && (so.platform === 'Beatport' || isBeatportUrl(so.url)))
+          .map((so) => beatportEmbed(socialToUrl('Beatport', so.url)))
+          .filter((emb): emb is NonNullable<typeof emb> => emb !== null);
         if (bp.length === 0) return null;
         return (
           <section className="border-b-4 border-black p-6 lg:p-12">
             <h2 className="text-5xl font-black uppercase italic mb-6">BEATPORT</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {bp.map(({ mix, emb }, i) => (
+              {bp.map((emb, i) => (
                 <div key={i} className="brutalist-border overflow-hidden bg-white">
                   <iframe
                     src={emb.src}
-                    title={mix.title || `Beatport ${emb.type}`}
+                    title={`Beatport ${emb.type}`}
                     height={beatportEmbedHeight(emb.type)}
                     className="w-full block border-0"
                     loading="lazy"

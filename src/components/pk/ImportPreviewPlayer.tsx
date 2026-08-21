@@ -11,9 +11,10 @@ import { RiPlayFill, RiPauseFill, RiLoader4Line, RiSkipBackFill, RiSkipForwardFi
 
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
 const isSp = (url: string) => /open\.spotify\.com|spotify\.com/i.test(url);
+const isBp = (url: string) => /beatport\.com/i.test(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
-const accentFor = (url: string) => (isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const accentFor = (url: string) => (isBp(url) ? '#01FF95' : isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isBp(url) ? 'Beatport' : isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 
 const fmt = (s: number) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -35,16 +36,19 @@ export default function ImportPreviewPlayer({
   onNext,
   hasPrev = false,
   hasNext = false,
+  playSignal = 0,
 }: {
   url: string;
   onPrev?: () => void;
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
+  // Señal EXPLÍCITA de "reproducir ahora": el padre la incrementa al usar
+  // anterior/siguiente. NUNCA reproduce solo al montar/recargar (0 = no tocar).
+  playSignal?: number;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resolvedRef = useRef<string>(''); // URL cuyo stream ya está cargado en el <audio>
-  const mountedRef = useRef(false); // false en el primer render (no auto-reproduce al abrir)
   const pauseSelfRef = useRef(() => audioRef.current?.pause()); // estable, para el registro global
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,8 +64,9 @@ export default function ImportPreviewPlayer({
       // Spotify: preview MP3 de 30s vía el endpoint propio. SoundCloud/Bandcamp:
       // stream real resuelto por sus endpoints.
       let streamUrl: string | null = null;
-      if (isSp(nextUrl)) {
-        const res = await fetch(`/api/pk/spotify?url=${encodeURIComponent(nextUrl)}`);
+      if (isSp(nextUrl) || isBp(nextUrl)) {
+        const api = isBp(nextUrl) ? '/api/pk/beatport' : '/api/pk/spotify';
+        const res = await fetch(`${api}?url=${encodeURIComponent(nextUrl)}`);
         if (res.ok) {
           const data = await res.json();
           streamUrl = data?.tracks?.[0]?.previewUrl || null;
@@ -106,9 +111,9 @@ export default function ImportPreviewPlayer({
     };
   }, []);
 
-  // Al cambiar de track: reinicia el <audio>. En el primer render NO reproduce
-  // (recién se abrió el selector); en cada cambio POSTERIOR (next/anterior o
-  // cambio de selección) reproduce de inmediato.
+  // Al cambiar de track: reinicia el <audio> (detenido). NUNCA reproduce solo
+  // (ni al montar, ni al recargar): la reproducción es siempre por gesto del
+  // usuario (botón play) o por la señal explícita playSignal (next/anterior).
   useEffect(() => {
     const a = audioRef.current;
     if (a) {
@@ -121,10 +126,14 @@ export default function ImportPreviewPlayer({
     setPos(0);
     setDur(0);
     setError('');
-    if (mountedRef.current) void play(url);
-    mountedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
+
+  // Reproducir SOLO cuando el padre lo pide explícitamente (next/anterior). En
+  // el montaje playSignal es 0 → no toca nada.
+  useEffect(() => {
+    if (playSignal > 0) void play(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playSignal]);
 
   const toggle = async () => {
     const a = audioRef.current;

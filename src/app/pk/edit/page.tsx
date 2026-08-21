@@ -36,7 +36,7 @@ import {
 
 // Instagram NO va acá: es un campo dedicado y obligatorio del formulario.
 const PLATFORM_OPTIONS = [
-  'SoundCloud', 'Spotify', 'YouTube',
+  'SoundCloud', 'Spotify', 'YouTube', 'Beatport',
   'Facebook', 'TikTok', 'Twitter', 'Bandcamp',
 ];
 
@@ -136,8 +136,13 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
   // una fila propia en Sets & Releases; el artista borra las que no quiera).
   const [spImporting, setSpImporting] = useState(false);
   const [spMsg, setSpMsg] = useState('');
+  const [bpImporting, setBpImporting] = useState(false);
+  const [bpMsg, setBpMsg] = useState('');
   // Aviso "cómo activar el import" cuando la red aún no está en Perfiles y redes.
   const [importHint, setImportHint] = useState<string | null>(null);
+  // Señal de auto-play del preview: se incrementa al usar anterior/siguiente en
+  // el dropdown de import, para que reproduzca solo por gesto (nunca al recargar).
+  const [previewSignal, setPreviewSignal] = useState(0);
   const socialsSectionRef = useRef<HTMLDivElement>(null);
   const mixesSectionRef = useRef<HTMLDivElement>(null);
 
@@ -696,6 +701,53 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
       setSpMsg('Error al conectar con Spotify.');
     } finally {
       setSpImporting(false);
+    }
+  };
+
+  // Beatport: el/los perfil(es) de artista en Redes. Importa TODA la discografía
+  // (vía la API del embed) con su preview MP3, como filas propias reproducibles.
+  const beatportUrls = socials
+    .filter((s) => s.platform === 'Beatport' && s.url.trim())
+    .map((s) => socialToUrl('Beatport', s.url));
+
+  const fetchBeatportTracks = async () => {
+    if (beatportUrls.length === 0) return;
+    void persist(false); // guarda el perfil de Beatport recién escrito
+    setBpImporting(true);
+    setBpMsg('');
+    try {
+      const perAccount = await Promise.all(
+        beatportUrls.map(async (u) => {
+          try {
+            const res = await fetch(`/api/pk/beatport?url=${encodeURIComponent(u)}`);
+            if (!res.ok) return [] as { url: string; title: string }[];
+            const data = await res.json();
+            return (data.tracks || []) as { url: string; title: string }[];
+          } catch {
+            return [] as { url: string; title: string }[];
+          }
+        })
+      );
+      const existingUrls = new Set(mixes.map((m) => m.url));
+      const seen = new Set<string>();
+      const nuevos: PresskitMix[] = [];
+      for (const t of perAccount.flat()) {
+        if (!t.url?.trim() || !t.title?.trim()) continue;
+        if (existingUrls.has(t.url) || seen.has(t.url)) continue;
+        seen.add(t.url);
+        nuevos.push({ title: t.title, platform: 'Beatport', url: t.url, type: 'release' });
+      }
+      if (nuevos.length === 0) {
+        setBpMsg('No se encontraron tracks nuevos en Beatport.');
+        return;
+      }
+      autoPendingRef.current = true; // import → auto-guardar
+      setMixes([...mixes, ...nuevos]);
+      setBpMsg(`${nuevos.length} track${nuevos.length === 1 ? '' : 's'} importado${nuevos.length === 1 ? '' : 's'}. Borra los que no quieras mostrar.`);
+    } catch {
+      setBpMsg('Error al conectar con Beatport.');
+    } finally {
+      setBpImporting(false);
     }
   };
 
@@ -1629,13 +1681,18 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                     value={social.url}
                     onChange={(e) => updateSocial(i, 'url', e.target.value)}
                     className={`${inputClass} ${!social.url.trim() ? '!border-red-500' : ''}`}
-                    placeholder={social.platform === 'Spotify' ? 'Spotify ID del artista' : 'Solo tu nombre de usuario'}
+                    placeholder={social.platform === 'Spotify' ? 'Spotify ID del artista' : social.platform === 'Beatport' ? 'URL de tu perfil de Beatport' : 'Solo tu nombre de usuario'}
                   />
                   <p className="mono text-[10px] opacity-40">
                     {social.platform === 'Spotify' ? (
                       <>El <span className="font-bold">Spotify ID</span> del artista (ej.{' '}
                       <span className="font-bold">1B1vRzgKU4B5Ad1N68To4m</span>). Si pegas la URL del
                       perfil, la recortamos sola.</>
+                    ) : social.platform === 'Beatport' ? (
+                      <>Pega la <span className="font-bold">URL completa</span> de Beatport. Un{' '}
+                      <span className="font-bold">release, track o chart</span> se muestra como
+                      reproductor embebido; el <span className="font-bold">perfil de artista</span> solo
+                      como botón (Beatport no permite embeber perfiles).</>
                     ) : (
                       <>Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
                       completa. Si pegas la URL, la recortamos sola.</>
@@ -1693,10 +1750,24 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                           {spImporting ? 'AGREGANDO…' : 'AGREGAR TRACKS A SETS & RELEASES'}
                         </button>
                       )}
+                      {social.platform === 'Beatport' && (
+                        <button
+                          type="button"
+                          onClick={fetchBeatportTracks}
+                          disabled={bpImporting}
+                          className="inline-flex items-center gap-1 mono text-xs font-bold uppercase px-3 py-2 brutalist-border bg-[#01FF95] text-black hover:bg-[#4dffb8] transition-colors disabled:opacity-60"
+                        >
+                          {bpImporting ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiAddLine className="w-4 h-4" />}
+                          {bpImporting ? 'AGREGANDO…' : 'AGREGAR TRACKS A SETS & RELEASES'}
+                        </button>
+                      )}
                     </div>
                   )}
                   {social.platform === 'Spotify' && spMsg && (
                     <p className="mono text-[11px] text-[#0a7d38] leading-snug">{spMsg}</p>
+                  )}
+                  {social.platform === 'Beatport' && bpMsg && (
+                    <p className="mono text-[11px] text-[#0a7d38] leading-snug">{bpMsg}</p>
                   )}
                 </div>
               ))}
@@ -1834,8 +1905,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                           url={sel.url}
                           hasPrev={idx > 0}
                           hasNext={idx < scTracks.length - 1}
-                          onPrev={() => setScSelectedTrack(String(scTracks[idx - 1].id))}
-                          onNext={() => setScSelectedTrack(String(scTracks[idx + 1].id))}
+                          playSignal={previewSignal}
+                          onPrev={() => { setScSelectedTrack(String(scTracks[idx - 1].id)); setPreviewSignal((n) => n + 1); }}
+                          onNext={() => { setScSelectedTrack(String(scTracks[idx + 1].id)); setPreviewSignal((n) => n + 1); }}
                         />
                       ) : null;
                     })()}
@@ -1985,10 +2057,9 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                         Publicar en Releases Nacionales
                       </label>
                     )}
-                    {/* Preview del track (SoundCloud/Bandcamp/Spotify). YouTube se
-                        embebe en la página; Beatport no se puede reproducir acá
-                        (se muestra su embed oficial en el presskit). */}
-                    {!isYt && !isBeatport && mix.url.trim() && (
+                    {/* Preview del track (SoundCloud/Bandcamp/Spotify/Beatport).
+                        YouTube se embebe en la página, no acá. */}
+                    {!isYt && mix.url.trim() && (
                       <ImportPreviewPlayer url={mix.url} />
                     )}
                   </div>

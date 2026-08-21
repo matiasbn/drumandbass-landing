@@ -12,6 +12,7 @@ import {
   RiAlbumFill,
   RiYoutubeLine,
   RiSpotifyLine,
+  RiDiscLine,
   RiDownloadLine,
   RiArrowDownSLine,
 } from '@remixicon/react';
@@ -56,18 +57,20 @@ const bigArt = (art: string | null) => (art ? art.replace('-large', '-t500x500')
 const isBc = (url: string) => /bandcamp\.com/i.test(url);
 const isYt = (url: string) => isYoutubeUrl(url);
 const isSp = (url: string) => isSpotifyUrl(url);
+const isBp = (url: string) => /beatport\.com/i.test(url);
 const streamApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/stream' : '/api/pk/soundcloud/stream');
 const setApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/set' : '/api/pk/soundcloud/set');
 const downloadApi = (url: string) => (isBc(url) ? '/api/pk/bandcamp/download' : '/api/pk/soundcloud/download');
 // Marca/branding por plataforma (ícono, color, nombre, URL de "abrir").
-const platformColor = (url: string) => (isYt(url) ? '#FF0000' : isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
-const platformName = (url: string) => (isYt(url) ? 'YouTube' : isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
+const platformColor = (url: string) => (isYt(url) ? '#FF0000' : isBp(url) ? '#01FF95' : isSp(url) ? '#1DB954' : isBc(url) ? '#1da0c3' : '#FF5500');
+const platformName = (url: string) => (isYt(url) ? 'YouTube' : isBp(url) ? 'Beatport' : isSp(url) ? 'Spotify' : isBc(url) ? 'Bandcamp' : 'SoundCloud');
 // Los tracks de un álbum de Bandcamp usan una URL sintética (álbum#i); para el
 // enlace "abrir" limpiamos el fragmento y apuntamos al álbum real.
 const openUrl = (url: string) => (isBc(url) ? url.split('#')[0] : url);
 function PlatformIcon({ url, className, style }: { url: string; className?: string; style?: React.CSSProperties }) {
   if (isYt(url)) return <RiYoutubeLine className={className} style={style} />;
   if (isSp(url)) return <RiSpotifyLine className={className} style={style} />;
+  if (isBp(url)) return <RiDiscLine className={className} style={style} />;
   return isBc(url) ? <RiAlbumFill className={className} style={style} /> : <RiSoundcloudLine className={className} style={style} />;
 }
 // Punto de montaje del reproductor de YouTube. Memoizado sin props → NUNCA se
@@ -367,7 +370,7 @@ export default function ReleasesPlayer({
     (async () => {
       const entries = await Promise.all(
         releases.map(async (r) => {
-          if (isYt(r.url) || isSp(r.url)) return null; // YouTube/Spotify no tienen descarga
+          if (isYt(r.url) || isSp(r.url) || isBp(r.url)) return null; // YouTube/Spotify/Beatport sin descarga
           try {
             const res = await fetch(`${downloadApi(r.url)}?url=${encodeURIComponent(r.url)}`);
             if (!res.ok) return null;
@@ -400,10 +403,11 @@ export default function ReleasesPlayer({
   const resolveStream = useCallback(async (trackUrl: string): Promise<Stream | null> => {
     if (isYt(trackUrl)) return null; // YouTube no usa stream de audio
     if (streamCache.current[trackUrl]) return streamCache.current[trackUrl];
-    // Spotify: resolver el preview MP3 (30s) del track por su URL.
-    if (isSp(trackUrl)) {
+    // Spotify/Beatport: resolver el preview MP3 del track por su URL.
+    if (isSp(trackUrl) || isBp(trackUrl)) {
       try {
-        const res = await fetch(`/api/pk/spotify?url=${encodeURIComponent(trackUrl)}`);
+        const ep = isBp(trackUrl) ? '/api/pk/beatport' : '/api/pk/spotify';
+        const res = await fetch(`${ep}?url=${encodeURIComponent(trackUrl)}`);
         if (!res.ok) return null;
         const data = await res.json();
         const t = (data.tracks || [])[0] as { title?: string; subtitle?: string; previewUrl?: string | null; artwork?: string | null } | undefined;
