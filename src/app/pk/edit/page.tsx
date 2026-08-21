@@ -1640,9 +1640,10 @@ function PresskitEditor({ driver }: { driver?: EditorDriver } = {}) {
                       <span className="font-bold">1B1vRzgKU4B5Ad1N68To4m</span>). Si pegas la URL del
                       perfil, la recortamos sola.</>
                     ) : social.platform === 'Beatport' ? (
-                      <>Pega la <span className="font-bold">URL completa</span> de tu perfil de Beatport
-                      (ej. <span className="font-bold">beatport.com/artist/tu-nombre/000000</span>). Se
-                      muestra como reproductor embebido en tu presskit.</>
+                      <>Pega la <span className="font-bold">URL completa</span> de Beatport. Un{' '}
+                      <span className="font-bold">release, track o chart</span> se muestra como
+                      reproductor embebido; el <span className="font-bold">perfil de artista</span> solo
+                      como botón (Beatport no permite embeber perfiles).</>
                     ) : (
                       <>Solo el usuario (ej. <span className="font-bold">tu_usuario</span>), no la URL
                       completa. Si pegas la URL, la recortamos sola.</>
